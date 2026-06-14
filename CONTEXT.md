@@ -18,6 +18,7 @@ Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 (language pipeline
 - **Agents:** LangGraph state machine (Plan → Execute → Reflect → Re-plan)
 - **LLM:** Multi-provider support — OpenAI (GPT-4o-mini), Google Gemini, local Ollama. Configurable via LLM_PROVIDER env var.
 - **Scoring weights:** Loaded from configs/scoring_weights.yaml at runtime, never hardcoded
+- **TranslationPipeline is stubbed:** opus-mt models are ~300MB each per language pair. Loading 9 would exceed the hackathon's 16GB RAM / 5min CPU budget. The Redrob dataset (100K profiles) is all English anyway, so translation is a no-op for this dataset. Architecture is correct (lazy load, model lookup, fallback chain) but real model loading is disabled until needed for a non-English dataset.
 
 ## Key Files
 | File | Purpose |
