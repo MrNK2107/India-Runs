@@ -68,3 +68,33 @@
 **Next Steps:**
 - Begin Phase 0: Environment setup
 - Implement src/core/llm.py — the provider-agnostic LLM client factory
+
+---
+
+## June 14, 2026 — current session — Session 4
+
+**Task:** Verify Phase 0, then implement Phase 1 (core infrastructure)
+**Status:** completed
+
+**Changes:**
+- `configs/settings.yaml`: Created with 7 sections (app, database, redis, models, search, scoring, agent) and env var interpolation
+- `configs/scoring_weights.yaml`: Created with 6 dimension weights, skill importance, proficiency scores
+- `configs/models.yaml`: Created with embedding, cross-encoder, translation, language detection configs
+- `src/core/config.py`: Created Settings (Pydantic), load_yaml_config, get_settings/get_scoring_config/get_model_config/get_app_config/get_llm_client() factory (OpenAI/Gemini/Ollama)
+- `src/core/constants.py`: Created with 12 supported languages, 45 Indian companies, 20 cities, 20 universities, FAISS/BM25 paths
+- `src/core/models.py`: Created with 30 Pydantic models (Profile, JobQuery, MatchResult, API schemas), 7 StrEnums
+
+**Lint:** ruff check — 0 errors after fixes (unused imports removed, Optional→X|None, str+Enum→StrEnum)
+
+**Imports:** All modules load clean. All 3 YAML configs parse and cache successfully.
+
+**Decisions:**
+- get_llm_client() lives in config.py (not a separate llm.py), matching IMPLEMENTATION_PLAN.md references
+- All enums use StrEnum (Python 3.11+) instead of str+Enum per ruff UP042
+
+**Issues:**
+- Pip dependency conflict with supabase httpx<0.28 — unrelated, pre-existing
+- ruff --fix auto-converted Optional[X]→X|None across all 329 lines of models.py
+
+**Next Steps:**
+- Phase 2: Synthetic data generation (1,000 profiles, 50 queries)
