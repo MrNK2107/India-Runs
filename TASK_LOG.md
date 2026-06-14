@@ -231,3 +231,21 @@
 
 **Next Steps:**
 - Phase 9: Fairness & bias evaluation
+
+---
+
+## June 14, 2026 — current session — Session 11
+
+**Task:** Phase 9 — Fairness & bias evaluation
+**Status:** completed
+
+**Changes:**
+- `src/fairness/bias_detector.py`: BiasDetector — 4 bias checks: name (first-character grouping), language (en vs non-en scores), location (tier-1 vs tier-2/3 cities), university (IIT/NIT/BITS vs others), each with detected flag, observations, and details
+- `src/fairness/metrics.py`: Module-level functions — compute_demographic_parity() for university/city/language, compute_disparate_impact_ratio() with 4/5ths rule, compute_language_bias(), compute_location_bias(), compute_all_fairness_metrics() aggregator
+
+**Lint:** ruff check — 0 errors across both files
+
+**Imports:** Both modules load cleanly
+
+**Next Steps:**
+- Phase 10: API layer (FastAPI endpoints)
