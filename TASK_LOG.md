@@ -289,5 +289,17 @@
 
 **Imports:** All 3 modules load cleanly
 
+## June 14, 2026 — current session — Session 14
+
+**Task:** Phase 12 — Index building
+**Status:** completed
+
+**Changes:**
+- `scripts/build_indexes.py`: build_indexes() loads profiles (JSON/JSONL), generates embeddings via MultilingualEmbedder, builds FAISS index (saves .bin + id_map.json), builds BM25 index (saves .pkl), supports JSONL format for streaming. _build_document_text() constructs searchable text from profile fields (raw_text + skills + experience + education).
+
+**Lint:** ruff check — 0 errors
+
+**Imports:** Module loads cleanly
+
 **Next Steps:**
-- Phase 12: Index building (scripts/build_indexes.py)
+- Phase 13: Evaluation

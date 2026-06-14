@@ -4,7 +4,7 @@
 > ⚠️ Lines: 60/600 — keep under limit!
 
 ## Current Status
-Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete. Phase 6 (matching & scoring) complete. Phase 7 (agentic workflow) complete. Phase 8 (rationale generation) complete. Phase 9 (fairness & bias) complete. Phase 10 (API layer) complete — FastAPI app with /search, /profiles, /ingest, /health endpoints, request logging & validation middleware. Phase 11 (Gradio UI) complete — search tab, analytics dashboard, about page.
+Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete. Phase 6 (matching & scoring) complete. Phase 7 (agentic workflow) complete. Phase 8 (rationale generation) complete. Phase 9 (fairness & bias) complete. Phase 10 (API layer) complete — FastAPI app with /search, /profiles, /ingest, /health endpoints, request logging & validation middleware. Phase 11 (Gradio UI) complete — search tab, analytics dashboard, about page. Phase 12 (index building) complete — scripts/build_indexes.py loads profiles, generates embeddings, builds FAISS + BM25 indexes.
 
 ## Active Tasks
 - [ ] Phase 7: Agentic workflow
