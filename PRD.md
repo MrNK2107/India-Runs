@@ -204,6 +204,7 @@ Hackathon judges will evaluate on:
 2. **Modular:** Each component (parser, embedder, searcher, ranker, generator) is independently testable and replaceable.
 3. **Fail-safe:** If any component fails, fall back gracefully (e.g., if cross-encoder is slow, skip reranking; if LLM is unavailable, return raw matches without rationale).
 4. **Local-first:** Use local models where possible to minimize API costs and latency. LLM calls only for planning and rationale generation.
+5. **Provider-agnostic:** LLM layer supports OpenAI, Google Gemini, and local Ollama. Configuration determines which provider is used. All agents use a unified interface.
 
 ---
 
@@ -791,9 +792,8 @@ Bulk ingest profiles from uploaded JSON/CSV file. Returns ingestion report (prof
                              │
                              ▼
                     ┌─────────────────┐
-                    │    PLANNER      │
-                    │  (GPT-4o-mini)  │
-                    │                 │
+                    │    PLANNER      │                     │  (Configurable  │
+                    │   LLM Provider) │
                     │ Parse NL query  │
                     │ into structured │
                     │ search params   │
@@ -815,9 +815,8 @@ Bulk ingest profiles from uploaded JSON/CSV file. Returns ingestion report (prof
                              │
                              ▼
                     ┌─────────────────┐
-                    │   REFLECTOR     │
-                    │  (GPT-4o-mini)  │
-                    │                 │
+                    │   REFLECTOR     │                     │  (Configurable  │
+                    │   LLM Provider) │
                     │ For each top-10:│
                     │ - Is it a match?│
                     │ - Gaps? Issues? │
@@ -1318,8 +1317,10 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 |-----------|---------|---------|
 | langgraph | 0.2+ | Agentic state machine |
 | langchain-core | 0.3+ | LLM abstractions |
-| langchain-openai | 0.2+ | OpenAI integration |
-| openai | 1.52+ | GPT-4o-mini for planning/rationale |
+| langchain-openai | 0.2+ | OpenAI / OpenAI-compatible endpoints |
+| langchain-google-genai | 2.0+ | Google Gemini integration |
+| langchain-ollama | 0.2+ | Local Ollama integration |
+| openai | 1.52+ | OpenAI SDK (also works with Ollama, vLLM, etc.) |
 
 ### Data & Storage
 | Technology | Version | Purpose |
@@ -1796,7 +1797,7 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| LLM API costs exceed budget | Medium | High | Use GPT-4o-mini (cheapest), cache responses, limit to planning + rationale only |
+| LLM API costs exceed budget | Medium | High | Use GPT-4o-mini or local Ollama (free), cache responses, limit to planning + rationale only |
 | Cross-encoder too slow | Medium | Medium | Use MiniLM variant, cache, skip if latency > 500ms |
 | Translation quality too low | Medium | Medium | Use multilingual embeddings as primary, translation as secondary |
 | Synthetic data not realistic enough | Medium | Medium | Use real company names, Indian cities, mixed skill levels |

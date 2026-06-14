@@ -38,7 +38,10 @@ dependencies = [
     "langgraph>=0.2",
     "langchain-core>=0.3",
     "langchain-openai>=0.2",
+    "langchain-google-genai>=2.0",
+    "langchain-ollama>=0.2",
     "openai>=1.52",
+    "google-genai>=1.0",
     # Data
     "sqlalchemy>=2.0",
     "psycopg2-binary>=2.9",
@@ -88,9 +91,20 @@ build-backend = "setuptools.backends._legacy:_Backend"
 ### 0.2 `.env.example`
 
 ```bash
-# OpenAI (for planner + rationale agents)
+# LLM Provider (choose one: openai | gemini | ollama)
+LLM_PROVIDER=openai
+
+# OpenAI (if provider=openai)
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
+
+# Google Gemini (if provider=gemini)
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash
+
+# Ollama (if provider=ollama)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
 
 # PostgreSQL
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/india_runs
@@ -241,9 +255,11 @@ models:
     name: "Helsinki-NLP/opus-mt-mul"
     fallback: "facebook/mbart-large-50-many-to-many-mmt"
   planner:
-    model: "gpt-4o-mini"
+    provider: "${LLM_PROVIDER:-openai}"  # openai | gemini | ollama
+    model: "gpt-4o-mini"  # overridden per provider in models.yaml
     temperature: 0.1
   rationale:
+    provider: "${LLM_PROVIDER:-openai}"
     model: "gpt-4o-mini"
     temperature: 0.3
 
@@ -339,9 +355,14 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # OpenAI
+    # LLM Provider
+    llm_provider: str = "openai"  # openai | gemini | ollama
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
 
     # Application
     log_level: str = "INFO"
@@ -1715,8 +1736,7 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any
-from openai import AsyncOpenAI
-from src.core.config import get_settings
+from src.core.config import get_settings, get_llm_client
 from src.core.models import ParsedQuery
 from src.agents.prompts import PLANNER_SYSTEM_PROMPT
 
@@ -1727,8 +1747,8 @@ class PlannerAgent:
     
     def __init__(self) -> None:
         settings = get_settings()
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
+        self.client = get_llm_client()
+        self.model = settings.planner_model
     
     async def plan(self, raw_query: str) -> ParsedQuery:
         """
@@ -1820,8 +1840,7 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any
-from openai import AsyncOpenAI
-from src.core.config import get_settings
+from src.core.config import get_settings, get_llm_client
 from src.core.models import MatchResult, ParsedQuery
 from src.agents.prompts import REFLECTOR_SYSTEM_PROMPT
 
