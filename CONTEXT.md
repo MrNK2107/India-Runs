@@ -4,7 +4,7 @@
 > ⚠️ Lines: 60/600 — keep under limit!
 
 ## Current Status
-Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete — FAISS vector search, BM25, hybrid RRF fusion, cross-encoder reranker, hard filters. Phase 6 (matching & scoring) complete — skill matcher with aliases, experience scorer, weighted overall scorer, confidence. Phase 7 (agentic workflow) complete — planner (LLM + fallback), executor, reflector, LangGraph orchestrator. Phase 8 (rationale generation) complete — provider-agnostic LLM generator, template fallback, validator. Phase 9 (fairness & bias) complete — name/language/location/university bias checks, demographic parity, disparate impact ratio.
+Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete. Phase 6 (matching & scoring) complete. Phase 7 (agentic workflow) complete. Phase 8 (rationale generation) complete. Phase 9 (fairness & bias) complete. Phase 10 (API layer) complete — FastAPI app with /search, /profiles, /ingest, /health endpoints, request logging & validation middleware.
 
 ## Active Tasks
 - [ ] Phase 7: Agentic workflow

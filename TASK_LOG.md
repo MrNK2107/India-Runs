@@ -249,3 +249,26 @@
 
 **Next Steps:**
 - Phase 10: API layer (FastAPI endpoints)
+
+---
+
+## June 14, 2026 — current session — Session 12
+
+**Task:** Phase 10 — API layer
+**Status:** completed
+
+**Changes:**
+- `src/main.py`: FastAPI entry point with lifespan, middleware, and 4 routers mounted at /api/v1
+- `src/api/routes/search.py`: POST /api/v1/search — delegates to orchestrator, init_orchestrator() for startup wiring
+- `src/api/routes/profiles.py`: GET /api/v1/profiles/{id} + GET /api/v1/profiles (paginated), init_profiles() for startup wiring
+- `src/api/routes/ingest.py`: POST /api/v1/ingest — upload JSON, validates filename and parses
+- `src/api/routes/health.py`: GET /api/v1/health — status, version, index_size, models_loaded, init_health() for startup wiring
+- `src/api/middleware/logging.py`: RequestLoggingMiddleware — logs method, path, status, duration
+- `src/api/middleware/validation.py`: InputValidationMiddleware — rejects requests >10MB body
+
+**Lint:** ruff check — 0 errors across all 7 files
+
+**Imports:** All 7 modules load cleanly
+
+**Next Steps:**
+- Phase 11: Gradio UI
