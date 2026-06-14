@@ -4,11 +4,9 @@
 > ⚠️ Lines: 60/600 — keep under limit!
 
 ## Current Status
-Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete — FAISS vector search, BM25, hybrid RRF fusion, cross-encoder reranker, hard filters. Ready for Phase 6 (matching & scoring).
+Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete — FAISS vector search, BM25, hybrid RRF fusion, cross-encoder reranker, hard filters. Phase 6 (matching & scoring) complete — skill matcher with aliases, experience scorer, weighted overall scorer, confidence. Ready for Phase 7 (agentic workflow).
 
 ## Active Tasks
-- [ ] Phase 5: Search pipeline
-- [ ] Phase 6: Matching & scoring
 - [ ] Phase 7: Agentic workflow
 
 ## Architecture Decisions

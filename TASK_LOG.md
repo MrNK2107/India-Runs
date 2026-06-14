@@ -171,3 +171,23 @@
 
 **Next Steps:**
 - Phase 6: Matching & scoring (skill_matcher.py, experience_matcher.py, scorer.py)
+
+---
+
+## June 14, 2026 — current session — Session 8
+
+**Task:** Phase 6 — Matching & scoring
+**Status:** completed
+
+**Changes:**
+- `src/matching/skill_matcher.py`: SkillMatcher — fuzzy matching with exact/normalized/alias/fuzzy strategies, SKILL_ALIASES (32 entries), proficiency match scoring
+- `src/matching/experience_matcher.py`: ExperienceMatcher — years scoring (deficit/excess penalty), industry scoring (exact match 1.0, else 0.3)
+- `src/matching/scorer.py`: CandidateScorer — weighted overall score from config, renormalizes when dimensions are null, confidence via std dev
+- `src/matching/confidence.py`: Module-level compute_confidence and compute_score_variance functions
+
+**Lint:** ruff check — 0 errors across all 4 files
+
+**Imports:** All 4 modules load cleanly (32 skill aliases)
+
+**Next Steps:**
+- Phase 7: Agentic workflow (prompts.py, planner.py, executor.py, reflector.py, agent.py)
