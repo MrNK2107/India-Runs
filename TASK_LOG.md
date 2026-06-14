@@ -212,3 +212,22 @@
 
 **Next Steps:**
 - Phase 8: Rationale generation
+
+---
+
+## June 14, 2026 — current session — Session 10
+
+**Task:** Phase 8 — Rationale generation
+**Status:** completed
+
+**Changes:**
+- `src/rationale/generator.py`: RationaleGenerator — generate() with LLM (provider-agnostic via get_llm_client), template fallback with skill/experience/strength/gap text generation
+- `src/rationale/templates.py`: RATIONALE_TEMPLATE and SKILL_EVIDENCE_TEMPLATE for LLM prompting
+- `src/rationale/validator.py`: RationaleValidator — validate() checks summary length, strengths presence, valid recommendation; validate_batch() for statistics
+
+**Lint:** ruff check — 0 errors across all 3 files
+
+**Imports:** All 3 modules load cleanly
+
+**Next Steps:**
+- Phase 9: Fairness & bias evaluation
