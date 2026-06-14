@@ -1,11 +1,164 @@
-"""CLI script to run evaluation metrics — placeholder for Phase 13."""
-
 from __future__ import annotations
 
+import json
+import logging
+import time
+from pathlib import Path
+from statistics import mean, median
 
-def main() -> None:
-    print("evaluate.py — not yet implemented. Will run Precision@10, Recall@50, MRR, nDCG.")
+from src.core.constants import GROUND_TRUTH_PATH, QUERIES_PATH
+from src.search.bm25_search import BM25Search
+from src.search.hybrid import HybridSearch
+from src.search.vector_search import VectorSearch
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    if k <= 0:
+        return 0.0
+    top_k = retrieved[:k]
+    if not top_k:
+        return 0.0
+    return len([doc for doc in top_k if doc in relevant]) / len(top_k)
+
+
+def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    if not relevant:
+        return 0.0
+    top_k = retrieved[:k]
+    hits = len([doc for doc in top_k if doc in relevant])
+    return hits / len(relevant)
+
+
+def mean_reciprocal_rank(retrieved: list[str], relevant: set[str]) -> float:
+    for i, doc in enumerate(retrieved, start=1):
+        if doc in relevant:
+            return 1.0 / i
+    return 0.0
+
+
+def ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
+    top_k = retrieved[:k]
+    dcg = 0.0
+    for i, doc in enumerate(top_k, start=1):
+        rel = 1.0 if doc in relevant else 0.0
+        dcg += (2 ** rel - 1) / (i.bit_length()) if i > 1 else rel
+    ideal = min(len(relevant), k)
+    idcg = sum(1.0 / (i.bit_length()) if i > 1 else 1.0 for i in range(1, ideal + 1))
+    return dcg / idcg if idcg > 0 else 0.0
+
+
+def cross_lingual_mrr(results: dict) -> float:
+    non_en_queries = {qid for qid, q in results.get("queries", {}).items()
+                      if q.get("language", "en") != "en"}
+    if not non_en_queries:
+        return 1.0
+    mrr_sum = 0.0
+    for qid in non_en_queries:
+        mrr_sum += results.get("mrr", {}).get(qid, 0.0)
+    return mrr_sum / len(non_en_queries)
+
+
+def latency_stats(latencies: list[float]) -> dict:
+    if not latencies:
+        return {"p50": 0, "p95": 0, "p99": 0, "mean": 0, "min": 0, "max": 0}
+    sorted_lat = sorted(latencies)
+    n = len(sorted_lat)
+    return {
+        "p50": sorted_lat[int(n * 0.50)],
+        "p95": sorted_lat[int(n * 0.95)],
+        "p99": sorted_lat[int(n * 0.99)],
+        "mean": mean(latencies),
+        "min": min(latencies),
+        "max": max(latencies),
+    }
+
+
+def evaluate(
+    queries_path: Path = QUERIES_PATH, ground_truth_path: Path = GROUND_TRUTH_PATH,
+) -> dict:
+    if not queries_path.exists():
+        logger.error(f"Queries file not found: {queries_path}")
+        return {}
+    if not ground_truth_path.exists():
+        logger.error(f"Ground truth file not found: {ground_truth_path}")
+        return {}
+
+    with open(queries_path) as f:
+        queries = json.load(f)
+    with open(ground_truth_path) as f:
+        ground_truth = json.load(f)
+    gt_map = ground_truth if isinstance(ground_truth, dict) else {}
+
+    vector_search = VectorSearch()
+    vector_search.load()
+    bm25_search = BM25Search()
+    bm25_search.load()
+
+    from src.language.multilingual import MultilingualEmbedder
+    embedder = MultilingualEmbedder()
+    hybrid = HybridSearch(vector_search, bm25_search, embedder)
+
+    all_metrics: dict[str, list] = {
+        "p@5": [], "p@10": [], "p@20": [],
+        "r@5": [], "r@10": [], "r@20": [],
+        "mrr": [],
+        "ndcg@10": [],
+        "latencies": [],
+    }
+
+    queries_list = queries if isinstance(queries, list) else list(queries.values())
+
+    for q in queries_list:
+        query_text = q.get("query", q.get("raw_query", ""))
+        qid = q.get("query_id", q.get("id", ""))
+        relevant = set(q.get("relevant_ids", q.get("profile_ids", gt_map.get(qid, []))))
+        if not query_text or not relevant:
+            continue
+
+        start = time.perf_counter()
+        results = hybrid.search(query_text, top_k=50)
+        elapsed = (time.perf_counter() - start) * 1000
+        all_metrics["latencies"].append(elapsed)
+
+        retrieved = [pid for pid, _ in results]
+
+        for k in (5, 10, 20):
+            all_metrics[f"p@{k}"].append(precision_at_k(retrieved, relevant, k))
+            all_metrics[f"r@{k}"].append(recall_at_k(retrieved, relevant, k))
+
+        all_metrics["mrr"].append(mean_reciprocal_rank(retrieved, relevant))
+        all_metrics["ndcg@10"].append(ndcg_at_k(retrieved, relevant, 10))
+
+    summary = {}
+    for metric, values in all_metrics.items():
+        if values:
+            summary[metric] = {
+                "mean": mean(values),
+                "median": median(values),
+                "min": min(values),
+                "max": max(values),
+            }
+        else:
+            summary[metric] = {}
+
+    summary["latency"] = latency_stats(all_metrics["latencies"])
+    summary["total_queries"] = len(all_metrics["mrr"])
+    summary["cross_lingual_mrr"] = cross_lingual_mrr({
+        "queries": {i: q for i, q in enumerate(queries_list)},
+        "mrr": {i: v for i, v in enumerate(all_metrics["mrr"])},
+    })
+
+    logger.info("Evaluation results:")
+    for metric, vals in summary.items():
+        if isinstance(vals, dict) and "mean" in vals:
+            logger.info(f"  {metric}: mean={vals['mean']:.4f}, median={vals['median']:.4f}")
+
+    return summary
 
 
 if __name__ == "__main__":
-    main()
+    result = evaluate()
+    print(json.dumps(result, indent=2))

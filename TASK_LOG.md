@@ -301,5 +301,17 @@
 
 **Imports:** Module loads cleanly
 
+## June 14, 2026 — current session — Session 15
+
+**Task:** Phase 13 — Evaluation
+**Status:** completed
+
+**Changes:**
+- `scripts/evaluate.py`: 7 metric functions — precision_at_k, recall_at_k, mean_reciprocal_rank, ndcg_at_k, cross_lingual_mrr, latency_stats (p50/p95/p99/mean), evaluate() loads queries + ground truth, runs hybrid search, computes all metrics, prints summary
+
+**Lint:** ruff check — 0 errors
+
+**Imports:** Module loads cleanly
+
 **Next Steps:**
-- Phase 13: Evaluation
+- Phase 14: Testing (unit, integration, system tests)
