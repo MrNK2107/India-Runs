@@ -4,20 +4,19 @@
 > ⚠️ Lines: 48/300 — keep under limit!
 
 ## Current Status
-PRD complete, implementation plan complete, agent workflow rules established. Ready to begin Phase 0 (environment setup) and Phase 1 (core infrastructure). No code written yet — all planning documents created.
+PRD complete, implementation plan complete, agent workflow rules established, git initialized with 2 commits. Multi-provider LLM support added (OpenAI, Gemini, Ollama). Ready to begin Phase 0 (environment setup). No code written yet.
 
 ## Active Tasks
 - [ ] Phase 0: Environment setup (pyproject.toml, Docker, configs)
-- [ ] Phase 1: Core infrastructure (config.py, models.py, constants.py)
+- [ ] Phase 1: Core infrastructure (config.py, models.py, constants.py, llm.py)
 - [ ] Phase 2: Synthetic data generation (1,000 profiles, 50 queries)
-- [ ] Git init + first meaningful commit
 
 ## Architecture Decisions
 - **UI Framework:** Gradio only (not Streamlit) — simpler for demos, free HuggingFace Spaces hosting
 - **Embedding Model:** paraphrase-multilingual-MiniLM-L12-v2 (384-dim, 50+ languages, local)
 - **Search:** Hybrid BM25 + FAISS + RRF fusion + cross-encoder reranking
 - **Agents:** LangGraph state machine (Plan → Execute → Reflect → Re-plan)
-- **LLM:** GPT-4o-mini for planner + rationale (cheapest, sufficient)
+- **LLM:** Multi-provider support — OpenAI (GPT-4o-mini), Google Gemini, local Ollama. Configurable via LLM_PROVIDER env var.
 - **Scoring weights:** Loaded from configs/scoring_weights.yaml at runtime, never hardcoded
 
 ## Key Files
@@ -33,8 +32,6 @@ PRD complete, implementation plan complete, agent workflow rules established. Re
 
 ## Known Issues
 - No code written yet — all planning docs only
-- Git repo not initialized yet
-- No .gitignore created yet
 
 ## Environment
 - Project path: `C:\Users\nanda\Desktop\india-runs`
@@ -44,8 +41,6 @@ PRD complete, implementation plan complete, agent workflow rules established. Re
 - No virtual environment set up yet
 
 ## Recent History
-- Researched India Runs hackathon (Redrob AI, Track 1, ₹10L prize)
-- Created PRD.md (24-section comprehensive requirements doc)
-- Created IMPLEMENTATION_PLAN.md (78-file execution blueprint)
-- Created .agent-rules.md (mandatory agent workflow rules)
-- Created CONTEXT.md and TASK_LOG.md
+- Session 1: Researched hackathon, created PRD, IMPLEMENTATION_PLAN, agent rules, context/task log
+- Session 2: Added multi-provider LLM support (OpenAI, Gemini, Ollama) to all docs
+- Git: 2 commits — docs (PRD+plan) and chore (agent rules+context+gitignore)
