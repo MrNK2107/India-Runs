@@ -190,4 +190,25 @@
 **Imports:** All 4 modules load cleanly (32 skill aliases)
 
 **Next Steps:**
-- Phase 7: Agentic workflow (prompts.py, planner.py, executor.py, reflector.py, agent.py)
+- Phase 7: Agentic workflow (prompts.py, planner.py, executor.py, reflector.py, orchestrator.py)
+
+---
+
+## June 14, 2026 — current session — Session 9
+
+**Task:** Phase 7 — Agentic workflow
+**Status:** completed
+
+**Changes:**
+- `src/agents/prompts.py`: 4 system prompts — PLANNER (structured query extraction), REFLECTOR (hiring evaluation), RATIONALE (report generation), REPLAN (broadening criteria)
+- `src/agents/planner.py`: PlannerAgent — plan() with LLM, fallback to keyword extraction (skill aliases, regex years, city/company matching), replan() with relaxation fallback
+- `src/agents/executor.py`: ExecutorAgent — execute() runs hybrid search + filters + reranker + scorer, builds MatchResult list
+- `src/agents/reflector.py`: ReflectorAgent — reflect() with LLM, fallback to score-threshold evaluation, should_replan heuristic
+- `src/agents/orchestrator.py`: Orchestrator — LangGraph state machine (Plan → Execute → Reflect → Re-plan loop), AgentState TypedDict, conditional edges with max_replan_cycles from config
+
+**Lint:** ruff check — 0 errors across all 5 files
+
+**Imports:** All 5 modules load cleanly
+
+**Next Steps:**
+- Phase 8: Rationale generation
