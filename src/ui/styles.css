@@ -1,0 +1,72 @@
+/* Score badges */
+.score-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 14px;
+}
+.score-strong { background: #d1fae5; color: #065f46; }
+.score-good { background: #dbeafe; color: #1e40af; }
+.score-potential { background: #fef3c7; color: #92400e; }
+.score-weak { background: #fee2e2; color: #991b1b; }
+
+/* Skill chips */
+.skill-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 2px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #f3f4f6;
+    color: #374151;
+}
+.skill-chip.matched { background: #d1fae5; color: #065f46; }
+.skill-chip.missing { background: #fee2e2; color: #991b1b; }
+
+/* Candidate card */
+.candidate-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: box-shadow 0.2s;
+}
+.candidate-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Metric card for analytics */
+.metric-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+.metric-label {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+.metric-value {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+/* Results container */
+.results-container {
+    max-height: 800px;
+    overflow-y: auto;
+}
+
+/* Custom scrollbar */
+.results-container::-webkit-scrollbar {
+    width: 6px;
+}
+.results-container::-webkit-scrollbar-track {
+    background: #f9fafb;
+}
+.results-container::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
