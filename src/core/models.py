@@ -14,6 +14,7 @@ class ProfileSource(StrEnum):
     RESUME_PDF = "resume_pdf"
     CAREER_PAGE = "career_page"
     MANUAL = "manual"
+    REDROB = "redrob"
 
 
 class SkillCategory(StrEnum):
