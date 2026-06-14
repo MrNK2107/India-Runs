@@ -150,3 +150,24 @@
 
 **Next Steps:**
 - Phase 5: Search pipeline (vector search, BM25, hybrid, reranker, filters)
+
+---
+
+## June 14, 2026 — current session — Session 7
+
+**Task:** Phase 5 — Search pipeline
+**Status:** completed
+
+**Changes:**
+- `src/search/vector_search.py`: FAISS vector search — build_index, search (Inner Product on normalized vectors), save/load with JSON id_map
+- `src/search/bm25_search.py`: BM25 keyword search — build_index, search (lowercase+split tokenization), save/load with pickle
+- `src/search/hybrid.py`: HybridSearch — orchestrate parallel vector+keyword search, reciprocal_rank_fusion with configurable k from scoring_weights.yaml
+- `src/search/reranker.py`: CrossEncoderReranker — rerank with timeout fallback, uses ms-marco-MiniLM-L-6-v2, timeout from settings.cross_encoder_timeout_ms
+- `src/search/filters.py`: SearchFilter — hard filters: location (city/country/exp location/remote), experience (min/max years), companies (include/exclude)
+
+**Lint:** ruff check — 0 errors across all 5 files
+
+**Imports:** All 5 modules load cleanly
+
+**Next Steps:**
+- Phase 6: Matching & scoring (skill_matcher.py, experience_matcher.py, scorer.py)

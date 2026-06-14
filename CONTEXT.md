@@ -4,7 +4,7 @@
 > ⚠️ Lines: 60/600 — keep under limit!
 
 ## Current Status
-Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 (language pipeline) complete — detector, translator, multilingual embedder written and linted. Ready for Phase 5 (search pipeline).
+Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 complete. Phase 5 (search pipeline) complete — FAISS vector search, BM25, hybrid RRF fusion, cross-encoder reranker, hard filters. Ready for Phase 6 (matching & scoring).
 
 ## Active Tasks
 - [ ] Phase 5: Search pipeline
