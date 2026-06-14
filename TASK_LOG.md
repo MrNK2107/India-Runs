@@ -98,3 +98,32 @@
 
 **Next Steps:**
 - Phase 2: Synthetic data generation (1,000 profiles, 50 queries)
+
+---
+
+## June 14, 2026 — current session — Session 5
+
+**Task:** Proceed with Phase 3 (ingestion pipeline)
+**Status:** completed
+
+**Changes:**
+- `src/core/models.py`: Added REDROB to ProfileSource enum
+- `src/ingestion/parser.py`: ProfileParser — JSONL, JSON, gzip, batch with error handling
+- `src/ingestion/normalizer.py`: normalize_redrob() mapping Redrob schema (8 top-level fields) → Profile model (30 Pydantic fields)
+- `src/ingestion/quality_scorer.py`: compute_data_quality_score() + bulk_score() per PRD Section 6.2b
+- `src/ingestion/extractor.py`: FieldExtractor — async LLM-assisted extraction for future unstructured data
+
+**Lint:** ruff check — 0 errors
+**Tests:** Parsed + normalized 50 real Redrob candidates from sample_candidates.json. All fields map correctly (name, title, company, location, skills, experience, education, signals). Quality scores computed.
+
+**Decisions:**
+- Normalizer adapted for Redrob schema (not LinkedIn/Naukri/GitHub as original plan specified) since real dataset is available
+- Skill categories auto-inferred from skill names via keyword matching (lang/framework/tool/domain)
+- File size: candidates.jsonl is 487 MB (100K lines) — parse_jsonl_file uses streaming, not load into memory
+
+**Issues:**
+- .docx files use unicode characters that break cp1252 encoding — used Python zipfile + xml.etree to extract
+- Phase 2 (synthetic data) is obsoleted by the 100K real Redrob profiles
+
+**Next Steps:**
+- Phase 4: Language pipeline (detector, translator, multilingual)

@@ -1,16 +1,15 @@
 # Project Context — India Runs
 
 > Last updated: June 14, 2026 by current session
-> ⚠️ Lines: 54/600 — keep under limit!
+> ⚠️ Lines: 60/600 — keep under limit!
 
 ## Current Status
-Phase 0 complete. Phase 1 (core infrastructure) complete — configs, config.py, constants.py, models.py all written, linted, and import-validated. Ready for Phase 2 (synthetic data generation).
+Phase 0 complete. Phase 1 (core infrastructure) complete. Phase 3 (ingestion pipeline) complete — parser, normalizer, quality scorer, extractor all written, linted, and tested on real Redrob dataset. Phase 2 (synthetic data generation) is obsolete — the hackathon provides 100K real profiles. Ready for Phase 4 (language pipeline).
 
 ## Active Tasks
-- [ ] Phase 2: Synthetic data generation (1,000 profiles, 50 queries)
-- [ ] Phase 3: Ingestion pipeline
-- [ ] Phase 4: Language pipeline
+- [ ] Phase 4: Language pipeline (detector, translator, multilingual)
 - [ ] Phase 5: Search pipeline
+- [ ] Phase 6: Matching & scoring
 
 ## Architecture Decisions
 - **UI Framework:** Gradio only (not Streamlit) — simpler for demos, free HuggingFace Spaces hosting
@@ -37,6 +36,7 @@ Phase 0 complete. Phase 1 (core infrastructure) complete — configs, config.py,
 
 ## Known Issues
 - Pip dependency conflict with supabase packages (httpx<0.28) — unrelated, not a project issue
+- Phase 2 (synthetic data generation) is obsoleted by real dataset — plan should skip to Phase 3
 
 ## Environment
 - Project path: `C:\Users\nanda\Desktop\india-runs`
@@ -49,4 +49,5 @@ Phase 0 complete. Phase 1 (core infrastructure) complete — configs, config.py,
 - Session 1: Researched hackathon, created PRD, IMPLEMENTATION_PLAN, agent rules, context/task log
 - Session 2: Added multi-provider LLM support (OpenAI, Gemini, Ollama) to all docs
 - Session 3: Phase 0 implemented — pyproject.toml, Docker, .env.example, configs, directory structure, placeholders
-- Session 4: Phase 1 implemented — settings.yaml, scoring_weights.yaml, models.yaml, config.py, constants.py, models.py. ruff clean, all imports validated.
+- Session 4: Phase 1 implemented — settings.yaml, scoring_weights.yaml, models.yaml, config.py, constants.py, models.py
+- Session 5: Phase 3 implemented — parser.py, normalizer.py, quality_scorer.py, extractor.py, tested on real Redrob dataset (100K profiles). Discovered real dataset in hackathon bundle, Phase 2 obsoleted.
