@@ -54,3 +54,10 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# External datasets (too large for git)
+\[PUB\]*/
+__MACOSX/
+
+# Benchmarks
+.benchmarks/

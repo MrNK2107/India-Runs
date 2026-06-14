@@ -315,3 +315,34 @@
 
 **Next Steps:**
 - Phase 14: Testing (unit, integration, system tests)
+
+---
+
+## June 14, 2026 — current session — Session 17
+
+**Task:** Phase 14 test fixes + Phase 15 documentation
+**Status:** completed
+
+**Changes:**
+- `tests/test_ingestion/test_parser.py`: Fixed normalizer tests to match Redrob API schema (candidate_id, nested profile, skills as dicts)
+- `tests/test_language/test_detector.py`: Fixed detector tests for dict return type, translator batch signature
+- `tests/test_rationale/test_generator.py`: Fixed Profile/personal requirement, SkillDetail proficiency_match
+- `src/rationale/generator.py`: Added missing proficiency_match to SkillDetail constructor
+- `README.md`: Created with project overview, quick start, architecture, tech stack
+- `docs/architecture.md`: Created with system overview, data flow, 7 subsystem descriptions
+- `docs/api.md`: Created with all 4 endpoints and curl examples
+- `docs/evaluation.md`: Created with metrics, running guide, interpretation table
+- `docs/deployment.md`: Created with local, Docker, Spaces, Railway/Render guides
+
+**Tests:** 57/57 passing
+**Lint:** ruff clean (only external dataset errors remain)
+
+**Decisions:**
+- Documentation follows Phase 15 spec exactly: README + 4 docs/*.md files
+- All docs written for real architecture (not planned), reflecting actual API behavior
+
+**Issues:**
+- None — Phase 15 is the final implementation phase
+
+**Next Steps:**
+- Project complete. Ready for final commit and push.

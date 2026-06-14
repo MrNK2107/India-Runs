@@ -94,6 +94,7 @@ class RationaleGenerator:
                 skill=s,
                 required=True,
                 found=s in matched,
+                proficiency_match=s in matched,
                 evidence=s in matched and "Found in profile" or "Not found in profile",
             )
             for s in list(matched) + list(missing)
