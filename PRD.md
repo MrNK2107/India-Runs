@@ -5,8 +5,8 @@
 > **Prize Pool:** ₹10 Lakhs (₹2,00,000 Grand Champion)  
 > **Platform:** Hack2Skill  
 > **Event Duration:** 42 days (Registration closes June 28, 2026; Event ends July 31, 2026)  
-> **PRD Version:** 1.0  
-> **Last Updated:** June 14, 2026
+> **PRD Version:** 2.0  
+> **Last Updated:** June 14, 2026 (updated: comprehensive gap analysis + winning strategies from Architectural Blueprint)
 
 ---
 
@@ -49,6 +49,10 @@ Build an **Intelligent Candidate Discovery System** that goes beyond traditional
 - Multilingual support (30+ Indian languages) — aligned with Redrob AI's core mission
 - Rationale reports for every match — not just a ranked list
 - Bias-aware ranking that matches on skills, not proxies
+- **Listwise tournament ranking** (Plackett-Luce) — candidates compete head-to-head in tournament rounds for globally coherent rankings
+- **PII redaction layer** — names, universities, locations stripped before LLM evaluation to prevent name-based and institution-based bias
+- **Scoped pre-search retrieval** — structural filters narrow the candidate pool before expensive vector search runs, solving Vector Search Dilution at scale
+- **Multi-dimensional YAML rationale** — 12-20 granular dimensions per candidate (not just 6)
 
 ---
 
@@ -199,12 +203,60 @@ Hackathon judges will evaluate on:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Architecture Diagram (3-Stage Pipeline)
+
+```
+              USER QUERY
+                  |
+                  v
+    +-------------------+      +-------------------+
+    |   Stage 1a: FTS   |      |   Stage 1b: Vec   |
+    |  BM25 Sparse Index|      |  FAISS Dense Retr |
+    +-------------------+      +-------------------+
+              |                         |
+              +---------> RRF <---------+
+                  (parallel execution)
+                          |
+                          v
+                +-------------------+
+                |  STRUCTURAL PRE-  |  <-- Scoped retrieval: filters BEFORE vector
+                |  SEARCH FILTERS   |      search narrows the candidate pool
+                +-------------------+
+                          |
+                          v
+                +-------------------+
+                |   Stage 2: Cross  |
+                |  Encoder Reranker |
+                +-------------------+
+                          |
+                          v
+               +---------------------+
+               |   Stage 3:          |
+               |  LangGraph Agent    |
+               |  Plan->Exec->Reflect|
+               +---------------------+
+                          |
+                          v
+               +---------------------+
+               |  Listwise           |
+               |  Tournament Ranking |
+               |  (Plackett-Luce)    |
+               +---------------------+
+                          |
+                          v
+             RATIONALE (12-20 dims) + PII REDACTED OUTPUT
+```
+
 ### Architecture Principles
 1. **Offline-heavy:** All heavy computation (embedding, indexing) happens at build time. Runtime is fast retrieval + LLM generation.
 2. **Modular:** Each component (parser, embedder, searcher, ranker, generator) is independently testable and replaceable.
 3. **Fail-safe:** If any component fails, fall back gracefully (e.g., if cross-encoder is slow, skip reranking; if LLM is unavailable, return raw matches without rationale).
 4. **Local-first:** Use local models where possible to minimize API costs and latency. LLM calls only for planning and rationale generation.
 5. **Provider-agnostic:** LLM layer supports OpenAI, Google Gemini, and local Ollama. Configuration determines which provider is used. All agents use a unified interface.
+6. **Scoped pre-search filtering:** Structural filters (location, experience, company) narrow the candidate pool before FAISS/BM25 search, not after — solving Vector Search Dilution at scale.
+7. **Parallel execution:** BM25 and FAISS searches run concurrently (not sequentially) to minimize latency.
+8. **PII-free evaluation pipeline:** Candidate names, institutions, and locations are stripped before any LLM evaluation to prevent name-based and institution-based bias.
+9. **Listwise over pointwise:** Final ranking uses a Plackett-Luce tournament model where candidates compete in small groups, producing globally coherent rankings rather than independent pointwise scores.
 
 ---
 
@@ -640,16 +692,18 @@ CREATE INDEX idx_matches_rank ON matches(query_id, rank);
 - **FR-2.3:** Use `facebook/mbart-large-50-many-to-many-mmt` or `Helsinki-NLP/opus-mt-mul` for translation
 - **FR-2.4:** Track translation confidence — flag low-confidence translations for human review
 - **FR-2.5:** Use multilingual embeddings (`paraphrase-multilingual-MiniLM-L12-v2`) so cross-lingual search works natively
+- **FR-2.6:** For code-mixed Hindi-English (Hinglish) text, use HingBERT/HingRoBERTa NER models for entity extraction rather than standard English NER
+- **FR-2.7:** Implement Translate-in-Thought (TinT) prompting for the LLM planner to internally translate and process code-mixed queries without explicit translation latency
 
-### FR-3: Hybrid Search Engine
+### FR-3: Hybrid Search Engine (Scoped Retrieval)
 - **FR-3.1:** Build a **BM25 index** over all profiles using `rank_bm25` library
 - **FR-3.2:** Build a **FAISS vector index** over all profile embeddings
-- **FR-3.3:** Given a query, execute **parallel search** on both indexes
-- **FR-3.4:** Combine results using **Reciprocal Rank Fusion (RRF)**:
+- **FR-3.3:** Apply **structural hard filters BEFORE search** (location, experience range, required certifications) to narrow the candidate pool before vector search — this solves Vector Search Dilution at scale
+- **FR-3.4:** Given a query, execute **parallel search** on both indexes (BM25 + FAISS run concurrently)
+- **FR-3.5:** Combine results using **Reciprocal Rank Fusion (RRF)**:
   ```
   RRF_score(d) = Σ 1/(k + rank_i(d))  where k = 60
   ```
-- **FR-3.5:** Apply **hard filters** before search (location, experience range, required certifications)
 - **FR-3.6:** Return top-50 candidates from hybrid search for reranking
 
 ### FR-4: Cross-Encoder Reranking
@@ -697,6 +751,20 @@ CREATE INDEX idx_matches_rank ON matches(query_id, rank);
             + 0.05 * cross_encoder
   ```
 - **FR-7.3:** Compute `confidence` based on score variance (high confidence = all dimensions agree)
+
+### FR-8: Listwise Tournament Ranking (Plackett-Luce)
+- **FR-8.1:** Instead of independent pointwise scoring, implement a listwise tournament ranking mechanism
+- **FR-8.2:** Group top candidates into subsets of 4-5. For each subset, have the evaluator LLM produce a relative ordering
+- **FR-8.3:** Aggregate partial rankings from all subsets using a statistical **Plackett-Luce model** to produce a globally coherent final ranking
+- **FR-8.4:** This mirrors real-world hiring committees and eliminates score clustering from independent pointwise scoring
+- **FR-8.5:** The evaluator LLM judges groups simultaneously, not pairwise (more sample-efficient than pairwise comparisons)
+
+### FR-9: PII Redaction & Bias Masking
+- **FR-9.1:** Build an **anonymization layer** that automatically strips PII before candidate data reaches any LLM: names, photos, gendered pronouns, specific local addresses, elite university names, company names
+- **FR-9.2:** Implement **style anonymization** — strip LLM-specific stylistic traits (excessive bullet-point structuring, overused verbs like "spearheaded" or "fostered", standard prompt-engineered summaries) before sending to the evaluator LLM
+- **FR-9.3:** This prevents **LLM self-preferencing bias** where LLMs rate LLM-written resumes 23-60% higher than human-written ones
+- **FR-9.4:** Compute Disparate Impact Ratio after every query; if DIR drops below 0.80 (4/5ths rule), **auto-halt and flag** the results
+- **FR-9.5:** Implement `equal_opportunity` metric alongside demographic parity and DIR
 
 ---
 
@@ -1073,35 +1141,109 @@ def reciprocal_rank_fusion(
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 ```
 
+### 12.4 Listwise Tournament Ranking (Plackett-Luce)
+
+The final ranking stage uses an **Active Listwise Tournament** mechanism:
+
+```python
+def rank_via_plackett_luce(
+    candidates: list[dict],  # candidate profiles with scores
+    evaluator_llm: Callable,  # LLM that judges groups
+    group_size: int = 5,
+    num_rounds: int = 3,
+) -> list[tuple[str, float]]:
+    """
+    Rank candidates using a Plackett-Luce tournament model.
+    
+    Process:
+    1. Divide candidates into random groups of `group_size`
+    2. For each group, LLM produces a relative ordering (listwise, not pairwise)
+    3. Aggregate partial rankings using Plackett-Luce into globally coherent ranking
+    4. Repeat for `num_rounds` with reshuffled groups
+    5. Final ranking from aggregated model
+    """
+    # 1. Random group assignment
+    groups = chunk_randomly(candidates, group_size)
+    
+    # 2. LLM judges each group
+    partial_rankings = []
+    for group in groups:
+        # Evaluator sees anonymized profiles (PII stripped)
+        ordering = evaluator_llm.judge_group(group)
+        partial_rankings.append(ordering)
+    
+    # 3. Aggregate via Plackett-Luce (iterative algorithm)
+    # Each candidate's "merit" parameter θ is estimated via MM algorithm
+    theta = {c["id"]: 1.0 for c in candidates}
+    for _ in range(20):  # EM iterations
+        for c in candidates:
+            numerator = sum(
+                1 for ranking in partial_rankings if c["id"] in ranking
+            )
+            denominator = sum(
+                sum(theta[c2["id"]] for c2 in r if c2["rank"] >= c_rank)
+                for r in partial_rankings
+                for c_rank in [r.index(c["id"]) + 1 if c["id"] in r else 0]
+            )
+            if denominator > 0:
+                theta[c["id"]] = numerator / denominator
+    
+    return sorted(candidates, key=lambda c: theta[c["id"]], reverse=True)
+```
+
+This approach is superior to:
+- **Pointwise scoring** (current): each candidate scored independently, scores cluster and lose discriminative power
+- **Pairwise comparisons**: O(n²) comparisons needed; listwise is O(n) while more accurate
+
 ---
 
 ## 13. Rationale Generation System
 
-### 13.1 Rationale Template
+### 13.1 Multi-Dimensional YAML Rationale Reports (12-20 Dimensions)
 
-For each candidate in the top-10, generate:
+For each candidate in the top-10, generate a **structured YAML report** breaking down evaluation across 12 granular dimensions:
 
-```json
-{
-  "summary": "2-3 sentence overview of why this candidate matches",
-  "strengths": [
-    "Specific strength with evidence from profile"
-  ],
-  "gaps": [
-    "Specific gap or concern with evidence"
-  ],
-  "skill_details": [
-    {
-      "skill": "Python",
-      "required": true,
-      "found": true,
-      "proficiency_match": true,
-      "evidence": "Candidate listed 'Advanced Python' with 5 years usage in experience at Flipkart"
-    }
-  ],
-  "experience_analysis": "Paragraph analyzing relevance of work history",
-  "recommendation": "strong_match | good_match | potential_match | weak_match"
-}
+```yaml
+candidate_evaluation:
+  profile_id: "8f3b92c4-e12a-4c99-b101-0d3e589df462"
+  match_confidence: 0.92
+  
+  dimensional_scores:
+    core_technical_skills: 0.95
+    tool_proficiency: 0.90
+    domain_expertise: 0.85
+    role_stability: 0.88
+    leadership_indicators: 0.70
+    communication_signals: 0.75
+    multilingual_fit: 0.90
+    localized_salary_alignment: 0.80
+    career_growth_trajectory: 0.85
+    industry_relevance: 0.92
+    company_prestige: 0.78
+    culture_fit_signals: 0.82
+  
+  matching_evidence:
+    - dimension: "core_technical_skills"
+      skill: "React JS"
+      proven_years: 3.5
+      context_found: "Lead UI Developer at FinTech Startup"
+      proficiency_match: true
+    - dimension: "tool_proficiency"
+      skill: "Docker"
+      proven_years: 2.0
+      context_found: "Containerized microservices at Flipkart"
+      proficiency_match: true
+  
+  evaluation_rationale:
+    summary: "2-3 sentence overview of why this candidate matches"
+    strengths:
+      - "Direct experience with React JS in fintech domain"
+      - "Based in Bangalore — location match"
+    gaps:
+      - "No explicit cloud infrastructure experience (AWS/GCP)"
+    recommendation: "strong_match"
+  
+  anonymization_note: "PII stripped before LLM evaluation — no name, university, or location data was visible to the evaluator"
 ```
 
 ### 13.2 Rationale Generation Prompt
@@ -1112,59 +1254,150 @@ You are generating a candidate evaluation report for a recruiter.
 JOB REQUIREMENTS:
 {job_requirements_json}
 
-CANDIDATE PROFILE:
+CANDIDATE PROFILE (PII REDACTED):
 {candidate_profile_summary}
 
 MATCH SCORES:
 {scores_json}
 
-Generate a detailed rationale report. Be specific — reference actual companies, 
-roles, and skills from the profile. Do not make generic statements.
+Generate a detailed rationale report with evaluations across the following 12 dimensions:
+1. core_technical_skills — exact match of required programming languages and frameworks
+2. tool_proficiency — CI/CD, cloud, monitoring tools
+3. domain_expertise — industry-specific knowledge (fintech, ecom, healthcare)
+4. role_stability — average tenure, job changes
+5. leadership_indicators — team lead, architect, mentoring roles
+6. communication_signals — public speaking, technical writing, open source
+7. multilingual_fit — language capabilities matching query requirements
+8. localized_salary_alignment — compensation parity for their location/seniority
+9. career_growth_trajectory — promotions, expanding responsibilities
+10. industry_relevance — experience in the same sector as the role
+11. company_prestige — brand-name companies vs startups (signal, not bias)
+12. culture_fit_signals — open source, side projects, community involvement
 
-Requirements:
-- summary: 2-3 sentences, specific to this candidate
-- strengths: list specific matches with evidence
-- gaps: list specific concerns or missing requirements
-- skill_details: for each required skill, note if found and the evidence
-- experience_analysis: paragraph about work history relevance
-- recommendation: one of strong_match, good_match, potential_match, weak_match
+Output as structured YAML. Reference specific evidence from the profile.
+Do NOT reference names, universities, or locations in the rationale — the candidate was anonymized for bias prevention.
 ```
 
 ---
 
 ## 14. Bias Mitigation & Fairness
 
-### 14.1 Identified Bias Risks
+### 14.1 PII Redaction Layer (Anonymization Pipeline)
+
+Before any candidate data reaches the LLM (for reflection, rationale, or listwise ranking), run through an **anonymization pipeline**:
+
+```python
+def anonymize_profile(profile: dict) -> dict:
+    """
+    Strip all PII from profile before LLM evaluation.
+    
+    Removes:
+    - Candidate name (replace with "Candidate-{uuid}")
+    - Gendered pronouns (replace with neutral "they/them")
+    - University names (replace with "University-{tier}")
+    - Company names (replace with "Company-{size}-{domain}")
+    - Specific addresses (replace with city only)
+    - Photo URLs
+    - Gendered language patterns
+    
+    Returns: anonymized profile dict (skills, experience lengths, 
+             industries, seniority preserved)
+    """
+    anonymized = deepcopy(profile)
+    anonymized["personal"]["name"] = f"Candidate-{uuid4().hex[:8]}"
+    anonymized["personal"]["location"]["city"] = None
+    anonymized["personal"]["location"]["state"] = None
+    anonymized["personal"]["languages_spoken"] = []  # Still tracked for multilingual
+    
+    for edu in anonymized.get("education", []):
+        edu["institution"] = anonymize_institution(edu["institution"])
+    
+    for exp in anonymized.get("experience", []):
+        exp["company"] = anonymize_company(exp["company"])
+        exp["location"] = None
+    
+    return anonymized
+
+
+def style_anonymize(text: str) -> str:
+    """
+    Strip LLM-writing style artifacts from profile text.
+    
+    Removes:
+    - Excessive bullet-point structures
+    - Overused verbs: "spearheaded", "fostered", "architected", "orchestrated"
+    - Standard LLM prompt-engineered summary patterns
+    - Generic power phrases
+    
+    Returns: style-neutralized text
+    """
+    LLM_VERBS = {"spearheaded", "fostered", "architected", "orchestrated", 
+                 "pioneered", "championed", "drove", "delivered", "enabled"}
+    # ... replacement logic
+    return cleaned_text
+```
+
+### 14.2 Internalized Bias Risks
+
 | Risk | Mitigation |
 |------|-----------|
-| Name-based ethnicity inference | Never infer ethnicity from names. Exclude names from matching logic. |
-| University pedigree bias | Weight skills/experience over education institution prestige. |
-| Gendered language bias | Do not use gendered pronouns in rationale. Match on skills only. |
-| Location bias (tier-1 vs tier-2) | Do not penalize tier-2 city candidates. Use location as a filter, not a ranking factor. |
+| Name-based ethnicity inference | **PII redaction layer** strips names before LLM evaluation. Never infer ethnicity. |
+| University pedigree bias | Anonymize institution names to tier-level only before LLM evaluation. Weight skills/experience over education. |
+| Gendered language bias | Strip gendered pronouns and style-anonymize text before LLM evaluation. Match on skills only. |
+| LLM self-preferencing bias (NEW) | Style-anonymization preprocessor strips LLM-writing artifacts (spearheaded, fostered, architected) before evaluation. Research shows LLMs rate LLM-written resumes 23-60% higher. |
+| Location bias (tier-1 vs tier-2) | Anonymize specific location to region only. Do not penalize tier-2 city candidates. |
 | Experience bias (gap years) | Do not penalize career gaps. Focus on total relevant experience. |
 | Language bias (English-only) | Multilingual support ensures non-English profiles are equally accessible. |
 
-### 14.2 Fairness Metrics
+### 14.3 Fairness Metrics + Automated Halting
 
 ```python
+DISPARATE_IMPACT_THRESHOLD = 0.80  # 4/5ths rule
+
+
 def compute_fairness_metrics(matches: list, profiles: dict) -> dict:
     """
     Compute fairness metrics for a set of matches.
     """
     return {
         "demographic_parity": compute_demographic_parity(matches, profiles),
-        "disparate_impact_ratio": compute_disparate_impairment(matches, profiles),
+        "disparate_impact_ratio": compute_disparate_impact_ratio(matches, profiles),
         "equal_opportunity": compute_equal_opportunity(matches, profiles),
         "language_bias_check": compute_language_bias(matches, profiles),
         "location_bias_check": compute_location_bias(matches, profiles)
     }
 
-def compute_disparate_impairment(matches, profiles):
+
+def compute_disparate_impact_ratio(matches, profiles):
     """
     4/5ths rule: selection rate of protected group / selection rate of majority group
     Should be ≥ 0.80
     """
     # ... implementation
+
+
+def check_and_flag_fairness(matches, profiles) -> dict:
+    """
+    Compute all fairness metrics and flag if DIR < 0.80.
+    If DIR drops below threshold, returns a warning that should halt/flag results.
+    """
+    metrics = compute_fairness_metrics(matches, profiles)
+    dir_value = metrics["disparate_impact_ratio"]
+    
+    if dir_value < DISPARATE_IMPACT_THRESHOLD:
+        return {
+            "fair": False,
+            "warning": f"Disparate Impact Ratio {dir_value:.2f} < {DISPARATE_IMPACT_THRESHOLD}. "
+                       f"Results may exhibit bias. Flagged for review.",
+            "metrics": metrics,
+            "action_required": "review"
+        }
+    
+    return {
+        "fair": True,
+        "metrics": metrics,
+        "action_required": "none"
+    }
 ```
 
 ---
@@ -1511,95 +1744,140 @@ india-runs/
 
 ## 19. Implementation Phases & Timeline
 
-### Phase 1: Foundation (Days 1-7)
-**Goal:** Working data pipeline with normalized profiles
+### Phase 1: Bug Fixes & API Wiring (Days 1-3)
+**Goal:** Fix all critical bugs from gap analysis — ensure core pipeline works correctly
 
 | Task | Owner | Days | Deliverable |
 |------|-------|------|-------------|
-| Set up project structure, pyproject.toml, Docker | - | 1 | Working dev environment |
-| Define Pydantic models (all schemas) | - | 1 | `src/core/models.py` |
-| Build profile parser (JSON/CSV → normalized schema) | - | 2 | `src/ingestion/parser.py` |
-| Build LLM-assisted field extractor | - | 2 | `src/ingestion/extractor.py` |
-| Build profile normalizer + quality scorer | - | 1 | `src/ingestion/normalizer.py` |
-| Generate synthetic dataset (1,000 profiles) | - | 1 | `data/profiles/*.json` |
-| Unit tests for ingestion pipeline | - | 1 | `tests/test_ingestion/` |
+| Fix API search route to wire filters into orchestrator | - | 0.5 | `src/api/routes/search.py`, `src/agents/orchestrator.py` |
+| Fix `executor.py` to return individual BM25/FAISS scores (not same hybrid score for both) | - | 0.5 | `src/agents/executor.py` |
+| Fix `_rationale_node` stub to actually call `RationaleGenerator` | - | 0.5 | `src/agents/orchestrator.py` |
+| Fix translation model loading (tokenizer/model swap bug) | - | 0.5 | `src/language/translator.py` |
+| Register `InputValidationMiddleware` in `main.py` | - | 0.5 | `src/main.py` |
+| Fix health endpoint to reflect actual model state | - | 0.5 | `src/api/routes/health.py` |
 
-**Exit Criteria:** Can ingest 1,000 profiles and produce normalized JSON output.
+**Exit Criteria:** All 7 critical bugs fixed; API filters applied; individual scores correct; rationale generated in agent loop.
 
-### Phase 2: Search Engine (Days 8-14)
-**Goal:** Working hybrid search with BM25 + FAISS + RRF
-
-| Task | Owner | Days | Deliverable |
-|------|-------|------|-------------|
-| Build multilingual embedding pipeline | - | 2 | `src/language/multilingual.py` |
-| Build FAISS vector index + search | - | 2 | `src/search/vector_search.py` |
-| Build BM25 index + search | - | 1 | `src/search/bm25_search.py` |
-| Implement RRF fusion | - | 1 | `src/search/hybrid.py` |
-| Build cross-encoder reranker | - | 1 | `src/search/reranker.py` |
-| Build hard filter system | - | 1 | `src/search/filters.py` |
-| Integration tests for search | - | 1 | `tests/test_search/` |
-| Generate 50 test queries + ground truth | - | 1 | `data/queries/`, `data/ground_truth/` |
-| Run evaluation metrics (precision@10, recall@50) | - | 1 | `notebooks/02_evaluation.ipynb` |
-
-**Exit Criteria:** Can search 1,000 profiles with precision@10 ≥ 0.70.
-
-### Phase 3: Matching & Scoring (Days 15-21)
-**Goal:** Fine-grained scoring with skill matching and confidence
+### Phase 2: Data Generation (Days 4-6)
+**Goal:** Realistic synthetic dataset for demo and evaluation
 
 | Task | Owner | Days | Deliverable |
 |------|-------|------|-------------|
-| Build skill matcher with fuzzy matching | - | 2 | `src/matching/skill_matcher.py` |
-| Build experience matcher | - | 1 | `src/matching/experience_matcher.py` |
-| Build weighted scoring system | - | 1 | `src/matching/scorer.py` |
-| Build confidence calculator | - | 1 | `src/matching/confidence.py` |
-| Build language detection + translation pipeline | - | 2 | `src/language/detector.py`, `translator.py` |
-| Cross-lingual evaluation tests | - | 1 | `tests/test_language/` |
-| Integration tests | - | 1 | `tests/test_integration/` |
+| Build synthetic profile generator (1,000 profiles) | - | 2 | `scripts/generate_data.py` |
+| Build 50 job queries with Indian-market realism | - | 0.5 | `data/queries/queries.json` |
+| Build ground truth labels for 20 queries | - | 0.5 | `data/ground_truth/ground_truth.json` |
+| Fix `raw_text` construction to match PRD spec | - | 0.5 | `src/ingestion/normalizer.py` |
+| Build FAISS + BM25 indexes from generated data | - | 0.5 | `scripts/build_indexes.py` |
 
-**Exit Criteria:** Precision@10 ≥ 0.80, cross-lingual MRR ≥ 0.60.
+**Exit Criteria:** 1,000 profiles generated, queries and ground truth created, indexes built.
 
-### Phase 4: Agentic Workflow (Days 22-28)
-**Goal:** Working Plan → Execute → Reflect → Re-plan loop
+### Phase 3: Scoped Retrieval + Parallel Search (Days 7-9)
+**Goal:** Scoped pre-search filtering and parallel BM25/FAISS execution
 
 | Task | Owner | Days | Deliverable |
 |------|-------|------|-------------|
-| Set up LangGraph state machine | - | 2 | `src/agents/orchestrator.py` |
-| Build Planner agent | - | 1 | `src/agents/planner.py` |
-| Build Executor agent | - | 1 | `src/agents/executor.py` |
-| Build Reflector agent | - | 2 | `src/agents/reflector.py` |
-| Build re-plan loop (max 3 cycles) | - | 1 | `src/agents/orchestrator.py` |
-| Agent integration tests | - | 1 | `tests/test_agents/` |
+| Implement scoped retrieval: structural filters BEFORE BM25/FAISS search | - | 1 | `src/search/filters.py`, `src/agents/executor.py` |
+| Make BM25 and FAISS searches run in parallel (concurrent.futures or asyncio.gather) | - | 1 | `src/search/hybrid.py` |
+| Add incremental FAISS index support (add vectors without full rebuild) | - | 1 | `src/search/vector_search.py` |
 
-**Exit Criteria:** End-to-end search with agentic planning returns top-10 with rationale.
+**Exit Criteria:** Filters narrow search pool before vector search; BM25 + FAISS run concurrently; incremental index updates.
 
-### Phase 5: Rationale & Fairness (Days 29-35)
-**Goal:** High-quality rationale reports and fairness metrics
+### Phase 4: Listwise Tournament Ranking (Days 10-13)
+**Goal:** Plackett-Luce tournament ranking replacing pointwise scoring for final ordering
 
 | Task | Owner | Days | Deliverable |
 |------|-------|------|-------------|
-| Build rationale generator | - | 2 | `src/rationale/generator.py` |
-| Build rationale validator | - | 1 | `src/rationale/validator.py` |
-| Build bias detector | - | 1 | `src/fairness/bias_detector.py` |
-| Build fairness metrics | - | 1 | `src/fairness/metrics.py` |
-| Rationale quality evaluation (human eval) | - | 1 | `notebooks/02_evaluation.ipynb` |
-| Fairness audit | - | 1 | `notebooks/02_evaluation.ipynb` |
+| Build listwise ranking module (`src/ranking/listwise_ranker.py`) | - | 2 | Plackett-Luce model with group creation + LLM judge calls + MM aggregation |
+| Build `judge_group` method for LLM evaluator (judge 4-5 candidates simultaneously) | - | 1 | LLM prompt + structured output parsing |
+| Integrate listwise ranking into the agent pipeline (new node after reflect) | - | 1 | `src/agents/orchestrator.py` |
+| Unit tests for Plackett-Luce aggregation | - | 1 | `tests/test_matching/test_listwise_ranker.py` |
 
-**Exit Criteria:** Rationale quality ≥ 4.0/5.0, disparate impact ratio ≥ 0.80.
+**Exit Criteria:** Listwise tournament produces globally coherent rankings; outperforms pointwise in precision@10.
 
-### Phase 6: UI, API & Polish (Days 36-42)
-**Goal:** Demo-ready application with polished UI
+### Phase 5: PII Redaction + Bias Automation (Days 14-17)
+**Goal:** Anonymization pipeline and automated fairness enforcement
 
 | Task | Owner | Days | Deliverable |
 |------|-------|------|-------------|
-| Build FastAPI endpoints | - | 2 | `src/api/` |
-| Build Gradio/Streamlit demo UI | - | 3 | `src/ui/app.py` |
-| Visual design: score colors, radar charts, timeline | - | 1 | UI components |
-| Add loading states, error handling, animations | - | 1 | UI polish |
-| Write pitch deck | - | 1 | `docs/pitch_deck.pdf` |
-| Final testing + bug fixes | - | 2 | All tests pass |
-| Deploy demo | - | 1 | Live demo URL |
+| Build PII redaction layer (`src/fairness/anonymizer.py`) | - | 1 | Strip names/universities/companies/locations before LLM eval |
+| Build style anonymization preprocessor | - | 1 | Strip LLM-writing artifacts (spearheaded, fostered, etc.) |
+| Wire anonymization into executor/reflector/rationale pipelines | - | 1 | `src/agents/executor.py`, `src/agents/reflector.py`, `src/rationale/generator.py` |
+| Add `equal_opportunity` metric | - | 0.5 | `src/fairness/metrics.py` |
+| Add automated DIR check with halting/flagging | - | 0.5 | `src/fairness/anonymizer.py` |
+| Unit tests for anonymizer + DIR halting | - | 1 | `tests/test_fairness/` |
 
-**Exit Criteria:** Fully working demo, pitch deck complete, all tests passing.
+**Exit Criteria:** All PII stripped before LLM eval; DIR auto-checks and flags; style-anonymization active.
+
+### Phase 6: 12-20 Dimension Rationale Reports (Days 18-20)
+**Goal:** Multi-dimensional YAML rationale with fine-grained evaluation
+
+| Task | Owner | Days | Deliverable |
+|------|-------|------|-------------|
+| Expand rationale prompt to 12 dimensions | - | 0.5 | `src/rationale/templates.py` |
+| Build YAML output formatter for rationale | - | 1 | `src/rationale/generator.py` |
+| Update `RationaleValidator` to validate all 12 dimensions | - | 0.5 | `src/rationale/validator.py` |
+| Wire rationale into agent's `_rationale_node` | - | 0.5 | `src/agents/orchestrator.py` |
+| UI: display 12-dim radar chart + YAML report | - | 0.5 | `src/ui/components.py` |
+
+**Exit Criteria:** Rationale reports contain 12 dimensions; output in YAML; validated by RationaleValidator.
+
+### Phase 7: Code-Mixed NLP + Translation (Days 21-23)
+**Goal:** Handle Hindi-English code-mixed profiles and queries
+
+| Task | Owner | Days | Deliverable |
+|------|-------|------|-------------|
+| Add HingBERT/HingRoBERTa NER for code-mixed entity extraction | - | 1 | `src/language/code_mixed.py` |
+| Implement Translate-in-Thought (TinT) prompting for planner | - | 1 | `src/agents/planner.py` |
+| Fix translation pipeline to actually load and use translation models | - | 1 | `src/language/translator.py` |
+| Cross-lingual evaluation tests | - | 1 | `tests/test_language/test_translator.py` |
+
+**Exit Criteria:** Code-mixed Hindi-English text correctly parsed; translation pipeline functional; cross-lingual MRR ≥ 0.75.
+
+### Phase 8: Error Handling + Observability (Days 24-26)
+**Goal:** All 7 PRD fallback scenarios implemented; structured logging
+
+| Task | Owner | Days | Deliverable |
+|------|-------|------|-------------|
+| Implement 0-results message + suggestions | - | 0.5 | `src/agents/orchestrator.py` |
+| Implement translation failure fallback flag | - | 0.5 | `src/language/translator.py` |
+| Implement noisy profile skip + counter | - | 0.5 | `src/ingestion/parser.py` |
+| Implement FAISS rebuild from stored embeddings | - | 0.5 | `src/search/vector_search.py` |
+| Implement rate limiting middleware (429 with retry-after) | - | 0.5 | `src/api/middleware/rate_limit.py` |
+| Add structured JSON logging | - | 0.5 | `src/api/middleware/logging.py` |
+| Add metrics tracking (latency, throughput, error rates) | - | 0.5 | `src/api/middleware/metrics.py` |
+
+**Exit Criteria:** All 7 error scenarios handled; structured logging active; metrics tracked.
+
+### Phase 9: UI Polish + Full Test Coverage (Days 27-30)
+**Goal:** Demo-ready UI, comprehensive test suite, CI pipeline
+
+| Task | Owner | Days | Deliverable |
+|------|-------|------|-------------|
+| UI: dark mode support | - | 0.5 | `src/ui/styles.css`, `src/ui/app.py` |
+| UI: skeleton loading states | - | 0.5 | `src/ui/components.py` |
+| UI: live analytics data (not hardcoded) | - | 0.5 | `src/ui/app.py` |
+| UI: left panel click→right panel behavior | - | 0.5 | `src/ui/app.py` |
+| UI: experience timeline component | - | 0.5 | `src/ui/components.py` |
+| Missing tests: 11 missing test files | - | 2 | `tests/test_ingestion/test_extractor.py`, etc. |
+| Missing tests: critical test cases (cross-lingual, listwise, latency) | - | 1 | All test files |
+| Set up CI pipeline (.github/workflows/) | - | 0.5 | `.github/workflows/test.yml` |
+| Set up Gradio Spaces config | - | 0.5 | `gradio_deploy.py` or Spaces config |
+
+**Exit Criteria:** Dark mode, skeleton loading, live analytics; 100+ tests; CI passing.
+
+### Phase 10: Documentation + Submission (Days 31-33)
+**Goal:** Complete documentation, pitch deck, deployable demo
+
+| Task | Owner | Days | Deliverable |
+|------|-------|------|-------------|
+| Update README.md with new architecture and metrics | - | 0.5 | `README.md` |
+| Update docs/ with new features (listwise, anonymizer, etc.) | - | 1 | `docs/architecture.md`, `docs/api.md`, etc. |
+| Create pitch deck PDF (12 slides) | - | 1 | `docs/pitch_deck.pdf` |
+| Fix Dockerfile to build indexes + expose Gradio | - | 0.5 | `Dockerfile`, `docker-compose.yml` |
+| Deploy to HuggingFace Spaces | - | 0.5 | Live demo URL |
+| Final commit + push to GitHub | - | 0.5 | GitHub repo |
+
+**Exit Criteria:** Fully working demo deployed; pitch deck ready; GitHub repo public.
 
 ---
 
@@ -1613,8 +1891,10 @@ india-runs/
 | Integration Tests | pytest + httpx | Key workflows | End of each phase |
 | Evaluation Tests | Custom scripts | Precision@10, Recall@50 | Phase 2, 5 |
 | E2E Tests | pytest | Full pipeline | Phase 4, 6 |
-| Fairness Tests | Custom scripts | Disparate impact | Phase 5 |
+| Fairness Tests | pytest + custom | Disparate impact, PII redaction | Phase 5 |
 | Load Tests | Locust or custom | 10 concurrent searches | Phase 6 |
+| Listwise Ranking Tests | pytest | Plackett-Luce correctness | Phase 4 |
+| Anonymization Tests | pytest | PII stripping, style stripping | Phase 5 |
 
 ### 20.2 Critical Test Cases
 
@@ -1627,8 +1907,11 @@ def test_hybrid_search_returns_ranked_results():
 def test_rrf_fusion_combines_bm25_and_vector():
     """RRF correctly merges results from both search methods"""
 
-def test_hard_filter_excludes_out_of_range():
-    """Location and experience filters correctly exclude candidates"""
+def test_scoped_retrieval_filters_before_search():
+    """Structural filters narrow the candidate pool BEFORE vector search runs"""
+
+def test_bm25_and_faiss_run_in_parallel():
+    """BM25 and FAISS searches execute concurrently, not sequentially"""
 
 def test_cross_lingual_search_matches_hindi_to_english():
     """A Hindi query matches English profiles with similar content"""
@@ -1667,6 +1950,9 @@ def test_replan_triggered_on_poor_results():
 def test_max_replan_limit():
     """System stops after 3 re-plan cycles even if results are poor"""
 
+def test_rationale_node_generates_rationale():
+    """_rationale_node calls RationaleGenerator and returns structured output"""
+
 # tests/test_integration/test_end_to_end.py
 
 def test_search_with_multilingual_profiles():
@@ -1677,6 +1963,50 @@ def test_search_with_messy_profiles():
 
 def test_search_latency_under_2s():
     """End-to-end search with rationale completes in < 2 seconds"""
+
+# NEW: Phase 4 - Listwise Ranking
+
+def test_plackett_luce_aggregation():
+    """Plackett-Luce correctly aggregates partial rankings into global ordering"""
+
+def test_listwise_ranked_better_than_pointwise():
+    """Listwise ranking produces better precision@10 than pointwise scoring"""
+
+# NEW: Phase 5 - Anonymization
+
+def test_pii_stripped_before_llm():
+    """Names, universities, and companies are removed before LLM evaluation"""
+
+def test_style_anonymization_removes_llm_artifacts():
+    """LLM-writing style artifacts (spearheaded, fostered) are stripped"""
+
+def test_dir_below_threshold_flags_results():
+    """DIR < 0.80 triggers a flag/warning in the response"""
+
+def test_equal_opportunity_metric_computed():
+    """Equal opportunity metric is computed alongside demographic parity"""
+
+# NEW: Phase 7 - Code-Mixed
+
+def test_hingbert_ner_extracts_skills_from_hinglish():
+    """HingBERT correctly extracts 'Python' and 'Docker' from 'Mujhe Python aur Docker aata hai'"""
+
+def test_translate_in_thought_handles_code_mixed_query():
+    """TinT prompting correctly parses a code-mixed Hindi-English query"""
+
+# NEW: Phase 8 - Error Handling
+
+def test_zero_results_returns_message_with_suggestions():
+    """Empty results include a helpful message and broadening suggestions"""
+
+def test_translation_fallback_sets_flag():
+    """When translation fails, translation_fallback=true is set in metadata"""
+
+def test_rate_limiting_returns_429():
+    """Exceeding rate limit returns 429 with retry-after header"""
+
+def test_faiss_corruption_rebuilds_from_embeddings():
+    """Corrupted FAISS index triggers automatic rebuild from stored embeddings"""
 ```
 
 ### 20.3 Evaluation Protocol
@@ -1804,6 +2134,9 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 | Demo fails during presentation | Low | Critical | Pre-compute top results, have offline fallback, test extensively |
 | FAISS index too large for free tier | Low | Medium | Use 384-dim embeddings (MiniLM), quantize if needed |
 | Agent hallucinates bad search parameters | Medium | Medium | Validate planner output against schema, use structured output |
+| LLM self-preferencing bias inflates scores | Medium | High | Style-anonymization preprocessor strips LLM-writing artifacts from profiles before evaluation |
+| Plackett-Luce model converges slowly | Low | Medium | Cap EM iterations at 20; fall back to pointwise if convergence fails |
+| PII redaction removes too much context | Medium | Medium | Selective redaction: preserve skills, years, industries; strip names, institutions, addresses |
 
 ---
 
@@ -1820,6 +2153,13 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 | **Bi-Encoder** | A model that encodes query and document independently into vectors — fast but less accurate |
 | **Agentic Workflow** | An AI system that uses multiple agents (planner, executor, reflector) to solve complex tasks iteratively |
 | **Passive Candidate** | A professional who is not actively looking for a job but may be open to the right opportunity |
+| **Plackett-Luce** | A statistical model for ranking items based on partial preference observations (tournament ranking) |
+| **Listwise Ranking** | A ranking approach where candidates are judged in groups simultaneously, not independently |
+| **Scoped Retrieval** | Applying structural filters before vector search to narrow the candidate pool (solves Vector Search Dilution) |
+| **PII Redaction** | Personally Identifiable Information removal — stripping names, universities, companies before LLM evaluation |
+| **Style Anonymization** | Removing LLM-writing style artifacts from candidate text to prevent LLM self-preferencing bias |
+| **HingBERT** | A BERT model fine-tuned on Hindi-English code-mixed text for NER and classification |
+| **Translate-in-Thought (TinT)** | A prompting strategy where the LLM internally translates code-mixed text without explicit translation calls |
 
 ### B. Reference Implementations
 
@@ -1843,6 +2183,8 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 **Source of truth:** `configs/scoring_weights.yaml`. The code in `src/matching/scorer.py` loads weights from this file at runtime. Do NOT hardcode weights in Python — always read from YAML.
 
 **Note on `cross_encoder_score`:** This score is only available for candidates that made it through reranking. For candidates not reranked (e.g., cross-encoder skipped due to latency), this component defaults to 0.5 (neutral).
+
+**Note on listwise ranking:** After pointwise scoring and Plackett-Luce tournament ranking, the listwise rank is the final ordering. The pointwise scores remain as interpretable dimensions.
 
 ```yaml
 # configs/scoring_weights.yaml
@@ -1871,6 +2213,18 @@ rrf_k: 60  # From original RRF paper (Cormack et al. 2009), tunable
 
 max_replan_cycles: 3
 min_good_matches_for_pass: 8
+
+# Fairness thresholds
+fairness:
+  disparate_impact_threshold: 0.80  # 4/5ths rule
+  auto_flag_on_violation: true
+
+# Listwise ranking
+listwise_ranking:
+  enabled: true
+  group_size: 5
+  max_em_iterations: 20
+  num_tournament_rounds: 3
 ```
 
 ---

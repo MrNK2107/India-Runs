@@ -1,2916 +1,614 @@
-# Implementation Plan — Intelligent Candidate Discovery System
-# Every File, Every Function, Every Test. No Shortcuts.
+﻿# Implementation Plan — Intelligent Candidate Discovery System v2.0
+# Bug Fixes → Data → Differentiators → Polish
 
-> **This document is the execution blueprint.** Every file lists its exact contents:
-> classes, functions, signatures, constants, imports. An agent can follow this
-> line-by-line to build the finished product.
-
----
-
-## Phase 0: Environment Setup
-
-### 0.1 `pyproject.toml`
-
-```toml
-[project]
-name = "india-runs"
-version = "0.1.0"
-description = "Intelligent Candidate Discovery System — India Runs Track 1"
-requires-python = ">=3.11"
-dependencies = [
-    # Core
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
-    "pydantic-settings>=2.5",
-    "pyyaml>=6.0",
-    "python-dotenv>=1.0",
-    # ML/NLP
-    "sentence-transformers>=3.3",
-    "torch>=2.4",
-    "transformers>=4.46",
-    "langdetect>=1.0.9",
-    "spacy>=3.8",
-    # Search
-    "faiss-cpu>=1.8",
-    "rank-bm25>=0.2.2",
-    # Agent
-    "langgraph>=0.2",
-    "langchain-core>=0.3",
-    "langchain-openai>=0.2",
-    "langchain-google-genai>=2.0",
-    "langchain-ollama>=0.2",
-    "openai>=1.52",
-    "google-genai>=1.0",
-    # Data
-    "sqlalchemy>=2.0",
-    "psycopg2-binary>=2.9",
-    "redis>=5.0",
-    # UI
-    "gradio>=5.0",
-    "plotly>=5.24",
-    # Dev
-    "ruff>=0.7",
-    "mypy>=1.12",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "httpx>=0.27",
-    "pytest-cov>=6.0",
-]
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks integration tests",
-]
-
-[build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
-```
-
-### 0.2 `.env.example`
-
-```bash
-# LLM Provider (choose one: openai | gemini | ollama)
-LLM_PROVIDER=openai
-
-# OpenAI (if provider=openai)
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-
-# Google Gemini (if provider=gemini)
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.0-flash
-
-# Ollama (if provider=ollama)
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-
-# PostgreSQL
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/india_runs
-
-# Redis (optional)
-REDIS_URL=redis://localhost:6379/0
-
-# Application
-LOG_LEVEL=INFO
-MAX_REPLAN_CYCLES=3
-CROSS_ENCODER_TIMEOUT_MS=500
-```
-
-### 0.3 `docker-compose.yml`
-
-```yaml
-version: "3.9"
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: india_runs
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-volumes:
-  pgdata:
-```
-
-### 0.4 `Dockerfile`
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# System deps for faiss, psycopg2
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc build-essential && \
-    rm -rf /var/lib/apt/lists/*
-
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]"
-
-COPY . .
-
-# Download spacy model
-RUN python -m spacy download en_core_web_sm
-
-# Build indexes (data must be generated first)
-# RUN python scripts/generate_data.py
-# RUN python scripts/build_indexes.py
-
-EXPOSE 8000
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### 0.5 `scripts/deploy.sh`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "=== India Runs — Deployment Script ==="
-
-# 1. Build Docker image
-docker compose build
-
-# 2. Start infrastructure
-docker compose up -d postgres redis
-sleep 5  # Wait for postgres
-
-# 3. Generate synthetic data (if not exists)
-if [ ! -f data/profiles/profiles.json ]; then
-    echo "Generating synthetic profiles..."
-    docker compose run --rm app python scripts/generate_data.py
-fi
-
-# 4. Build indexes
-echo "Building FAISS + BM25 indexes..."
-docker compose run --rm app python scripts/build_indexes.py
-
-# 5. Run evaluation
-echo "Running evaluation..."
-docker compose run --rm app python scripts/evaluate.py
-
-# 6. Start application
-echo "Starting application..."
-docker compose up -d app
-
-echo "=== Application running at http://localhost:8000 ==="
-echo "=== Gradio UI at http://localhost:7860 ==="
-```
-
-### 0.6 Directory structure creation
-
-Run this to create all directories:
-```bash
-mkdir -p src/{api/{routes,middleware},core,ingestion,language,search,matching,agents,rationale,fairness,data,ui}
-mkdir -p tests/{test_ingestion,test_language,test_search,test_matching,test_agents,test_rationale,test_api,test_integration}
-mkdir -p notebooks scripts configs data/{profiles,queries,ground_truth,indexes,models} docs
-touch src/__init__.py src/{api,api/routes,api/middleware,core,ingestion,language,search,matching,agents,rationale,fairness,data,ui}/__init__.py
-touch tests/__init__.py tests/{test_ingestion,test_language,test_search,test_matching,test_agents,test_rationale,test_api,test_integration}/__init__.py
-```
+> **This document is the execution blueprint for completing the India Runs Track-1 submission.**
+> It accounts for: the existing codebase (57 tests, all 15 phases done), the 7 critical bugs found in the gap analysis, and the new winning strategies from the Architectural Blueprint.
+>
+> **Total phases: 10 | Estimated effort: 33 days | Primary goal: Precision@10 >= 0.85, DIR >= 0.80, cross-lingual MRR >= 0.75**
 
 ---
 
-## Phase 1: Core Infrastructure
+## Phase 0: Bug Fixes & API Wiring (Days 1-3)
 
-### 1.1 `configs/settings.yaml`
+**Mission:** Fix all 7 critical bugs identified in the gap analysis. Get the core pipeline working correctly before adding any new features.
 
-```yaml
-app:
-  name: "india-runs"
-  version: "0.1.0"
-  log_level: "INFO"
+### Bug B1: API search route ignores filters (src/api/routes/search.py)
 
-database:
-  url: "${DATABASE_URL}"
-  pool_size: 10
-  max_overflow: 20
+**Current:** Line 27 passes request.query only, ignores request.filters, request.language, request.include_rationale.
 
-redis:
-  url: "${REDIS_URL}"
-  cache_ttl_seconds: 3600
+**Fix:** Pass all request fields to orchestrator.run():
+- src/api/routes/search.py: update search_candidates to pass request.filters, request.language, request.include_rationale
+- src/agents/orchestrator.py: update run() signature to accept and wire filters into ExecutorAgent.execute()
 
-models:
-  embedding:
-    name: "paraphrase-multilingual-MiniLM-L12-v2"
-    dimension: 384
-    max_seq_length: 256
-    device: "cpu"
-  cross_encoder:
-    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    max_seq_length: 512
-    device: "cpu"
-  translation:
-    name: "Helsinki-NLP/opus-mt-mul"
-    fallback: "facebook/mbart-large-50-many-to-many-mmt"
-  planner:
-    provider: "${LLM_PROVIDER:-openai}"  # openai | gemini | ollama
-    model: "gpt-4o-mini"  # overridden per provider in models.yaml
-    temperature: 0.1
-  rationale:
-    provider: "${LLM_PROVIDER:-openai}"
-    model: "gpt-4o-mini"
-    temperature: 0.3
+### Bug B2: Rationale node is stub (src/agents/orchestrator.py:138-139)
 
-search:
-  top_k_hybrid: 50
-  top_k_final: 10
-  rrf_k: 60
-  cross_encoder_timeout_ms: 500
+**Current:** _rationale_node() returns {"should_continue": False} - no rationale generation in the agent loop.
 
-scoring:
-  weights_file: "configs/scoring_weights.yaml"
+**Fix:** Wire RationaleGenerator into the agent state machine, calling generator.generate() for each result profile.
 
-agent:
-  max_replan_cycles: 3
-  min_good_matches_for_pass: 8
-```
+### Bug B3: Same score for semantic_similarity and keyword_match (src/agents/executor.py:67-71)
 
-### 1.2 `configs/scoring_weights.yaml`
+**Current:** Both dimensions get the SAME hybrid fusion score.
 
-```yaml
-scoring_weights:
-  semantic_similarity: 0.25
-  keyword_match: 0.15
-  skill_match: 0.30
-  experience_match: 0.15
-  location_match: 0.05
-  education_match: 0.05
-  cross_encoder: 0.05
+**Fix:** Modify HybridSearch.search() to return individual FAISS and BM25 scores alongside the RRF score. Update executor to track separate semantic_similarity and keyword_match values.
 
-skill_importance_weights:
-  required: 1.0
-  preferred: 0.6
-  nice_to_have: 0.3
+### Bug B4: Translation model loading broken (src/language/translator.py:19-25)
 
-proficiency_scores:
-  beginner: 0.25
-  intermediate: 0.50
-  advanced: 0.75
-  expert: 1.00
+**Current:** Tokenizer assigned to _primary, model assigned to _fallback - wrong wiring.
 
-rrf_k: 60
-max_replan_cycles: 3
-min_good_matches_for_pass: 8
-```
+**Fix:** Use transformers.pipeline("translation", ...) for primary. Load fallback model separately.
 
-### 1.3 `configs/models.yaml`
+### Bug B5: compute_disparate_impact_ratio flawed (src/fairness/metrics.py:89-102)
 
-```yaml
-models:
-  embedding:
-    sentence_transformers_name: "paraphrase-multilingual-MiniLM-L12-v2"
-    dimension: 384
-    batch_size: 64
-    normalize_embeddings: true
-  cross_encoder:
-    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    batch_size: 32
-  translation:
-    primary: "Helsinki-NLP/opus-mt-mul"
-    fallback: "facebook/mbart-large-50-many-to-many-mmt"
-  language_detection:
-    library: "langdetect"
-    seed: 0
-```
+**Current:** _in_group iterates education entries, flagging profiles incorrectly.
 
-### 1.4 `src/core/config.py`
+**Fix:** Rewrite _in_group to check protected group against profile attributes (language, location, university) independently of education entries.
 
-```python
-"""Application configuration — loads from YAML + env vars."""
+### Bug B6: Health endpoint hardcoded (src/api/routes/health.py)
 
-from __future__ import annotations
+**Current:** models_loaded always {"embedding": False, "cross_encoder": False}.
 
-import os
-from functools import lru_cache
-from pathlib import Path
-from typing import Any
+**Fix:** Add init_health() function to inject real model loading state. Return index sizes and last_updated.
 
-import yaml
-from pydantic import Field
-from pydantic_settings import BaseSettings
+### Bug B7: InputValidationMiddleware not registered (src/main.py:35)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-CONFIGS_DIR = PROJECT_ROOT / "configs"
-DATA_DIR = PROJECT_ROOT / "data"
+**Fix:** Import and register InputValidationMiddleware alongside RequestLoggingMiddleware.
 
-
-class Settings(BaseSettings):
-    """Main application settings."""
-
-    # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/india_runs"
-
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
-
-    # LLM Provider
-    llm_provider: str = "openai"  # openai | gemini | ollama
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1:8b"
-
-    # Application
-    log_level: str = "INFO"
-    max_replan_cycles: int = 3
-    cross_encoder_timeout_ms: int = 500
-
-    model_config = {"env_file": ".env", "extra": "ignore"}
-
-
-def load_yaml_config(filename: str) -> dict[str, Any]:
-    """Load a YAML config file from the configs directory."""
-    path = CONFIGS_DIR / filename
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
-
-
-@lru_cache
-def get_settings() -> Settings:
-    """Cached singleton for application settings."""
-    return Settings()
-
-
-@lru_cache
-def get_scoring_config() -> dict[str, Any]:
-    """Load scoring weights from YAML."""
-    return load_yaml_config("scoring_weights.yaml")
-
-
-@lru_cache
-def get_model_config() -> dict[str, Any]:
-    """Load model configurations from YAML."""
-    return load_yaml_config("models.yaml")
-
-
-@lru_cache
-def get_app_config() -> dict[str, Any]:
-    """Load application settings from YAML."""
-    return load_yaml_config("settings.yaml")
-```
-
-### 1.5 `src/core/constants.py`
-
-```python
-"""Constants and magic numbers used across the application."""
-
-from __future__ import annotations
-
-# Supported languages (ISO 639-1 codes)
-SUPPORTED_LANGUAGES: dict[str, str] = {
-    "en": "English",
-    "hi": "Hindi",
-    "ta": "Tamil",
-    "te": "Telugu",
-    "mr": "Marathi",
-    "bn": "Bengali",
-    "kn": "Kannada",
-    "ml": "Malayalam",
-    "gu": "Gujarati",
-    "pa": "Punjabi",
-    "or": "Odia",
-    "as": "Assamese",
-}
-
-# Source types
-PROFILE_SOURCES = ("linkedin", "naukri", "github", "resume_pdf", "career_page", "manual")
-
-# Skill categories
-SKILL_CATEGORIES = (
-    "programming_language",
-    "framework",
-    "tool",
-    "soft_skill",
-    "domain_knowledge",
-    "certification",
-)
-
-# Proficiency levels
-PROFICIENCY_LEVELS = ("beginner", "intermediate", "advanced", "expert")
-
-# Importance levels
-SKILL_IMPORTANCE = ("required", "preferred", "nice_to_have")
-
-# Employment types
-EMPLOYMENT_TYPES = ("full_time", "part_time", "contract", "freelance", "student")
-
-# Match recommendations
-MATCH_RECOMMENDATIONS = ("strong_match", "good_match", "potential_match", "weak_match")
-
-# Search methods
-SEARCH_METHODS = ("hybrid", "vector_only", "keyword_only")
-
-# Realistic Indian company names for synthetic data
-INDIAN_COMPANIES = [
-    "Flipkart", "Zoho", "Freshworks", "TCS", "Infosys", "Wipro", "HCL",
-    "Razorpay", "PhonePe", "Swiggy", "Zomato", "Ola", "Paytm", "BYJU'S",
-    "PolicyBazaar", "Dream11", "Meesho", "CRED", "Postman", "Hasura",
-    "CitrusPay", "Mu Sigma", "Fractal Analytics", "Postman", "BrowserStack",
-    "Chargebee", "Zenoti", "InMobi", "BigBasket", "UrbanClap", "Vedantu",
-    "Unacademy", "Cult.fit", "Cars24", "Delhivery", "BlackBuck",
-    "Icertis", "Druva", "Sigmoid", "Tiger Analytics", "Fractal",
-    "Publicis Sapient", "Infosys BPM", "Mindtree", "Mphasis",
-]
-
-# Realistic Indian cities
-INDIAN_CITIES = [
-    "Bangalore", "Hyderabad", "Pune", "Chennai", "Noida", "Gurgaon",
-    "Mumbai", "Kolkata", "Ahmedabad", "Jaipur", "Lucknow", "Kochi",
-    "Indore", "Bhopal", "Coimbatore", "Visakhapatnam", "Thiruvananthapuram",
-    "Mysore", "Nagpur", "Chandigarh",
-]
-
-# Indian universities
-INDIAN_UNIVERSITIES = [
-    "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kanpur", "IIT Kharagpur",
-    "BITS Pilani", "NIT Trichy", "NIT Warangal", "IIIT Hyderabad",
-    "VIT Vellore", "SRM University", "Manipal Institute of Technology",
-    "Delhi Technological University", "Punjab Engineering College",
-    "Anna University", "Osmania University", "JNTU Hyderabad",
-    "University of Mumbai", "Pune University", "Christ University Bangalore",
-]
-
-# Hard filter defaults
-DEFAULT_MIN_EXPERIENCE = 0
-DEFAULT_MAX_EXPERIENCE = 50
-DEFAULT_LOCATION = None
-
-# FAISS
-FAISS_INDEX_PATH = DATA_DIR / "indexes" / "faiss_index.bin"
-FAISS_ID_MAP_PATH = DATA_DIR / "indexes" / "faiss_id_map.json"
-BM25_INDEX_PATH = DATA_DIR / "indexes" / "bm25_index.pkl"
-PROFILES_PATH = DATA_DIR / "profiles" / "profiles.json"
-QUERIES_PATH = DATA_DIR / "queries" / "queries.json"
-GROUND_TRUTH_PATH = DATA_DIR / "ground_truth" / "ground_truth.json"
-```
-
-### 1.6 `src/core/models.py`
-
-> **Full file:** ~350 lines. Contains every Pydantic model from PRD Sections 6.2–6.4.
-
-```python
-"""Pydantic models for all data schemas. Single source of truth for validation."""
-
-from __future__ import annotations
-
-import uuid
-from datetime import datetime
-from enum import Enum
-from typing import Optional
-
-from pydantic import BaseModel, Field, field_validator
-
-
-# ── Enums ──────────────────────────────────────────────────────
-
-class ProfileSource(str, Enum):
-    LINKEDIN = "linkedin"
-    NAUKRI = "naukri"
-    GITHUB = "github"
-    RESUME_PDF = "resume_pdf"
-    CAREER_PAGE = "career_page"
-    MANUAL = "manual"
-
-
-class SkillCategory(str, Enum):
-    PROGRAMMING_LANGUAGE = "programming_language"
-    FRAMEWORK = "framework"
-    TOOL = "tool"
-    SOFT_SKILL = "soft_skill"
-    DOMAIN_KNOWLEDGE = "domain_knowledge"
-    CERTIFICATION = "certification"
-
-
-class ProficiencyLevel(str, Enum):
-    BEGINNER = "beginner"
-    INTERMEDIATE = "intermediate"
-    ADVANCED = "advanced"
-    EXPERT = "expert"
-
-
-class SkillImportance(str, Enum):
-    REQUIRED = "required"
-    PREFERRED = "preferred"
-    NICE_TO_HAVE = "nice_to_have"
-
-
-class EmploymentType(str, Enum):
-    FULL_TIME = "full_time"
-    PART_TIME = "part_time"
-    CONTRACT = "contract"
-    FREELANCE = "freelance"
-    STUDENT = "student"
-
-
-class MatchRecommendation(str, Enum):
-    STRONG = "strong_match"
-    GOOD = "good_match"
-    POTENTIAL = "potential_match"
-    WEAK = "weak_match"
-
-
-class SearchMethod(str, Enum):
-    HYBRID = "hybrid"
-    VECTOR_ONLY = "vector_only"
-    KEYWORD_ONLY = "keyword_only"
-
-
-# ── Nested Models (Profile) ───────────────────────────────────
-
-class Location(BaseModel):
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: str = "India"
-    is_remote_ok: bool = False
-
-
-class PersonalInfo(BaseModel):
-    name: str
-    location: Location = Field(default_factory=Location)
-    languages_spoken: list[str] = Field(default_factory=list)
-    native_language: Optional[str] = None
-
-
-class ProfessionalInfo(BaseModel):
-    current_title: Optional[str] = None
-    current_company: Optional[str] = None
-    total_experience_years: Optional[float] = None
-    industry: Optional[str] = None
-    employment_type: Optional[EmploymentType] = None
-
-
-class Skill(BaseModel):
-    name: str
-    category: SkillCategory = SkillCategory.TOOL
-    proficiency: Optional[ProficiencyLevel] = None
-    years_used: Optional[float] = None
-    evidence: Optional[str] = None
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-
-
-class WorkExperience(BaseModel):
-    title: str
-    company: str
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    is_current: bool = False
-    description: str = ""
-    highlights: list[str] = Field(default_factory=list)
-    skills_demonstrated: list[str] = Field(default_factory=list)
-    location: Optional[str] = None
-
-
-class Education(BaseModel):
-    institution: str
-    degree: Optional[str] = None
-    field: Optional[str] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    gpa: Optional[float] = None
-
-
-class Signals(BaseModel):
-    is_passive: bool = False
-    last_active_date: Optional[str] = None
-    open_to_work: Optional[bool] = None
-    github_activity_score: Optional[float] = None
-    has_portfolio: bool = False
-    certifications: list[str] = Field(default_factory=list)
-    publications: list[str] = Field(default_factory=list)
-    speaking_engagements: list[str] = Field(default_factory=list)
-
-
-class ProfileMetadata(BaseModel):
-    language_detected: str = "en"
-    original_language: str = "en"
-    was_translated: bool = False
-    translation_confidence: Optional[float] = None
-    embedding_vector_id: Optional[int] = None
-    bm25_doc_id: Optional[int] = None
-    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    data_quality_score: float = Field(default=0.0, ge=0.0, le=1.0)
-
-
-# ── Profile (root model) ──────────────────────────────────────
-
-class Profile(BaseModel):
-    """Normalized profile schema — PRD Section 6.2."""
-
-    profile_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    source: ProfileSource = ProfileSource.MANUAL
-    raw_text: str = ""
-    personal: PersonalInfo
-    professional: ProfessionalInfo = Field(default_factory=ProfessionalInfo)
-    skills: list[Skill] = Field(default_factory=list)
-    experience: list[WorkExperience] = Field(default_factory=list)
-    education: list[Education] = Field(default_factory=list)
-    signals: Signals = Field(default_factory=Signals)
-    metadata: ProfileMetadata = Field(default_factory=ProfileMetadata)
-
-
-# ── Job Query ──────────────────────────────────────────────────
-
-class RequiredSkill(BaseModel):
-    name: str
-    importance: SkillImportance = SkillImportance.REQUIRED
-    min_proficiency: Optional[ProficiencyLevel] = None
-    min_years: Optional[float] = None
-
-
-class PreferredSkill(BaseModel):
-    name: str
-    importance: SkillImportance = SkillImportance.NICE_TO_HAVE
-    weight: float = Field(default=0.5, ge=0.0, le=1.0)
-
-
-class ExperienceRequirements(BaseModel):
-    min_years: Optional[float] = None
-    max_years: Optional[float] = None
-    industry: Optional[str] = None
-
-
-class LocationRequirements(BaseModel):
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    remote_ok: bool = False
-    hybrid_ok: bool = False
-
-
-class EducationRequirements(BaseModel):
-    min_degree: Optional[str] = None
-    field: Optional[str] = None
-
-
-class SalaryRequirements(BaseModel):
-    min: Optional[float] = None
-    max: Optional[float] = None
-    currency: str = "INR"
-
-
-class QueryFilters(BaseModel):
-    exclude_companies: list[str] = Field(default_factory=list)
-    include_companies: list[str] = Field(default_factory=list)
-    must_have_certifications: list[str] = Field(default_factory=list)
-    languages_required: list[str] = Field(default_factory=list)
-
-
-class ParsedQuery(BaseModel):
-    """Structured query parsed from natural language — PRD Section 6.3."""
-
-    required_skills: list[RequiredSkill] = Field(default_factory=list)
-    preferred_skills: list[PreferredSkill] = Field(default_factory=list)
-    experience: ExperienceRequirements = Field(default_factory=ExperienceRequirements)
-    location: LocationRequirements = Field(default_factory=LocationRequirements)
-    education: EducationRequirements = Field(default_factory=EducationRequirements)
-    salary: SalaryRequirements = Field(default_factory=SalaryRequirements)
-    filters: QueryFilters = Field(default_factory=QueryFilters)
-
-
-class JobQuery(BaseModel):
-    query_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    raw_query: str
-    parsed: ParsedQuery = Field(default_factory=ParsedQuery)
-    language: str = "en"
-
-
-# ── Match Results ──────────────────────────────────────────────
-
-class MatchScores(BaseModel):
-    """Per-dimension scores for a single match — PRD Section 6.4."""
-
-    overall: float = Field(ge=0.0, le=1.0)
-    semantic_similarity: float = Field(ge=0.0, le=1.0)
-    keyword_match: float = Field(ge=0.0, le=1.0)
-    skill_match: float = Field(ge=0.0, le=1.0)
-    experience_match: float = Field(ge=0.0, le=1.0)
-    location_match: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    education_match: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    cross_encoder_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
-class SkillDetail(BaseModel):
-    skill: str
-    required: bool
-    found: bool
-    proficiency_match: bool
-    evidence: str = ""
-
-
-class Rationale(BaseModel):
-    """Per-candidate rationale report — PRD Section 13.1."""
-
-    summary: str = ""
-    strengths: list[str] = Field(default_factory=list)
-    gaps: list[str] = Field(default_factory=list)
-    skill_details: list[SkillDetail] = Field(default_factory=list)
-    experience_analysis: str = ""
-    recommendation: MatchRecommendation = MatchRecommendation.GOOD
-
-
-class MatchMetadata(BaseModel):
-    search_method: SearchMethod = SearchMethod.HYBRID
-    reranked: bool = False
-    language_matched: bool = False
-    passive_candidate: bool = False
-    processing_time_ms: int = 0
-    translation_fallback: bool = False
-
-
-class MatchResult(BaseModel):
-    """Single candidate match — PRD Section 6.4."""
-
-    match_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    query_id: str
-    profile_id: str
-    rank: int
-    name: str = ""
-    current_title: Optional[str] = None
-    current_company: Optional[str] = None
-    location: Optional[str] = None
-    experience_years: Optional[float] = None
-    scores: MatchScores
-    matched_skills: list[str] = Field(default_factory=list)
-    missing_skills: list[str] = Field(default_factory=list)
-    rationale: Rationale = Field(default_factory=Rationale)
-    metadata: MatchMetadata = Field(default_factory=MatchMetadata)
-
-
-# ── API Request/Response Models ────────────────────────────────
-
-class SearchFilters(BaseModel):
-    location: Optional[str] = None
-    min_experience_years: Optional[float] = None
-    max_experience_years: Optional[float] = None
-    remote_ok: bool = False
-    exclude_companies: list[str] = Field(default_factory=list)
-    include_companies: list[str] = Field(default_factory=list)
-
-
-class SearchRequest(BaseModel):
-    """POST /api/v1/search request body — PRD Section 9.1."""
-
-    query: str = Field(min_length=1, max_length=2000)
-    filters: SearchFilters = Field(default_factory=SearchFilters)
-    max_results: int = Field(default=10, ge=1, le=100)
-    include_rationale: bool = True
-    language: Optional[str] = None
-
-
-class SearchResultItem(BaseModel):
-    rank: int
-    profile_id: str
-    name: str
-    current_title: Optional[str] = None
-    current_company: Optional[str] = None
-    location: Optional[str] = None
-    experience_years: Optional[float] = None
-    scores: MatchScores
-    matched_skills: list[str] = Field(default_factory=list)
-    missing_skills: list[str] = Field(default_factory=list)
-    rationale: Rationale
-    passive_candidate: bool = False
-    language_matched: bool = False
-
-
-class SearchMetadata(BaseModel):
-    methods_used: list[str] = Field(default_factory=list)
-    replan_count: int = 0
-    total_time_ms: int = 0
-
-
-class SearchResponse(BaseModel):
-    """POST /api/v1/search response body — PRD Section 9.1."""
-
-    query_id: str
-    total_candidates_searched: int
-    results: list[SearchResultItem] = Field(default_factory=list)
-    message: Optional[str] = None
-    suggestions: list[str] = Field(default_factory=list)
-    processing_time_ms: int = 0
-    search_metadata: SearchMetadata = Field(default_factory=SearchMetadata)
-
-
-class IngestResponse(BaseModel):
-    total_profiles: int
-    successful: int
-    failed: int
-    language_distribution: dict[str, int] = Field(default_factory=dict)
-    errors: list[str] = Field(default_factory=list)
-
-
-class HealthResponse(BaseModel):
-    status: str
-    version: str
-    index_size: int
-    models_loaded: dict[str, bool] = Field(default_factory=dict)
-    last_updated: Optional[str] = None
-```
+### Exit Criteria for Phase 0
+- [ ] All 7 bugs fixed and verified
+- [ ] API filters wired into orchestrator
+- [ ] Rationale generated in agent loop
+- [ ] Individual BM25/FAISS scores tracked
+- [ ] Translation models load correctly
+- [ ] DIR computation corrected
+- [ ] Health endpoint reflects real state
+- [ ] InputValidationMiddleware active
 
 ---
 
-## Phase 2: Synthetic Data Generation
+## Phase 1: Data Generation (Days 4-6)
 
-### 2.1 `src/data/generator.py`
+**Mission:** Build the synthetic dataset. Without this, nothing else works.
 
-> **Purpose:** Generate 1,000 realistic Indian candidate profiles + 50 queries + 20 ground-truth sets.
+### 1.1 scripts/generate_data.py (Full Rewrite)
 
-**Classes/Functions:**
-```python
-class ProfileGenerator:
-    """Generate realistic synthetic candidate profiles."""
-    
-    def __init__(self, seed: int = 42) -> None: ...
-    
-    def generate_profile(self, language: str = "en") -> dict: ...
-    """Generate a single profile with realistic Indian hiring data."""
-    
-    def generate_batch(self, count: int = 1000) -> list[dict]: ...
-    """Generate batch with language distribution: 60% en, 20% hi, 10% ta, 5% te, 5% other."""
-    
-    def _generate_name(self, language: str) -> str: ...
-    """Generate realistic Indian name in the given language."""
-    
-    def _generate_skills(self, role_type: str) -> list[dict]: ...
-    """Generate relevant skills for a given role type."""
-    
-    def _generate_experience(self, total_years: float) -> list[dict]: ...
-    """Generate 2-5 work experiences that sum to total_years."""
-    
-    def _generate_education(self) -> dict: ...
-    """Generate realistic Indian university education."""
-    
-    def _construct_raw_text(self, profile: dict) -> str: ...
-    """Construct raw_text per PRD Section 6.2a."""
-    
-    def _compute_quality_score(self, profile: dict) -> float: ...
-    """Compute data_quality_score per PRD Section 6.2b."""
+Replace the current 11-line stub with a full synthetic profile generator producing:
+- 1,000 profiles across 5 domains (software engineering, data science, product, design, marketing)
+- 20% non-English names (Hindi, Tamil, Telugu)
+- 3-7 work experiences per profile
+- Raw_text per PRD Section 6.2a spec
+- Realistic Indian companies, cities, skills, and universities
+- 70% passive candidates, varying data quality scores
 
+### 1.2 data/queries/queries.json
 
-class QueryGenerator:
-    """Generate realistic job search queries."""
-    
-    def generate_queries(self, count: int = 50) -> list[dict]: ...
-    """Generate 50 queries: 15 technical, 15 business, 10 creative, 10 cross-functional."""
-    
-    def generate_ground_truth(self, queries: list[dict], profiles: list[dict]) -> dict: ...
-    """For 20 queries, label top-10 relevant candidates as ground truth."""
+Generate 50 search queries: 15 technical, 15 business, 10 creative, 10 cross-functional.
+Each query includes raw_query, parsed structure, and language field.
 
+### 1.3 data/ground_truth/ground_truth.json
 
-def run_generation(output_dir: Path) -> None:
-    """Main entry point — generate all data and save to disk."""
-```
+Ground truth relevance labels for 20 of the 50 queries. Each query maps to 10 top-relevant profile IDs based on skill/experience/location overlap.
 
-**Data generation rules (from PRD 6.5-6.6):**
-- Each profile: 3+ work experiences, realistic Indian company names
-- Language distribution: 60% en, 20% hi, 10% ta, 5% te, 5% other
-- 20% non-English names with mixed-language content
-- Skills reflect Indian market demand
-- Varying quality (some complete, some messy)
+### 1.4 Fix raw_text Construction (src/ingestion/normalizer.py)
 
-### 2.2 `scripts/generate_data.py`
+Update normalizer to match PRD Section 6.2a:
+"Name: {name}. Title: {title}. Company: {company}. Summary: {summary}. Skills: {...}. Experience: {...}. Education: {...}. Certifications: {...}. Languages: {...}."
 
-```python
-"""CLI script to generate synthetic data."""
-from src.data.generator import run_generation
-from src.core.constants import DATA_DIR
+### 1.5 Build Indexes
 
-if __name__ == "__main__":
-    run_generation(DATA_DIR)
-```
+Run scripts/build_indexes.py against the generated dataset to create FAISS + BM25 indexes.
 
-### 2.3 `src/data/ground_truth.py`
-
-```python
-"""Ground truth labels for evaluation."""
-
-def load_ground_truth() -> dict[str, list[str]]:
-    """Load ground truth from disk. Returns {query_id: [relevant_profile_ids]}."""
-    ...
-
-def save_ground_truth(data: dict) -> None:
-    """Save ground truth to disk."""
-    ...
-```
-
-### 2.4 `src/data/sample_queries.py`
-
-```python
-"""50 sample queries for demo and evaluation."""
-
-SAMPLE_QUERIES: list[dict] = [
-    # Technical (15)
-    {"query": "Find a senior DevOps engineer with 5+ years in AWS and Kubernetes, based in Bangalore", "category": "technical"},
-    {"query": "我们需要一个有3年以上Python和机器学习经验的后端工程师", "category": "technical"},
-    # ... 13 more technical
-    
-    # Business (15)
-    {"query": "Product manager with B2B SaaS experience and growth mindset", "category": "business"},
-    # ... 14 more business
-    
-    # Creative (10)
-    {"query": "UX designer who has redesigned enterprise dashboards", "category": "creative"},
-    # ... 9 more creative
-    
-    # Cross-functional (10)
-    {"query": "CTO-level leader who has scaled engineering teams from 10 to 100", "category": "crossfunctional"},
-    # ... 9 more cross-functional
-]
-```
+### Exit Criteria for Phase 1
+- [ ] 1,000 synthetic profiles generated
+- [ ] 50 queries generated
+- [ ] Ground truth for 20 queries
+- [ ] raw_text matches PRD spec
+- [ ] FAISS + BM25 indexes built
 
 ---
 
-## Phase 3: Ingestion Pipeline
+## Phase 2: Infrastructure Fixes (Days 7-10)
 
-### 3.1 `src/ingestion/parser.py`
+**Mission:** Add error handling fallbacks, structured logging, metrics tracking.
 
-```python
-"""Parse raw profiles from JSON/CSV/text into normalized schema."""
+### 2.1 Error Handling - All 7 Fallback Scenarios
 
-from __future__ import annotations
-from pathlib import Path
-from typing import Any
-from src.core.models import Profile
+| Scenario | Location | Implementation |
+|----------|----------|----------------|
+| 0 results | src/agents/orchestrator.py | Populate message + suggestions in SearchResponse |
+| Translation fails | src/language/translator.py | Set translation_fallback: true in metadata |
+| Noisy profile skip | src/ingestion/parser.py | If quality_score < 0.3, skip + increment counter |
+| LLM unavailable (planner) | src/agents/planner.py | Already done (keyword fallback) |
+| LLM unavailable (rationale) | src/rationale/generator.py | Already done (template fallback) |
+| FAISS corrupted | src/search/vector_search.py | Auto-rebuild from stored embeddings |
+| Rate limit | src/api/middleware/rate_limit.py | New middleware returning 429 with retry-after |
 
-class ProfileParser:
-    """Parse profiles from various input formats."""
-    
-    def parse_json(self, data: dict[str, Any]) -> Profile:
-        """Parse a single profile from JSON dict."""
-        ...
-    
-    def parse_json_file(self, path: Path) -> list[Profile]:
-        """Parse all profiles from a JSON file."""
-        ...
-    
-    def parse_csv(self, path: Path) -> list[Profile]:
-        """Parse profiles from CSV (column-mapped)."""
-        ...
-    
-    def parse_raw_text(self, text: str, source: str = "manual") -> Profile:
-        """Parse a raw text resume into a Profile."""
-        ...
-    
-    def parse_batch(self, data: list[dict[str, Any]]) -> tuple[list[Profile], list[str]]:
-        """Parse a batch, returning (successful, error_messages)."""
-        ...
-```
+### 2.2 Structured JSON Logging (src/api/middleware/logging.py)
 
-### 3.2 `src/ingestion/extractor.py`
+Replace basic INFO logging with structured JSON entries:
+- Timestamp, method, path, status_code, latency_ms
+- PII redacted from log messages
 
-```python
-"""LLM-assisted field extraction from unstructured text."""
+### 2.3 Metrics Tracking (src/api/middleware/metrics.py)
 
-from __future__ import annotations
-from typing import Any
+In-memory metrics tracker:
+- Request count, error count, latency p50/p95/p99
+- Exposed via /api/v1/health endpoint
 
-class FieldExtractor:
-    """Extract structured fields from unstructured profile text using LLM."""
-    
-    def __init__(self, model: str = "gpt-4o-mini") -> None: ...
-    
-    async def extract_skills(self, text: str) -> list[dict[str, Any]]:
-        """Extract skills with categories and proficiency from text."""
-        ...
-    
-    async def extract_experience(self, text: str) -> list[dict[str, Any]]:
-        """Extract work experience entries from text."""
-        ...
-    
-    async def extract_education(self, text: str) -> list[dict[str, Any]]:
-        """Extract education entries from text."""
-        ...
-    
-    async def extract_all(self, text: str) -> dict[str, Any]:
-        """Extract all structured fields in one LLM call."""
-        ...
-    
-    def _build_extraction_prompt(self, text: str) -> str:
-        """Build the LLM prompt for field extraction."""
-        ...
-    
-    def _parse_llm_response(self, response: str) -> dict[str, Any]:
-        """Parse and validate LLM JSON response."""
-        ...
-```
+### 2.4 No-Results Response
 
-### 3.3 `src/ingestion/normalizer.py`
+When search returns 0 results, populate message and suggestions in SearchResponse.
+Suggestions include: try removing location filter, reduce min experience, move required to preferred.
 
-```python
-"""Normalize profiles from different sources to unified schema."""
-
-from __future__ import annotations
-from typing import Any
-from src.core.models import Profile
-
-class ProfileNormalizer:
-    """Normalize profiles across different source formats."""
-    
-    def normalize_linkedin(self, raw: dict[str, Any]) -> Profile:
-        """Normalize LinkedIn export format."""
-        ...
-    
-    def normalize_naukri(self, raw: dict[str, Any]) -> Profile:
-        """Normalize Naukri.com scraped format."""
-        ...
-    
-    def normalize_github(self, raw: dict[str, Any]) -> Profile:
-        """Normalize GitHub API format."""
-        ...
-    
-    def normalize_generic(self, raw: dict[str, Any]) -> Profile:
-        """Generic normalization for unknown formats."""
-        ...
-    
-    def normalize(self, raw: dict[str, Any], source: str) -> Profile:
-        """Route to correct normalizer based on source."""
-        ...
-```
-
-### 3.4 `src/ingestion/quality_scorer.py`
-
-```python
-"""Data quality scoring for profiles."""
-
-from __future__ import annotations
-import re
-from src.core.models import Profile
-
-def has_encoding_artifacts(text: str) -> bool:
-    """Check for mojibake or encoding issues."""
-    ...
-
-def compute_data_quality_score(profile: Profile) -> float:
-    """
-    Score 0.0-1.0 based on completeness — PRD Section 6.2b.
-    
-    Scoring:
-    - Name present: +0.10
-    - Title present: +0.10
-    - At least 1 skill: +0.15
-    - At least 1 experience: +0.15
-    - Education present: +0.10
-    - Location present: +0.10
-    - raw_text > 200 chars: +0.10
-    - raw_text > 500 chars: +0.05
-    - No encoding artifacts: +0.05
-    - Skills have evidence: +0.10
-    """
-    score = 0.0
-    if profile.personal.name:
-        score += 0.10
-    if profile.professional.current_title:
-        score += 0.10
-    if profile.skills:
-        score += 0.15
-    if profile.experience:
-        score += 0.15
-    if profile.education:
-        score += 0.10
-    if profile.personal.location.city:
-        score += 0.10
-    raw = profile.raw_text
-    if len(raw) > 200:
-        score += 0.10
-    if len(raw) > 500:
-        score += 0.05
-    if not has_encoding_artifacts(raw):
-        score += 0.05
-    if any(s.evidence for s in profile.skills):
-        score += 0.10
-    return min(score, 1.0)
-```
+### Exit Criteria for Phase 2
+- [ ] All 7 error scenarios handled
+- [ ] Structured JSON logging active
+- [ ] Metrics tracking operational
+- [ ] 0-results response has suggestions
 
 ---
 
-## Phase 4: Language Processing
+## Phase 3: Scoped Retrieval + Parallel Search (Days 11-13)
 
-### 4.1 `src/language/detector.py`
+**Mission:** Solve Bottleneck A (Vector Search Dilution). Apply filters BEFORE search. Run BM25 + FAISS in parallel.
 
-```python
-"""Language detection for profiles and queries."""
+### 3.1 Scoped Pre-Search Filters (src/search/filters.py)
 
-from __future__ import annotations
-from langdetect import detect, DetectorFactory, LangDetectException
+Create ScopedRetriever class:
+- get_candidate_ids(filters) returns profile IDs that pass structural filters
+- Filters applied: location, experience years, company inclusion/exclusion
+- If no filters, returns ALL profile IDs
+- This narrows the search pool BEFORE vector search runs
 
-# Fix seed for reproducibility
-DetectorFactory.seed = 0
+### 3.2 Parallel BM25 + FAISS (src/search/hybrid.py)
 
-class LanguageDetector:
-    """Detect the language of a text string."""
-    
-    def __init__(self, min_confidence: float = 0.5) -> None:
-        self.min_confidence = min_confidence
-    
-    def detect(self, text: str) -> dict[str, str | bool]:
-        """
-        Returns: {"language": "hi", "is_english": False, "needs_translation": True}
-        Falls back to "en" on detection failure.
-        """
-        ...
-    
-    def detect_batch(self, texts: list[str]) -> list[dict[str, str | bool]]:
-        """Detect language for a batch of texts."""
-        ...
-```
+Replace sequential execution with parallel using concurrent.futures.ThreadPoolExecutor + asyncio.gather:
+- BM25 and FAISS searches run concurrently
+- HybridSearch.search() returns individual FAISS and BM25 scores per candidate (not just combined RRF)
 
-### 4.2 `src/language/translator.py`
+### 3.3 Integrate into Executor (src/agents/executor.py)
 
-```python
-"""Translation pipeline for non-English profiles."""
+- Step 1: Call ScopedRetriever.get_candidate_ids(filters) FIRST
+- Step 2: Pass narrowed candidate_ids into HybridSearch.search()
+- Step 3: Cross-encoder reranking on narrowed results
+- Step 4: Build MatchResults with per-dimension scores (semantic_similarity from FAISS, keyword_match from BM25)
 
-from __future__ import annotations
-from typing import Optional
+### 3.4 Incremental FAISS Support (src/search/vector_search.py)
 
-class TranslationPipeline:
-    """Translate non-English text to English."""
-    
-    def __init__(self, primary_model: str = "Helsinki-NLP/opus-mt-mul",
-                 fallback_model: str = "facebook/mbart-large-50-many-to-many-mmt") -> None:
-        self.primary_model = primary_model
-        self.fallback_model = fallback_model
-        self._primary_loaded = False
-        self._fallback_loaded = False
-    
-    def load_models(self) -> None:
-        """Lazy-load translation models."""
-        ...
-    
-    def translate_to_english(self, text: str, source_lang: str) -> dict[str, str | float]:
-        """
-        Translate text to English.
-        Returns: {"original": ..., "translated": ..., "confidence": 0.95, "model_used": ...}
-        """
-        ...
-    
-    def translate_batch(self, texts: list[tuple[str, str]]) -> list[dict]:
-        """Translate a batch of (text, source_lang) pairs."""
-        ...
-    
-    def _get_model_name(self, source_lang: str) -> Optional[str]:
-        """Get the specific opus-mt model name for a language pair."""
-        ...
-```
+Add method to add individual profile embeddings to existing index without full rebuild:
+- vector_search.add_embeddings(ids, embeddings)
+- Updates both faiss index and id_map
 
-### 4.3 `src/language/multilingual.py`
-
-```python
-"""Multilingual embedding utilities."""
-
-from __future__ import annotations
-import numpy as np
-from sentence_transformers import SentenceTransformer
-
-class MultilingualEmbedder:
-    """Embed text in 50+ languages into a shared vector space."""
-    
-    def __init__(self, model_name: str = "paraphrase-multilingual-MiniLM-L12-v2",
-                 device: str = "cpu") -> None:
-        self.model_name = model_name
-        self.device = device
-        self._model: SentenceTransformer | None = None
-        self.dimension: int = 384  # Fixed for MiniLM
-    
-    @property
-    def model(self) -> SentenceTransformer:
-        """Lazy-load the embedding model."""
-        if self._model is None:
-            self._model = SentenceTransformer(self.model_name, device=self.device)
-        return self._model
-    
-    def embed(self, text: str) -> np.ndarray:
-        """Embed a single text string. Returns 384-dim vector."""
-        ...
-    
-    def embed_batch(self, texts: list[str], batch_size: int = 64) -> np.ndarray:
-        """Embed a batch of texts. Returns (N, 384) array."""
-        ...
-    
-    def cosine_similarity(self, vec_a: np.ndarray, vec_b: np.ndarray) -> float:
-        """Compute cosine similarity between two vectors."""
-        ...
-    
-    def embed_query(self, query: str) -> np.ndarray:
-        """Embed a search query (same as embed, but for clarity)."""
-        return self.embed(query)
-```
+### Exit Criteria for Phase 3
+- [ ] Pre-search filters narrow candidate pool
+- [ ] BM25 + FAISS run in parallel
+- [ ] Individual FAISS/BM25 scores tracked
+- [ ] Incremental FAISS updates work
 
 ---
 
-## Phase 5: Search Engine
+## Phase 4: Listwise Tournament Ranking (Days 14-17)
 
-### 5.1 `src/search/vector_search.py`
+**Mission:** Implement Strategy 1 (Plackett-Luce) from the Blueprint. The primary innovation differentiator.
 
-```python
-"""FAISS vector similarity search."""
+### 4.1 src/ranking/listwise_ranker.py (New File)
 
-from __future__ import annotations
-import json
-import faiss
-import numpy as np
-from pathlib import Path
-from src.core.constants import FAISS_INDEX_PATH, FAISS_ID_MAP_PATH
+Implement PlackettLuceRanker class:
 
-class VectorSearch:
-    """FAISS-based dense vector search."""
-    
-    def __init__(self, dimension: int = 384) -> None:
-        self.dimension = dimension
-        self.index: faiss.IndexFlatIP | None = None
-        self.id_map: list[str] = []  # profile_id at each index position
-    
-    def build_index(self, embeddings: np.ndarray, profile_ids: list[str]) -> None:
-        """
-        Build FAISS index from embeddings.
-        Uses Inner Product (equivalent to cosine on normalized vectors).
-        """
-        ...
-    
-    def search(self, query_embedding: np.ndarray, top_k: int = 50) -> list[tuple[str, float]]:
-        """
-        Search for nearest neighbors.
-        Returns: [(profile_id, score), ...] sorted by score descending.
-        """
-        ...
-    
-    def save(self, index_path: Path = FAISS_INDEX_PATH, 
-             id_map_path: Path = FAISS_ID_MAP_PATH) -> None:
-        """Persist index and ID map to disk."""
-        ...
-    
-    def load(self, index_path: Path = FAISS_INDEX_PATH,
-             id_map_path: Path = FAISS_ID_MAP_PATH) -> None:
-        """Load index and ID map from disk."""
-        ...
-    
-    @property
-    def size(self) -> int:
-        """Number of vectors in the index."""
-        return self.index.ntotal if self.index else 0
-```
+- rank(candidates, anonymized_profiles) -> list of (profile_id, merit_score) sorted by merit
+- Candidates divided into random groups of 4-5
+- LLM judges each group simultaneously (listwise, not pairwise)
+- Partial rankings aggregated via Plackett-Luce MM algorithm (max 20 EM iterations)
+- 3 tournament rounds with reshuffled groups
+- Fallback to pointwise scoring if LLM fails
 
-### 5.2 `src/search/bm25_search.py`
+### 4.2 Group Judge Prompt
 
-```python
-"""BM25 keyword search."""
+LLM prompt that presents 4-5 anonymized candidates and asks for relative ordering:
+- Only skills, experience years, industry shown (no PII)
+- Output format: comma-separated list of candidate numbers in rank order
+- Structured output parsing with fallback
 
-from __future__ import annotations
-import pickle
-import numpy as np
-from pathlib import Path
-from rank_bm25 import BM25Okapi
-from src.core.constants import BM25_INDEX_PATH
+### 4.3 Integrate into Orchestrator (src/agents/orchestrator.py)
 
-class BM25Search:
-    """BM25-based sparse keyword search."""
-    
-    def __init__(self) -> None:
-        self.index: BM25Okapi | None = None
-        self.id_map: list[str] = []
-        self.corpus_tokenized: list[list[str]] = []
-    
-    def build_index(self, documents: list[str], profile_ids: list[str]) -> None:
-        """
-        Build BM25 index from tokenized documents.
-        Tokenization: lowercase + simple whitespace split.
-        """
-        ...
-    
-    def search(self, query: str, top_k: int = 50) -> list[tuple[str, float]]:
-        """
-        Search for documents matching query.
-        Returns: [(profile_id, bm25_score), ...] sorted by score descending.
-        """
-        ...
-    
-    def save(self, path: Path = BM25_INDEX_PATH) -> None:
-        """Persist index to disk."""
-        ...
-    
-    def load(self, path: Path = BM25_INDEX_PATH) -> None:
-        """Load index from disk."""
-        ...
-    
-    def _tokenize(self, text: str) -> list[str]:
-        """Simple tokenization: lowercase + whitespace split."""
-        ...
-    
-    @property
-    def size(self) -> int:
-        return len(self.id_map)
-```
+Add listwise_ranking node (or integrate into _rationale_node):
+- Takes top-20 from cross-encoder reranking
+- Runs through PlackettLuceRanker
+- Produces final ordering
 
-### 5.3 `src/search/hybrid.py`
+### 4.4 Tests (tests/test_matching/test_listwise_ranker.py)
 
-```python
-"""Hybrid search orchestrator — BM25 + FAISS + RRF."""
+- test_plackett_luce_aggregation: verify MM algorithm produces consistent results
+- test_listwise_ranked_better_than_pointwise: compare precision@10
+- test_group_judge_prompt: verify LLM prompt structure
+- test_fallback_on_llm_failure: verify pointwise fallback
 
-from __future__ import annotations
-import numpy as np
-from src.search.vector_search import VectorSearch
-from src.search.bm25_search import BM25Search
-from src.language.multilingual import MultilingualEmbedder
-from src.core.config import get_scoring_config
-
-class HybridSearch:
-    """Orchestrate parallel vector + keyword search with RRF fusion."""
-    
-    def __init__(self, vector_search: VectorSearch, bm25_search: BM25Search,
-                 embedder: MultilingualEmbedder) -> None:
-        self.vector_search = vector_search
-        self.bm25_search = bm25_search
-        self.embedder = embedder
-        self.rrf_k = get_scoring_config().get("rrf_k", 60)
-    
-    def search(self, query: str, top_k: int = 50) -> list[tuple[str, float]]:
-        """
-        Execute hybrid search:
-        1. Embed query
-        2. Search FAISS (vector search)
-        3. Search BM25 (keyword search)
-        4. Fuse with Reciprocal Rank Fusion
-        Returns: [(profile_id, rrf_score), ...] sorted by score descending.
-        """
-        ...
-    
-    def reciprocal_rank_fusion(
-        self, 
-        rankings: list[list[tuple[str, float]]],
-        k: int = 60
-    ) -> list[tuple[str, float]]:
-        """
-        Combine multiple ranked lists using RRF.
-        RRF_score(d) = Σ 1/(k + rank_i(d))
-        """
-        scores: dict[str, float] = {}
-        for ranking in rankings:
-            for rank, (doc_id, _) in enumerate(ranking, start=1):
-                if doc_id not in scores:
-                    scores[doc_id] = 0.0
-                scores[doc_id] += 1.0 / (k + rank)
-        return sorted(scores.items(), key=lambda x: x[1], reverse=True)
-```
-
-### 5.4 `src/search/reranker.py`
-
-```python
-"""Cross-encoder reranking."""
-
-from __future__ import annotations
-import time
-from typing import Optional
-from sentence_transformers import CrossEncoder
-
-class CrossEncoderReranker:
-    """Rerank search results using a cross-encoder model."""
-    
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
-                 timeout_ms: int = 500) -> None:
-        self.model_name = model_name
-        self.timeout_ms = timeout_ms
-        self._model: CrossEncoder | None = None
-    
-    @property
-    def model(self) -> CrossEncoder:
-        if self._model is None:
-            self._model = CrossEncoder(self.model_name)
-        return self._model
-    
-    def rerank(self, query: str, 
-               candidates: list[tuple[str, str, float]],  # (id, text, original_score)
-               top_k: int = 10) -> list[tuple[str, float]]:
-        """
-        Rerank candidates using cross-encoder.
-        Returns: [(profile_id, cross_encoder_score), ...] sorted by score.
-        Times out and returns original ranking if exceeds timeout.
-        """
-        ...
-    
-    def score_pair(self, query: str, document: str) -> float:
-        """Score a single query-document pair."""
-        ...
-```
-
-### 5.5 `src/search/filters.py`
-
-```python
-"""Hard filter application for search results."""
-
-from __future__ import annotations
-from typing import Optional
-from src.core.models import Profile, SearchFilters
-
-class SearchFilter:
-    """Apply hard filters to candidate profiles before or after search."""
-    
-    def __init__(self, filters: SearchFilters) -> None:
-        self.filters = filters
-    
-    def passes(self, profile: Profile) -> bool:
-        """Check if a profile passes all hard filters."""
-        ...
-    
-    def filter_profiles(self, profiles: list[Profile]) -> list[Profile]:
-        """Filter a list of profiles."""
-        ...
-    
-    def _check_location(self, profile: Profile) -> bool:
-        """Check location filter."""
-        ...
-    
-    def _check_experience(self, profile: Profile) -> bool:
-        """Check experience range filter."""
-        ...
-    
-    def _check_companies(self, profile: Profile) -> bool:
-        """Check company include/exclude filters."""
-        ...
-```
+### Exit Criteria for Phase 4
+- [ ] Plackett-Luce ranker functional
+- [ ] LLM group judge working with structured output
+- [ ] Integrated into orchestrator
+- [ ] Tests passing
 
 ---
 
-## Phase 6: Matching & Scoring
+## Phase 5: PII Redaction + Bias Automation (Days 18-21)
 
-### 6.1 `src/matching/skill_matcher.py`
+**Mission:** Implement PII redaction layer (Strategy 3) and automated fairness halting.
 
-```python
-"""Skill matching with fuzzy logic."""
+### 5.1 src/fairness/anonymizer.py (New File)
 
-from __future__ import annotations
-from difflib import SequenceMatcher
-from typing import Optional
-from src.core.models import Skill, RequiredSkill, SkillImportance
+Implement Anonymizer class:
 
-class SkillMatcher:
-    """Match required skills against candidate skills with fuzzy matching."""
-    
-    def __init__(self, similarity_threshold: float = 0.7) -> None:
-        self.similarity_threshold = similarity_threshold
-    
-    def match_skills(self, required: list[RequiredSkill], 
-                     candidate_skills: list[Skill]) -> tuple[float, list[dict]]:
-        """
-        Compute skill match score.
-        Returns: (score, skill_details_list)
-        """
-        ...
-    
-    def find_best_match(self, required_name: str, 
-                        candidate_skills: list[Skill]) -> Optional[Skill]:
-        """
-        Find best matching candidate skill using:
-        1. Exact match (case-insensitive)
-        2. Normalized string match (strip, lowercase)
-        3. Fuzzy match (SequenceMatcher ratio)
-        """
-        ...
-    
-    def _normalize(self, name: str) -> str:
-        """Normalize skill name for comparison."""
-        ...
-    
-    def _fuzzy_score(self, a: str, b: str) -> float:
-        """Compute fuzzy similarity between two skill names."""
-        ...
-    
-    def compute_proficiency_match(self, required: Optional[str], 
-                                  candidate: Optional[str]) -> float:
-        """Compute proficiency match score."""
-        ...
+- anonymize_profile(profile) -> dict with PII stripped:
+  - Name -> "Candidate-{uuid}"
+  - Gendered pronouns -> neutral
+  - University names -> "University-{tier}"
+  - Company names -> "Company-{size}-{domain}"
+  - Specific addresses -> city only
+  - Photo URLs removed
 
-# Common skill aliases for fuzzy matching
-SKILL_ALIASES: dict[str, list[str]] = {
-    "python": ["python3", "py"],
-    "javascript": ["js", "ecmascript", "es6"],
-    "react": ["reactjs", "react.js"],
-    "kubernetes": ["k8s"],
-    "amazon web services": ["aws"],
-    "google cloud platform": ["gcp", "google cloud"],
-    "microsoft azure": ["azure"],
-    "machine learning": ["ml"],
-    "artificial intelligence": ["ai"],
-    "natural language processing": ["nlp"],
-    "continuous integration": ["ci"],
-    "continuous deployment": ["cd", "ci/cd"],
-    # ... 50+ more
-}
-```
+- style_anonymize(text) -> str with LLM-writing artifacts removed:
+  - Remove excessive bullet-point structures
+  - Replace overused verbs: spearheaded, fostered, architected, orchestrated, pioneered, championed
+  - Strip generic LLM power phrases
+  - Other style normalization
 
-### 6.2 `src/matching/experience_matcher.py`
+### 5.2 Wire Anonymization into Pipeline
 
-```python
-"""Experience scoring."""
+- src/agents/executor.py: anonymize profiles before reflection
+- src/agents/reflector.py: use anonymized profiles for LLM evaluation
+- src/rationale/generator.py: use anonymized profiles for rationale generation
+- src/api/routes/search.py: add anonymization_note to response
 
-from __future__ import annotations
-from typing import Optional
+### 5.3 Equal Opportunity Metric (src/fairness/metrics.py)
 
-class ExperienceMatcher:
-    """Score how well a candidate's experience matches requirements."""
-    
-    def match(self, required_min_years: Optional[float],
-              required_max_years: Optional[float],
-              candidate_years: Optional[float],
-              required_industry: Optional[str],
-              candidate_industry: Optional[str]) -> float:
-        """
-        Score experience match (0.0 - 1.0).
-        Components: years match + industry match.
-        """
-        ...
-    
-    def _score_years(self, required_min: Optional[float],
-                     required_max: Optional[float],
-                     candidate: Optional[float]) -> Optional[float]:
-        """Score years of experience."""
-        ...
-    
-    def _score_industry(self, required: Optional[str],
-                        candidate: Optional[str]) -> Optional[float]:
-        """Score industry relevance."""
-        ...
-```
+Add compute_equal_opportunity():
+- True positive rate comparison between protected and majority groups
+- TPR = correctly matched candidates in group / total relevant in group
+- Returns ratio between groups
 
-### 6.3 `src/matching/scorer.py`
+### 5.4 Automated DIR Halting
 
-```python
-"""Overall scoring — weighted combination of all dimensions."""
+- After every search, compute fairness metrics
+- If DIR < 0.80, add fairness_warning to SearchResponse
+- Warning: "Disparate Impact Ratio {value:.2f} < 0.80. Results flagged for review."
+- Flag in UI with warning badge
 
-from __future__ import annotations
-from src.core.models import MatchScores
-from src.core.config import get_scoring_config
+### 5.5 Update scoring_weights.yaml
 
-class CandidateScorer:
-    """Compute overall match score from per-dimension scores."""
-    
-    def __init__(self) -> None:
-        config = get_scoring_config()
-        self.weights = config["scoring_weights"]
-    
-    def compute_overall(self, scores: dict[str, float | None]) -> MatchScores:
-        """
-        Compute overall score as weighted combination.
-        overall = Σ weight_i * score_i (skipping null components, re-normalizing).
-        """
-        ...
-    
-    def compute_confidence(self, scores: dict[str, float | None]) -> float:
-        """
-        Confidence = 1.0 - std_dev of non-null scores.
-        High confidence = all dimensions agree.
-        """
-        ...
-```
+Add fairness thresholds:
+`yaml
+fairness:
+  disparate_impact_threshold: 0.80
+  auto_flag_on_violation: true
+`
 
-### 6.4 `src/matching/confidence.py`
+### 5.6 Tests (tests/test_fairness/)
 
-```python
-"""Confidence calculation utilities."""
+- test_pii_stripped_before_llm: verify names/universities removed
+- test_style_anonymization_removes_llm_artifacts: verify style stripping
+- test_dir_below_threshold_flags_results: verify halting logic
+- test_equal_opportunity_metric_computed: verify metric
+- test_anonymization_preserves_skills: verify skills/years/industry intact
 
-from __future__ import annotations
-import numpy as np
-
-def compute_score_variance(scores: list[float]) -> float:
-    """Compute variance of score list."""
-    ...
-
-def compute_confidence(scores: dict[str, float | None]) -> float:
-    """
-    High confidence when all non-null dimensions agree.
-    confidence = 1.0 - normalized_std_dev
-    """
-    ...
-```
+### Exit Criteria for Phase 5
+- [ ] PII stripped before LLM evaluation
+- [ ] Style anonymization active
+- [ ] Equal opportunity metric computed
+- [ ] Automated DIR halting with flags
+- [ ] Tests passing
 
 ---
 
-## Phase 7: Agentic Workflow
+## Phase 6: 12-20 Dimension Rationale Reports (Days 22-24)
 
-### 7.1 `src/agents/prompts.py`
+**Mission:** Implement Strategy 2 - Multi-dimensional YAML rationale reports.
 
-```python
-"""All agent system prompts — single source of truth."""
+### 6.1 Expand Rationale Generator (src/rationale/generator.py)
 
-PLANNER_SYSTEM_PROMPT = """You are an expert recruiter's assistant. Given a natural language job query, 
-parse it into a structured search specification.
+Update RationaleGenerator to evaluate 12 dimensions:
+1. core_technical_skills
+2. tool_proficiency
+3. domain_expertise
+4. role_stability
+5. leadership_indicators
+6. communication_signals
+7. multilingual_fit
+8. localized_salary_alignment
+9. career_growth_trajectory
+10. industry_relevance
+11. company_prestige
+12. culture_fit_signals
 
-Extract:
-- Required skills (with importance: required/preferred/nice_to_have)
-- Experience requirements (years, industry)
-- Location preferences (city, remote preference)
-- Education requirements
-- Any exclusion criteria
+### 6.2 YAML Output Format
 
-Output valid JSON matching this schema:
-{
-  "required_skills": [{"name": "...", "importance": "required|preferred|nice_to_have", "min_proficiency": "...", "min_years": null}],
-  "preferred_skills": [{"name": "...", "importance": "nice_to_have", "weight": 0.5}],
-  "experience": {"min_years": null, "max_years": null, "industry": null},
-  "location": {"city": null, "state": null, "country": null, "remote_ok": false, "hybrid_ok": false},
-  "education": {"min_degree": null, "field": null},
-  "filters": {"exclude_companies": [], "include_companies": [], "must_have_certifications": [], "languages_required": []}
-}
+Generate YAML rationale reports with:
+- dimensional_scores: all 12 dimensions with 0-1 scores
+- matching_evidence: per dimension, specific evidence from profile
+- evaluation_rationale: summary, strengths, gaps, recommendation
+- anonymization_note: PII stripping confirmation
 
-If the query is ambiguous, make reasonable assumptions and note them.
-Output ONLY valid JSON, no other text."""
+### 6.3 Update Rationale Prompt (src/rationale/templates.py)
 
-REFLECTOR_SYSTEM_PROMPT = """You are a critical hiring evaluator. For each candidate in the search results,
-assess whether they truly match the job requirements.
+New RATIONALE_12D_TEMPLATE that explicitly requests evaluation across all 12 dimensions with evidence for each.
 
-For each candidate, provide:
-1. overall_assessment: "strong_match" | "good_match" | "potential_match" | "weak_match"
-2. key_strengths: list of specific reasons why they match
-3. key_gaps: list of specific reasons why they might not match
-4. concerns: any red flags or uncertainties
-5. should_keep: boolean
+### 6.4 Update RationaleValidator (src/rationale/validator.py)
 
-Be strict — a "strong_match" means you would confidently shortlist this person.
-A "good_match" means they could work with some caveats.
-A "potential_match" means they're worth a phone screen.
-A "weak_match" means they should be dropped.
+Validate all 12 dimensions are present with valid scores (0-1). Check matching_evidence has at least one entry per matched dimension. Validate anonymization_note is present.
 
-Output valid JSON array. No other text."""
+### 6.5 UI Components (src/ui/components.py)
 
-RATIONALE_SYSTEM_PROMPT = """You are generating a candidate evaluation report for a recruiter.
+Add 12-dim radar chart component. Add YAML report viewer tab. Replace old 6-dim chart with 12-dim chart.
 
-JOB REQUIREMENTS:
-{job_requirements_json}
-
-CANDIDATE PROFILE:
-{candidate_profile_summary}
-
-MATCH SCORES:
-{scores_json}
-
-Generate a detailed rationale report. Be specific — reference actual companies,
-roles, and skills from the profile. Do not make generic statements.
-
-Requirements:
-- summary: 2-3 sentences, specific to this candidate
-- strengths: list specific matches with evidence
-- gaps: list specific concerns or missing requirements
-- skill_details: for each required skill, note if found and the evidence
-- experience_analysis: paragraph about work history relevance
-- recommendation: one of strong_match, good_match, potential_match, weak_match
-
-Output valid JSON only."""
-
-REPLAN_SYSTEM_PROMPT = """The previous search did not yield enough strong matches.
-Original query: {original_query}
-Previous parsed parameters: {previous_params}
-Reflector feedback: {feedback}
-
-Revise the search parameters based on the feedback.
-Common revisions:
-- Broaden skill requirements (move some required to preferred)
-- Relax experience requirements
-- Expand location (remove city filter, allow remote)
-- Remove company exclusions
-
-Output the revised parsed query as valid JSON (same schema as before)."""
-```
-
-### 7.2 `src/agents/planner.py`
-
-```python
-"""Planner agent — parse natural language into structured query."""
-
-from __future__ import annotations
-import json
-import logging
-from typing import Any
-from src.core.config import get_settings, get_llm_client
-from src.core.models import ParsedQuery
-from src.agents.prompts import PLANNER_SYSTEM_PROMPT
-
-logger = logging.getLogger(__name__)
-
-class PlannerAgent:
-    """Parse natural language query into structured search parameters."""
-    
-    def __init__(self) -> None:
-        settings = get_settings()
-        self.client = get_llm_client()
-        self.model = settings.planner_model
-    
-    async def plan(self, raw_query: str) -> ParsedQuery:
-        """
-        Parse a natural language job query into structured parameters.
-        Falls back to keyword extraction if LLM unavailable.
-        """
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-                    {"role": "user", "content": raw_query},
-                ],
-                temperature=0.1,
-                response_format={"type": "json_object"},
-            )
-            parsed = json.loads(response.choices[0].message.content)
-            return ParsedQuery(**parsed)
-        except Exception as e:
-            logger.warning(f"Planner LLM failed, using fallback: {e}")
-            return self._fallback_parse(raw_query)
-    
-    async def replan(self, original_query: str, previous_params: dict,
-                     feedback: str) -> ParsedQuery:
-        """Re-plan with reflector feedback."""
-        ...
-    
-    def _fallback_parse(self, query: str) -> ParsedQuery:
-        """Extract keywords using spaCy NER as fallback."""
-        ...
-```
-
-### 7.3 `src/agents/executor.py`
-
-```python
-"""Executor agent — run hybrid search with parsed parameters."""
-
-from __future__ import annotations
-import logging
-from src.core.models import ParsedQuery, MatchResult
-from src.search.hybrid import HybridSearch
-from src.search.reranker import CrossEncoderReranker
-from src.search.filters import SearchFilter
-from src.matching.scorer import CandidateScorer
-from src.search.filters import SearchFilters
-
-logger = logging.getLogger(__name__)
-
-class ExecutorAgent:
-    """Execute search using parsed query parameters."""
-    
-    def __init__(self, hybrid_search: HybridSearch, 
-                 reranker: CrossEncoderReranker,
-                 scorer: CandidateScorer,
-                 profiles: dict) -> None:  # profile_id -> Profile
-        self.hybrid_search = hybrid_search
-        self.reranker = reranker
-        self.scorer = scorer
-        self.profiles = profiles
-    
-    async def execute(self, parsed: ParsedQuery, 
-                      top_k: int = 50) -> list[MatchResult]:
-        """
-        1. Convert parsed query to search text
-        2. Run hybrid search
-        3. Apply hard filters
-        4. Rerank top-50
-        5. Score top-10
-        Returns: sorted list of MatchResult
-        """
-        ...
-    
-    def _query_to_search_text(self, parsed: ParsedQuery) -> str:
-        """Convert structured query back to searchable text."""
-        ...
-    
-    def _apply_filters(self, results: list[tuple[str, float]], 
-                       parsed: ParsedQuery) -> list[tuple[str, float]]:
-        """Apply hard filters from parsed query."""
-        ...
-```
-
-### 7.4 `src/agents/reflector.py`
-
-```python
-"""Reflector agent — evaluate search results quality."""
-
-from __future__ import annotations
-import json
-import logging
-from typing import Any
-from src.core.config import get_settings, get_llm_client
-from src.core.models import MatchResult, ParsedQuery
-from src.agents.prompts import REFLECTOR_SYSTEM_PROMPT
-
-logger = logging.getLogger(__name__)
-
-class ReflectorAgent:
-    """Evaluate search results and decide whether to re-plan."""
-    
-    def __init__(self) -> None:
-        settings = get_settings()
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
-    
-    async def reflect(self, query: ParsedQuery, 
-                      results: list[MatchResult]) -> dict[str, Any]:
-        """
-        Evaluate each candidate match.
-        Returns: {
-            "evaluations": [{"profile_id": ..., "assessment": ..., "should_keep": bool, ...}],
-            "good_match_count": int,
-            "should_replan": bool,
-            "feedback": str
-        }
-        """
-        ...
-    
-    def _should_replan(self, evaluations: list[dict], 
-                       threshold: int = 8) -> bool:
-        """Decide if re-plan is needed (less than threshold good matches)."""
-        ...
-```
-
-### 7.5 `src/agents/orchestrator.py`
-
-```python
-"""LangGraph state machine — Plan → Execute → Reflect → Re-plan."""
-
-from __future__ import annotations
-import logging
-from typing import Any, TypedDict
-from langgraph.graph import StateGraph, END
-from src.agents.planner import PlannerAgent
-from src.agents.executor import ExecutorAgent
-from src.agents.reflector import ReflectorAgent
-from src.core.models import ParsedQuery, MatchResult, SearchResponse
-from src.core.config import get_scoring_config
-
-logger = logging.getLogger(__name__)
-
-class AgentState(TypedDict):
-    raw_query: str
-    parsed_query: dict | None
-    results: list[dict]
-    evaluations: dict | None
-    replan_count: int
-    max_replans: int
-    should_continue: bool
-    search_metadata: dict
-
-class Orchestrator:
-    """Main agentic orchestrator — Plan → Execute → Reflect → Re-plan."""
-    
-    def __init__(self, planner: PlannerAgent, executor: ExecutorAgent,
-                 reflector: ReflectorAgent) -> None:
-        self.planner = planner
-        self.executor = executor
-        self.reflector = reflector
-        config = get_scoring_config()
-        self.max_replans = config.get("max_replan_cycles", 3)
-        self.min_good_matches = config.get("min_good_matches_for_pass", 8)
-        self.graph = self._build_graph()
-    
-    def _build_graph(self) -> StateGraph:
-        """Build the LangGraph state machine."""
-        workflow = StateGraph(AgentState)
-        workflow.add_node("plan", self._plan_node)
-        workflow.add_node("execute", self._execute_node)
-        workflow.add_node("reflect", self._reflect_node)
-        workflow.add_node("generate_rationale", self._rationale_node)
-        
-        workflow.set_entry_point("plan")
-        workflow.add_edge("plan", "execute")
-        workflow.add_edge("execute", "reflect")
-        workflow.add_conditional_edges(
-            "reflect",
-            self._should_continue,
-            {
-                "replan": "plan",
-                "done": "generate_rationale",
-            }
-        )
-        workflow.add_edge("generate_rationale", END)
-        return workflow.compile()
-    
-    async def run(self, raw_query: str) -> SearchResponse:
-        """Execute the full agentic workflow."""
-        initial_state: AgentState = {
-            "raw_query": raw_query,
-            "parsed_query": None,
-            "results": [],
-            "evaluations": None,
-            "replan_count": 0,
-            "max_replans": self.max_replans,
-            "should_continue": True,
-            "search_metadata": {},
-        }
-        final_state = await self.graph.ainvoke(initial_state)
-        return self._build_response(final_state)
-    
-    async def _plan_node(self, state: AgentState) -> dict:
-        """Parse query into structured parameters."""
-        ...
-    
-    async def _execute_node(self, state: AgentState) -> dict:
-        """Run hybrid search + reranking."""
-        ...
-    
-    async def _reflect_node(self, state: AgentState) -> dict:
-        """Evaluate results quality."""
-        ...
-    
-    async def _rationale_node(self, state: AgentState) -> dict:
-        """Generate rationale for top matches."""
-        ...
-    
-    def _should_continue(self, state: AgentState) -> str:
-        """Decide: replan or done."""
-        ...
-    
-    def _build_response(self, state: AgentState) -> SearchResponse:
-        """Convert final state to API response."""
-        ...
-```
+### Exit Criteria for Phase 6
+- [ ] 12 dimensions in rationale output
+- [ ] YAML output format working
+- [ ] Validator checks all dimensions
+- [ ] UI shows 12-dim radar chart
 
 ---
 
-## Phase 8: Rationale Generation
+## Phase 7: Code-Mixed NLP + Translation (Days 25-27)
 
-### 8.1 `src/rationale/generator.py`
+**Mission:** Implement Bottleneck B mitigation - handle Hindi-English code-mixed text.
 
-```python
-"""Rationale generation for each candidate match."""
+### 7.1 src/language/code_mixed.py (New File)
 
-from __future__ import annotations
-import json
-import logging
-from openai import AsyncOpenAI
-from src.core.config import get_settings
-from src.core.models import Rationale, MatchResult, Profile, SkillDetail, MatchRecommendation
-from src.agents.prompts import RATIONALE_SYSTEM_PROMPT
+Implement CodeMixedProcessor:
+- Load HingBERT or HingRoBERTa for NER on code-mixed text
+- extract_entities(text) -> list of (entity_text, entity_type, confidence)
+- detect_code_mixed(text) -> bool
+- transliterate_hinglish(text) -> str (Devanagari <-> Latin)
 
-logger = logging.getLogger(__name__)
+### 7.2 Translate-in-Thought (TinT) for Planner (src/agents/planner.py)
 
-class RationaleGenerator:
-    """Generate detailed rationale reports for each candidate match."""
-    
-    def __init__(self) -> None:
-        settings = get_settings()
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.openai_model
-    
-    async def generate(self, match: MatchResult, profile: Profile,
-                       job_requirements: dict) -> Rationale:
-        """
-        Generate a rationale report for a single candidate match.
-        Falls back to template-based rationale if LLM unavailable.
-        """
-        ...
-    
-    async def generate_batch(self, matches: list[MatchResult],
-                             profiles: dict[str, Profile],
-                             job_requirements: dict) -> list[Rationale]:
-        """Generate rationale for all top matches."""
-        ...
-    
-    def _build_prompt(self, match: MatchResult, profile: Profile,
-                      job_requirements: dict) -> str:
-        """Build the rationale generation prompt."""
-        ...
-    
-    def _parse_response(self, response: str) -> Rationale:
-        """Parse LLM response into Rationale model."""
-        ...
-    
-    def _template_rationale(self, match: MatchResult, profile: Profile) -> Rationale:
-        """Fallback template-based rationale when LLM is unavailable."""
-        ...
-```
+Add TinT prompt strategy to PlannerAgent:
+- Detect if query is code-mixed (Hindi + English)
+- If yes, prompt LLM to translate internally + parse search params
+- No explicit translation call - LLM does both steps in one response
+- TinT prompt: "This query is in Hinglish (Hindi-English mixed). Parse it as if it were English for search purposes."
 
-### 8.2 `src/rationale/templates.py`
+### 7.3 Fix Translation Pipeline (src/language/translator.py)
 
-```python
-"""Rationale prompt templates."""
+Fix load_models:
+- Load primary model via transformers.pipeline("translation", ...)
+- Load fallback M2M100 model correctly
+- translate_to_english() now actually translates non-English text
+- Set translation_confidence score
+- On failure, set translation_fallback: true in metadata
 
-RATIONALE_TEMPLATE = """Generate a candidate evaluation report for a recruiter.
+### 7.4 Tests (tests/test_language/test_translator.py)
 
-JOB REQUIREMENTS:
-{job_requirements}
+- test_hingbert_ner_extracts_skills_from_hinglish
+- test_translate_in_thought_handles_code_mixed_query
+- test_translation_actual_translates_hindi
+- test_translation_fallback_on_failure
 
-CANDIDATE PROFILE:
-Name: {name}
-Title: {current_title} at {current_company}
-Experience: {experience_years} years
-Skills: {skill_names}
-Location: {location}
-
-MATCH SCORES:
-- Overall: {overall_score:.2f}
-- Skill Match: {skill_score:.2f}
-- Experience Match: {experience_score:.2f}
-- Semantic Match: {semantic_score:.2f}
-
-Generate a JSON response with:
-- summary: 2-3 sentence overview
-- strengths: list of specific strengths with evidence
-- gaps: list of specific gaps
-- skill_details: for each required skill, note found/evidence
-- experience_analysis: paragraph about work history relevance
-- recommendation: strong_match | good_match | potential_match | weak_match"""
-
-SKILL_EVIDENCE_TEMPLATE = """Candidate skill: {skill_name} (proficiency: {proficiency})
-Evidence: {evidence}
-Required level: {required_level}
-Match: {matched}"""
-```
-
-### 8.3 `src/rationale/validator.py`
-
-```python
-"""Validate rationale quality."""
-
-from __future__ import annotations
-from src.core.models import Rationale
-
-class RationaleValidator:
-    """Validate that generated rationales meet quality standards."""
-    
-    def validate(self, rationale: Rationale) -> tuple[bool, list[str]]:
-        """
-        Validate a rationale.
-        Returns: (is_valid, list of issues)
-        
-        Checks:
-        - summary is 10-500 chars
-        - strengths has 1+ items
-        - gaps can be empty
-        - recommendation is valid enum
-        - skill_details covers all required skills
-        """
-        ...
-    
-    def validate_batch(self, rationales: list[Rationale]) -> dict[str, int]:
-        """Validate a batch, return stats."""
-        ...
-```
+### Exit Criteria for Phase 7
+- [ ] Code-mixed Hinglish text parsable
+- [ ] HingBERT NER extracts skills from code-mixed text
+- [ ] TinT prompting for planner works
+- [ ] Translation pipeline actually translates
+- [ ] Tests passing
 
 ---
 
-## Phase 9: Fairness & Bias
+## Phase 8: UI Polish (Days 28-30)
 
-### 9.1 `src/fairness/bias_detector.py`
+**Mission:** Demo-ready UI: dark mode, skeleton loading, live analytics data, experience timeline.
 
-```python
-"""Bias detection utilities."""
+### 8.1 Dark Mode (src/ui/styles.css, src/ui/app.py)
 
-from __future__ import annotations
-from typing import Optional
-from src.core.models import MatchResult, Profile
+Add dark mode CSS variables. Add toggle button in Gradio UI. Use prefers-color-scheme media query for auto-detection.
 
-class BiasDetector:
-    """Detect potential bias in match results."""
-    
-    def check_name_bias(self, matches: list[MatchResult], 
-                        profiles: dict[str, Profile]) -> dict[str, Any]:
-        """
-        Check if certain name patterns are systematically ranked lower.
-        Returns bias indicators.
-        """
-        ...
-    
-    def check_language_bias(self, matches: list[MatchResult],
-                            profiles: dict[str, Profile]) -> dict[str, Any]:
-        """Check if non-English profiles are systematically disadvantaged."""
-        ...
-    
-    def check_location_bias(self, matches: list[MatchResult],
-                            profiles: dict[str, Profile]) -> dict[str, Any]:
-        """Check if tier-2/3 city candidates are disadvantaged."""
-        ...
-    
-    def check_university_bias(self, matches: list[MatchResult],
-                              profiles: dict[str, Profile]) -> dict[str, Any]:
-        """Check if certain universities are overrepresented in top results."""
-        ...
-```
+### 8.2 Skeleton Loading States (src/ui/components.py)
 
-### 9.2 `src/fairness/metrics.py`
+Add create_skeleton_card() component that shows animated placeholder while search runs. Wire into app.py search flow.
 
-```python
-"""Fairness metrics computation."""
+### 8.3 Live Analytics Data (src/ui/app.py)
 
-from __future__ import annotations
-import numpy as np
-from src.core.models import MatchResult, Profile
+Replace hardcoded fairness metrics values with actual computed values from orchestrator:
+- Language distribution from profiles
+- Source distribution
+- Average match scores from results
+- Passive vs active ratio
+- Fairness metrics from BiasDetector + Metrics module
 
-def compute_demographic_parity(matches: list[MatchResult],
-                               profiles: dict[str, Profile],
-                               protected_attribute: str) -> float:
-    """
-    Compute demographic parity for a protected attribute.
-    Should be close to 1.0 for fairness.
-    """
-    ...
+### 8.4 Left Panel / Right Panel Layout (src/ui/app.py)
 
-def compute_disparate_impact_ratio(matches: list[MatchResult],
-                                   profiles: dict[str, Profile],
-                                   protected_group: str,
-                                   majority_group: str) -> float:
-    """
-    4/5ths rule: selection_rate_protected / selection_rate_majority.
-    Should be ≥ 0.80.
-    """
-    ...
+Implement click-to-select behavior:
+- Left panel: ranked candidate cards
+- Right panel: full rationale on card click
+- Use Gradio's gr.Row + gr.Column with visibility toggling
 
-def compute_language_bias(matches: list[MatchResult],
-                          profiles: dict[str, Profile]) -> dict[str, float]:
-    """Check if non-English profiles have lower average ranks."""
-    ...
+### 8.5 Experience Timeline (src/ui/components.py)
 
-def compute_location_bias(matches: list[MatchResult],
-                          profiles: dict[str, Profile]) -> dict[str, float]:
-    """Check if tier-2/3 city candidates have lower average ranks."""
-    ...
+Add create_experience_timeline() component:
+- Visual horizontal timeline with company logos (or initials)
+- Role, company, dates, description
+- Color-coded by relevance to query
 
-def compute_all_fairness_metrics(matches: list[MatchResult],
-                                 profiles: dict[str, Profile]) -> dict[str, Any]:
-    """Compute all fairness metrics."""
-    ...
-```
+### 8.6 Example Queries in Hindi
+
+Add Hindi example queries to search bar:
+- "Mujhe ek DevOps engineer chiye jisko AWS aur Kubernetes mein 5 saal ka experience hai"
+- "Python aur data science mein 3 saal ka anubhav wala candidate dhoondhein"
+
+### Exit Criteria for Phase 8
+- [ ] Dark mode toggle working
+- [ ] Skeleton loading on search
+- [ ] Live analytics data from pipeline
+- [ ] Click-to-select candidate cards
+- [ ] Experience timeline component
+- [ ] Hindi example queries
 
 ---
 
-## Phase 10: API Layer
+## Phase 9: Full Test Coverage (Days 31-33)
 
-### 10.1 `src/main.py`
+**Mission:** All missing test files written. CI pipeline set up.
 
-```python
-"""FastAPI application entry point."""
+### 9.1 Missing Test Files
 
-from __future__ import annotations
-import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from src.api.routes.search import router as search_router
-from src.api.routes.profiles import router as profiles_router
-from src.api.routes.ingest import router as ingest_router
-from src.api.routes.health import router as health_router
-from src.api.middleware.logging import RequestLoggingMiddleware
+Create 11 missing test files from PRD spec:
+- tests/test_ingestion/test_extractor.py - LLM field extraction
+- tests/test_ingestion/test_normalizer.py - field normalization
+- tests/test_language/test_translator.py - actual translation
+- tests/test_search/test_vector.py - FAISS build/search/save/load
+- tests/test_search/test_bm25.py - BM25 build/search/save/load
+- tests/test_search/test_reranker.py - cross-encoder reranking
+- tests/test_matching/test_scorer.py - weighted scoring
+- tests/test_matching/test_confidence.py - confidence calculation
+- tests/test_agents/test_orchestrator.py - full state machine
+- tests/test_agents/test_reflector.py - LLM + fallback reflection
+- tests/test_api/test_health_endpoint.py - health endpoint
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+### 9.2 Missing Critical Test Cases
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle."""
-    logger.info("Starting India Runs — Intelligent Candidate Discovery")
-    # Load indexes, models, etc.
-    yield
-    logger.info("Shutting down")
+From PRD Section 20.2:
+- test_cross_lingual_search_matches_hindi_to_english
+- test_multilingual_embedding_same_space
+- test_reranker_improves_precision
+- test_semantic_skill_match
+- test_required_skill_missing_penalizes
+- test_nice_to_have_skill_bonuses
+- test_full_pipeline_end_to_end
+- test_replan_triggered_on_poor_results
+- test_max_replan_limit
+- test_search_with_multilingual_profiles
+- test_search_with_messy_profiles
+- test_search_latency_under_2s
 
-app = FastAPI(
-    title="India Runs — Intelligent Candidate Discovery",
-    description="Hybrid semantic search with agentic AI for candidate matching",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+### 9.3 CI Pipeline (.github/workflows/test.yml)
 
-app.add_middleware(RequestLoggingMiddleware)
-app.include_router(search_router, prefix="/api/v1")
-app.include_router(profiles_router, prefix="/api/v1")
-app.include_router(ingest_router, prefix="/api/v1")
-app.include_router(health_router, prefix="/api/v1")
-```
+`yaml
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src/
+      - run: python -m pytest tests/ -v --tb=short
+`
 
-### 10.2 `src/api/routes/search.py`
+### 9.4 Target
 
-```python
-"""POST /api/v1/search endpoint."""
+- 100+ total tests (up from 57)
+- 80%+ code coverage
+- All tests passing in CI
+- Ruff clean
 
-from __future__ import annotations
-from fastapi import APIRouter, HTTPException
-from src.core.models import SearchRequest, SearchResponse
-from src.agents.orchestrator import Orchestrator
-
-router = APIRouter()
-
-# Global orchestrator instance (initialized at startup)
-_orchestrator: Orchestrator | None = None
-
-@router.post("/search", response_model=SearchResponse)
-async def search_candidates(request: SearchRequest) -> SearchResponse:
-    """
-    Search for candidates matching a natural language query.
-    
-    - **query**: Natural language job description
-    - **filters**: Optional hard filters (location, experience, etc.)
-    - **max_results**: Number of results (1-100, default 10)
-    - **include_rationale**: Whether to include rationale reports
-    """
-    if _orchestrator is None:
-        raise HTTPException(status_code=503, detail="Search system not initialized")
-    
-    try:
-        response = await _orchestrator.run(request.query)
-        return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-```
-
-### 10.3 `src/api/routes/profiles.py`
-
-```python
-"""GET /api/v1/profiles/{profile_id} endpoint."""
-
-from __future__ import annotations
-from fastapi import APIRouter, HTTPException
-from src.core.models import Profile
-
-router = APIRouter()
-
-@router.get("/profiles/{profile_id}", response_model=Profile)
-async def get_profile(profile_id: str) -> Profile:
-    """Get full normalized profile data by ID."""
-    ...
-```
-
-### 10.4 `src/api/routes/ingest.py`
-
-```python
-"""POST /api/v1/ingest endpoint."""
-
-from __future__ import annotations
-import json
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from src.core.models import IngestResponse
-
-router = APIRouter()
-
-@router.post("/ingest", response_model=IngestResponse)
-async def ingest_profiles(file: UploadFile = File(...)) -> IngestResponse:
-    """
-    Bulk ingest profiles from uploaded JSON file.
-    Returns ingestion report with counts and language distribution.
-    """
-    ...
-```
-
-### 10.5 `src/api/routes/health.py`
-
-```python
-"""GET /api/v1/health endpoint."""
-
-from __future__ import annotations
-from fastapi import APIRouter
-from src.core.models import HealthResponse
-
-router = APIRouter()
-
-@router.get("/health", response_model=HealthResponse)
-async def health_check() -> HealthResponse:
-    """
-    System health status.
-    Returns index sizes, model loading status, last update time.
-    """
-    ...
-```
-
-### 10.6 `src/api/middleware/logging.py`
-
-```python
-"""Request/response logging middleware."""
-
-from __future__ import annotations
-import time
-import logging
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-
-logger = logging.getLogger("api.access")
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Log all API requests with timing."""
-    
-    async def dispatch(self, request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        duration = (time.time() - start) * 1000
-        
-        logger.info(
-            f"{request.method} {request.url.path} "
-            f"status={response.status_code} "
-            f"duration={duration:.1f}ms"
-        )
-        return response
-```
-
-### 10.7 `src/api/middleware/validation.py`
-
-```python
-"""Input validation middleware."""
-
-from __future__ import annotations
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class InputValidationMiddleware(BaseHTTPMiddleware):
-    """Validate request inputs (max body size, content type, etc.)."""
-    
-    MAX_BODY_SIZE = 10 * 1024 * 1024  # 10MB
-    
-    async def dispatch(self, request, call_next):
-        ...
-```
+### Exit Criteria for Phase 9
+- [ ] 11 missing test files created
+- [ ] 10+ missing critical test cases added
+- [ ] CI pipeline running
+- [ ] 100+ tests passing
+- [ ] Ruff clean
 
 ---
 
-## Phase 11: UI Layer
+## Phase 10: Documentation + Submission Prep (Days 32-33 overlaps with 9)
 
-### 11.1 `src/ui/app.py`
+**Mission:** Complete documentation, pitch deck, deploy.
 
-> **This is the main Gradio application. ~400 lines.**
+### 10.1 Update README.md
 
-```python
-"""Gradio demo application — the primary user interface."""
+- Add new architecture diagram (3-stage + listwise + PII redaction)
+- Add new metrics targets
+- Add setup instructions for all 3 LLM providers
+- Add deployment options table
 
-from __future__ import annotations
-import gradio as gr
-import plotly.graph_objects as go
-from src.core.models import SearchResponse, SearchResultItem
-from src.ui.components import (
-    create_candidate_card,
-    create_score_radar_chart,
-    create_skill_match_table,
-    create_analytics_dashboard,
-    MATCH_COLORS,
-)
+### 10.2 Update docs/
 
-def create_app() -> gr.Blocks:
-    """Create the main Gradio application."""
-    
-    with gr.Blocks(
-        title="India Runs — Intelligent Candidate Discovery",
-        theme=gr.themes.Soft(),
-        css="src/ui/styles.css",
-    ) as app:
-        
-        gr.Markdown("# 🏃 India Runs — Intelligent Candidate Discovery")
-        gr.Markdown("*Beyond keywords. Beyond filters. AI that understands hiring.*")
-        
-        with gr.Tabs():
-            # Tab 1: Search
-            with gr.Tab("🔍 Search"):
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        query_input = gr.Textbox(
-                            label="Job Query",
-                            placeholder="e.g., Find a senior DevOps engineer with 5+ years in AWS...",
-                            lines=3,
-                        )
-                        # Example queries
-                        gr.Examples(
-                            examples=[
-                                "Find a senior Python developer with ML experience in Bangalore",
-                                "पायथन और डेटा स�ंस में 3 साल का अनुभव वाला उम्मीदवार ढूंढें",
-                                "Someone who can build our recommendation engine from scratch",
-                                "Product manager with B2B SaaS experience and growth mindset",
-                            ],
-                            inputs=query_input,
-                        )
-                    with gr.Column(scale=1):
-                        location_filter = gr.Textbox(label="Location")
-                        experience_filter = gr.Slider(
-                            label="Min Experience (years)", minimum=0, maximum=20, step=1, value=0
-                        )
-                        remote_ok = gr.Checkbox(label="Remote OK", value=False)
-                
-                search_btn = gr.Button("🔍 Search Candidates", variant="primary", size="lg")
-                results_area = gr.HTML(label="Results")
-                rationale_area = gr.HTML(label="Rationale Report")
-            
-            # Tab 2: Analytics
-            with gr.Tab("📊 Analytics"):
-                analytics_html = gr.HTML(label="Analytics Dashboard")
-            
-            # Tab 3: About
-            with gr.Tab("ℹ️ About"):
-                gr.Markdown("""
-                ## About This System
-                
-                **Intelligent Candidate Discovery** — a hybrid semantic search system
-                that goes beyond keyword matching.
-                
-                ### Architecture
-                - **Hybrid Search**: BM25 + FAISS vector search + Reciprocal Rank Fusion
-                - **Cross-Encoder Reranking**: MiniLM for precision
-                - **Agentic Workflow**: Plan → Execute → Reflect → Re-plan (LangGraph)
-                - **Multilingual**: 30+ Indian languages via multilingual embeddings
-                - **Rationale Reports**: Every match comes with an explanation
-                
-                ### Tech Stack
-                - FastAPI, FAISS, sentence-transformers, LangGraph, Gradio
-                """)
-        
-        # Wire up search
-        search_btn.click(
-            fn=search_handler,
-            inputs=[query_input, location_filter, experience_filter, remote_ok],
-            outputs=[results_area, rationale_area],
-        )
-    
-    return app
+- docs/architecture.md: add listwise ranking section, scoped retrieval
+- docs/api.md: update response schemas with new fields
+- docs/evaluation.md: add listwise evaluation metrics
+- docs/deployment.md: add Spaces deployment, Railway config
 
+### 10.3 Pitch Deck (docs/pitch_deck.pdf)
 
-def search_handler(query, location, min_experience, remote_ok) -> tuple[str, str]:
-    """Handle search request and return HTML for results + rationale."""
-    # This calls the orchestrator
-    ...
+12 slides from PRD Section 22.2:
+1. Title
+2-3. Problem (keyword failure + Indian market)
+4-5. Solution architecture (3-stage + listwise + PII)
+6. Innovation: Listwise Tournament Ranking
+7. Innovation: PII Redaction + Fairness
+8. Demo screenshots
+9. Metrics
+10. Impact
+11. Roadmap
+12. Thank you
 
+### 10.4 Docker / Deployment Fixes
 
-if __name__ == "__main__":
-    app = create_app()
-    app.launch(server_name="0.0.0.0", server_port=7860)
-```
+- Dockerfile: expose port 7860 for Gradio, run build_indexes.py on startup
+- docker-compose.yml: add gradio service alongside app
+- Add gradio_deploy.py for HuggingFace Spaces
+- Add railway.json for Railway deployment
 
-### 11.2 `src/ui/components.py`
+### 10.5 Final Commit + Push
 
-```python
-"""Reusable UI components for Gradio."""
+- git add -A
+- git commit -m "feat: PRD v2 + Implementation Plan v2 + Blueprint strategies"
+- git push origin main
 
-from __future__ import annotations
-from src.core.models import SearchResultItem, Rationale
-
-MATCH_COLORS = {
-    "strong_match": "#10b981",  # Green
-    "good_match": "#3b82f6",    # Blue
-    "potential_match": "#f59e0b",  # Yellow
-    "weak_match": "#ef4444",    # Red
-}
-
-def create_candidate_card(item: SearchResultItem) -> str:
-    """Generate HTML card for a single candidate."""
-    ...
-
-def create_score_radar_chart(scores: dict) -> go.Figure:
-    """Generate Plotly radar chart for score breakdown."""
-    ...
-
-def create_skill_match_table(rationale: Rationale) -> str:
-    """Generate HTML table showing skill-by-skill match details."""
-    ...
-
-def create_analytics_dashboard(matches_data: list) -> str:
-    """Generate analytics dashboard HTML with charts."""
-    ...
-
-def create_rationale_panel(rationale: Rationale, profile_summary: str) -> str:
-    """Generate full rationale report panel."""
-    ...
-
-def create_loading_spinner() -> str:
-    """HTML/CSS loading animation."""
-    ...
-```
-
-### 11.3 `src/ui/styles.css`
-
-```css
-/* Custom CSS for professional look */
-
-/* Score badges */
-.score-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-weight: 600;
-    font-size: 14px;
-}
-.score-strong { background: #d1fae5; color: #065f46; }
-.score-good { background: #dbeafe; color: #1e40af; }
-.score-potential { background: #fef3c7; color: #92400e; }
-.score-weak { background: #fee2e2; color: #991b1b; }
-
-/* Skill chips */
-.skill-chip {
-    display: inline-block;
-    padding: 2px 8px;
-    margin: 2px;
-    border-radius: 4px;
-    font-size: 12px;
-    background: #f3f4f6;
-    color: #374151;
-}
-.skill-chip.matched { background: #d1fae5; color: #065f46; }
-.skill-chip.missing { background: #fee2e2; color: #991b1b; }
-
-/* Candidate card */
-.candidate-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
-    transition: box-shadow 0.2s;
-}
-.candidate-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-/* Radar chart container */
-.radar-container {
-    width: 300px;
-    height: 300px;
-}
-```
+### Exit Criteria for Phase 10
+- [ ] README and docs updated
+- [ ] Pitch deck PDF ready
+- [ ] Dockerfile fixed, exposed ports
+- [ ] Deployed to Spaces or Railway
+- [ ] GitHub repo public with final commit
 
 ---
 
-## Phase 12: Index Building
-
-### 12.1 `scripts/build_indexes.py`
-
-```python
-"""Build FAISS + BM25 indexes from generated data."""
-
-from __future__ import annotations
-import json
-import logging
-from pathlib import Path
-from src.core.constants import PROFILES_PATH, FAISS_INDEX_PATH, BM25_INDEX_PATH
-from src.language.multilingual import MultilingualEmbedder
-from src.search.vector_search import VectorSearch
-from src.search.bm25_search import BM25Search
-from src.ingestion.quality_scorer import compute_data_quality_score
-from src.core.models import Profile
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def build_indexes() -> None:
-    """Main entry point — build all search indexes."""
-    # 1. Load profiles
-    profiles = load_profiles(PROFILES_PATH)
-    logger.info(f"Loaded {len(profiles)} profiles")
-    
-    # 2. Build embedding index
-    embedder = MultilingualEmbedder()
-    raw_texts = [p.raw_text for p in profiles]
-    profile_ids = [p.profile_id for p in profiles]
-    
-    logger.info("Generating embeddings...")
-    embeddings = embedder.embed_batch(raw_texts)
-    
-    vector_search = VectorSearch(dimension=384)
-    vector_search.build_index(embeddings, profile_ids)
-    vector_search.save()
-    logger.info(f"FAISS index built: {vector_search.size} vectors")
-    
-    # 3. Build BM25 index
-    bm25_search = BM25Search()
-    bm25_search.build_index(raw_texts, profile_ids)
-    bm25_search.save()
-    logger.info(f"BM25 index built: {bm25_search.size} documents")
-    
-    logger.info("All indexes built successfully!")
-
-def load_profiles(path: Path) -> list[Profile]:
-    """Load profiles from JSON file."""
-    with open(path, "r") as f:
-        data = json.load(f)
-    return [Profile(**p) for p in data]
-
-if __name__ == "__main__":
-    build_indexes()
-```
-
----
-
-## Phase 13: Evaluation
-
-### 13.1 `scripts/evaluate.py`
-
-```python
-"""Run full evaluation metrics on test queries."""
-
-from __future__ import annotations
-import json
-import time
-import logging
-from statistics import mean, median
-from pathlib import Path
-from src.core.constants import QUERIES_PATH, GROUND_TRUTH_PATH, PROFILES_PATH
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def evaluate():
-    """Run full evaluation."""
-    ...
-
-def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    """Compute Precision@k."""
-    ...
-
-def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    """Compute Recall@k."""
-    ...
-
-def mean_reciprocal_rank(retrieved: list[str], relevant: set[str]) -> float:
-    """Compute MRR."""
-    ...
-
-def ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    """Compute nDCG@k."""
-    ...
-
-def cross_lingual_mrr(results: dict) -> float:
-    """Compute MRR for non-English queries only."""
-    ...
-
-def latency_stats(latencies: list[float]) -> dict:
-    """Compute p50, p95, p99 latency."""
-    ...
-
-if __name__ == "__main__":
-    evaluate()
-```
-
----
-
-## Phase 14: Testing
-
-### 14.1 `tests/conftest.py`
-
-```python
-"""Shared pytest fixtures."""
-
-import pytest
-from src.core.models import Profile, Skill, WorkExperience, PersonalInfo, ProfessionalInfo
-
-@pytest.fixture
-def sample_profile() -> Profile:
-    """Create a sample profile for testing."""
-    ...
-
-@pytest.fixture
-def sample_profiles() -> list[Profile]:
-    """Create 20 sample profiles for testing."""
-    ...
-
-@pytest.fixture
-def sample_query():
-    """Create a sample job query."""
-    ...
-
-@pytest.fixture
-def multilingual_embedder():
-    """Create a loaded MultilingualEmbedder."""
-    ...
-
-@pytest.fixture
-def vector_search():
-    """Create an empty VectorSearch."""
-    ...
-
-@pytest.fixture
-def bm25_search():
-    """Create an empty BM25Search."""
-    ...
-```
-
-### 14.2 Test Files (one per module)
-
-Each test file follows the same pattern — see PRD Section 20.2 for the exact test cases.
-
-| Test File | Tests | What It Verifies |
-|-----------|-------|-----------------|
-| `test_ingestion/test_parser.py` | 8 tests | JSON parsing, CSV parsing, raw text parsing, batch parsing, error handling |
-| `test_ingestion/test_normalizer.py` | 6 tests | LinkedIn, Naukri, GitHub normalization, generic fallback |
-| `test_language/test_detector.py` | 6 tests | English, Hindi, Tamil detection, fallback on failure |
-| `test_language/test_translator.py` | 4 tests | Hindi→English, Tamil→English, fallback model, batch |
-| `test_search/test_hybrid.py` | 8 tests | RRF fusion, parallel search, hybrid vs vector-only vs keyword-only |
-| `test_search/test_vector.py` | 5 tests | Build index, search, save/load, empty index, dimension mismatch |
-| `test_search/test_bm25.py` | 5 tests | Build index, search, save/load, tokenization |
-| `test_search/test_reranker.py` | 4 tests | Rerank improves precision, timeout fallback, score ordering |
-| `test_matching/test_skill_matcher.py` | 8 tests | Exact, fuzzy, semantic matching, proficiency scoring, required vs optional |
-| `test_matching/test_scorer.py` | 5 tests | Overall score, weight normalization, null handling, confidence |
-| `test_agents/test_orchestrator.py` | 5 tests | Full pipeline, re-plan, max cycles, LLM fallback |
-| `test_agents/test_planner.py` | 4 tests | Parse query, JSON output, fallback, replan |
-| `test_agents/test_reflector.py` | 4 tests | Evaluate matches, should_replan, feedback generation |
-| `test_rationale/test_generator.py` | 4 tests | Generate rationale, batch, fallback, validation |
-| `test_api/test_search_endpoint.py` | 6 tests | POST /search, validation, empty results, error handling |
-| `test_api/test_health_endpoint.py` | 3 tests | Health check, index size, model status |
-| `test_integration/test_end_to_end.py` | 6 tests | Full pipeline, multilingual, messy data, latency, no-results, error handling |
-
----
-
-## Phase 15: Documentation
-
-### 15.1 `README.md`
-
-```markdown
-# 🏃 India Runs — Intelligent Candidate Discovery
-
-> Hackathon submission for India Runs by Redrob AI — Track 1: Data & AI Challenge
-
-## Quick Start
-
-### Prerequisites
-- Python 3.11+
-- Docker & Docker Compose
-- OpenAI API key (for agentic workflow)
-
-### Setup
-\```bash
-# 1. Clone and install
-git clone <repo-url>
-cd india-runs
-pip install -e ".[dev]"
-
-# 2. Start infrastructure
-docker compose up -d postgres redis
-
-# 3. Set up environment
-cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
-
-# 4. Download spacy model
-python -m spacy download en_core_web_sm
-
-# 5. Generate synthetic data
-python scripts/generate_data.py
-
-# 6. Build indexes
-python scripts/build_indexes.py
-
-# 7. Run evaluation
-python scripts/evaluate.py
-
-# 8. Start the application
-uvicorn src.main:app --reload
-# OR
-python src/ui/app.py
-\```
-
-## Architecture
-
-See [docs/architecture.md](docs/architecture.md)
-
-## API Documentation
-
-Once running, visit: http://localhost:8000/docs
-
-## Running Tests
-
-\```bash
-pytest tests/ -v --cov=src
-\```
-
-## Tech Stack
-
-- **Search**: FAISS (vector) + BM25 (keyword) + RRF fusion + Cross-Encoder reranking
-- **Agents**: LangGraph (Plan → Execute → Reflect → Re-plan)
-- **ML**: sentence-transformers, torch, langdetect, spacy
-- **API**: FastAPI + Uvicorn
-- **UI**: Gradio 5.0
-- **Data**: PostgreSQL + Redis
-```
-
-### 15.2 `docs/architecture.md`
-
-~2000 word architecture deep-dive explaining:
-1. System overview diagram
-2. Data flow (ingestion → indexing → search → scoring → rationale)
-3. Agentic workflow state machine
-4. Hybrid search pipeline
-5. Multilingual processing
-6. Fairness considerations
-7. Performance optimizations
-
-### 15.3 `docs/api.md`
-
-API documentation with curl examples for all 4 endpoints.
-
-### 15.4 `docs/evaluation.md`
-
-How to run evaluation, interpret metrics, and understand the evaluation notebook.
-
-### 15.5 `docs/deployment.md`
-
-Step-by-step deployment guide for:
-1. Local development
-2. Docker deployment
-3. Gradio Live (HuggingFace Spaces)
-4. Railway/Render
-
----
-
-## Execution Order
-
-The implementation must follow this exact dependency order:
-
-```
-Phase 0  (Environment)     ← No dependencies
-    ↓
-Phase 1  (Core/Config)     ← Depends on: Phase 0
-    ↓
-Phase 2  (Data Gen)        ← Depends on: Phase 1
-    ↓
-Phase 3  (Ingestion)       ← Depends on: Phase 1
-    ↓
-Phase 4  (Language)        ← Depends on: Phase 1
-    ↓
-Phase 5  (Search)          ← Depends on: Phase 4 (embeddings)
-    ↓
-Phase 6  (Matching)        ← Depends on: Phase 1
-    ↓
-Phase 7  (Agents)          ← Depends on: Phase 5, 6
-    ↓
-Phase 8  (Rationale)       ← Depends on: Phase 7
-    ↓
-Phase 9  (Fairness)        ← Depends on: Phase 6
-    ↓
-Phase 10 (API)             ← Depends on: Phase 7, 8
-    ↓
-Phase 11 (UI)              ← Depends on: Phase 10
-    ↓
-Phase 12 (Index Build)     ← Depends on: Phase 2, 4, 5
-    ↓
-Phase 13 (Evaluation)      ← Depends on: Phase 12
-    ↓
-Phase 14 (Testing)         ← After all phases
-    ↓
-Phase 15 (Documentation)   ← After all phases
-```
-
-**Within each phase, create files in the order listed.**
-
----
-
-## File Count Summary
-
-| Phase | Files | Lines (est.) |
-|-------|-------|-------------|
-| 0: Environment | 6 | ~150 |
-| 1: Core | 5 | ~350 |
-| 2: Data | 4 | ~500 |
-| 3: Ingestion | 4 | ~400 |
-| 4: Language | 3 | ~300 |
-| 5: Search | 5 | ~500 |
-| 6: Matching | 4 | ~400 |
-| 7: Agents | 5 | ~600 |
-| 8: Rationale | 3 | ~300 |
-| 9: Fairness | 2 | ~250 |
-| 10: API | 7 | ~400 |
-| 11: UI | 3 | ~500 |
-| 12: Index Build | 1 | ~80 |
-| 13: Evaluation | 1 | ~200 |
-| 14: Testing | 19 | ~1500 |
-| 15: Documentation | 6 | ~800 |
-| **Total** | **78** | **~7,230** |
-
----
-
-*Every file, every function, every test. No shortcuts. No MVPs.*
-*This is the finished product — ready to build, ready to deploy.*
+## Appendix: File Change Summary
+
+| File | Change Type | Phase |
+|------|-------------|-------|
+| src/api/routes/search.py | Bug fix | 0 |
+| src/agents/orchestrator.py | Bug fix + new nodes | 0, 4 |
+| src/agents/executor.py | Bug fix + scoped retrieval | 0, 3 |
+| src/agents/reflector.py | Anonymization integration | 5 |
+| src/agents/planner.py | TinT prompt | 7 |
+| src/language/translator.py | Bug fix + full translation | 0, 7 |
+| src/language/code_mixed.py | New file | 7 |
+| src/fairness/metrics.py | Bug fix + equal opportunity | 0, 5 |
+| src/fairness/anonymizer.py | New file | 5 |
+| src/search/hybrid.py | Parallel + individual scores | 3 |
+| src/search/filters.py | Scoped retriever | 3 |
+| src/search/vector_search.py | Incremental FAISS | 3 |
+| src/ranking/listwise_ranker.py | New file | 4 |
+| src/rationale/generator.py | 12 dimensions + YAML | 6 |
+| src/rationale/templates.py | 12D prompt | 6 |
+| src/rationale/validator.py | 12D validation | 6 |
+| src/ingestion/normalizer.py | Fix raw_text | 1 |
+| src/api/middleware/rate_limit.py | New file | 2 |
+| src/api/middleware/metrics.py | New file | 2 |
+| src/api/middleware/logging.py | Structured JSON | 2 |
+| src/main.py | Add middleware | 0 |
+| src/api/routes/health.py | Fix hardcoded state | 0 |
+| src/ui/app.py | Live analytics, dark mode, layout | 8 |
+| src/ui/components.py | Skeleton, timeline, 12D chart | 8 |
+| src/ui/styles.css | Dark mode CSS | 8 |
+| scripts/generate_data.py | Full rewrite | 1 |
+| scripts/build_indexes.py | Minor update | 1 |
+| scripts/init_db.py | New file | 2 |
+| data/queries/queries.json | New file | 1 |
+| data/ground_truth/ground_truth.json | New file | 1 |
+| configs/scoring_weights.yaml | Add fairness section | 5 |
+| tests/test_matching/test_listwise_ranker.py | New file | 4 |
+| tests/test_fairness/ | New files | 5 |
+| tests/* (11 missing files) | New files | 9 |
+| .github/workflows/test.yml | New file | 9 |
+| Dockerfile | Fix exposed ports | 10 |
+| docker-compose.yml | Add gradio service | 10 |
+| gradio_deploy.py | New file | 10 |
+| README.md | Update | 10 |
+| docs/*.md | Update | 10 |
+| docs/pitch_deck.pdf | New file | 10 |
