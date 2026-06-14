@@ -4,12 +4,12 @@
 > ⚠️ Lines: 60/600 — keep under limit!
 
 ## Current Status
-Phase 0 complete. Phase 1 (core infrastructure) complete. Phase 3 (ingestion pipeline) complete — parser, normalizer, quality scorer, extractor all written, linted, and tested on real Redrob dataset. Phase 2 (synthetic data generation) is obsolete — the hackathon provides 100K real profiles. Ready for Phase 4 (language pipeline).
+Phase 0 complete. Phase 1 complete. Phase 3 complete. Phase 4 (language pipeline) complete — detector, translator, multilingual embedder written and linted. Ready for Phase 5 (search pipeline).
 
 ## Active Tasks
-- [ ] Phase 4: Language pipeline (detector, translator, multilingual)
 - [ ] Phase 5: Search pipeline
 - [ ] Phase 6: Matching & scoring
+- [ ] Phase 7: Agentic workflow
 
 ## Architecture Decisions
 - **UI Framework:** Gradio only (not Streamlit) — simpler for demos, free HuggingFace Spaces hosting
@@ -51,3 +51,4 @@ Phase 0 complete. Phase 1 (core infrastructure) complete. Phase 3 (ingestion pip
 - Session 3: Phase 0 implemented — pyproject.toml, Docker, .env.example, configs, directory structure, placeholders
 - Session 4: Phase 1 implemented — settings.yaml, scoring_weights.yaml, models.yaml, config.py, constants.py, models.py
 - Session 5: Phase 3 implemented — parser.py, normalizer.py, quality_scorer.py, extractor.py, tested on real Redrob dataset (100K profiles). Discovered real dataset in hackathon bundle, Phase 2 obsoleted.
+- Session 6: Phase 4 implemented — language detector, translator pipeline, multilingual embedder

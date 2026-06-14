@@ -127,3 +127,26 @@
 
 **Next Steps:**
 - Phase 4: Language pipeline (detector, translator, multilingual)
+
+---
+
+## June 14, 2026 — current session — Session 6
+
+**Task:** Verify implementation status and proceed with Phase 4 (language pipeline)
+**Status:** completed
+
+**Changes:**
+- `src/language/detector.py`: LanguageDetector — detect() and detect_batch() using langdetect
+- `src/language/translator.py`: TranslationPipeline — translate_to_english(), translate_batch(), model name lookup for 9 Indian languages
+- `src/language/multilingual.py`: MultilingualEmbedder — embed(), embed_batch(), cosine_similarity() using paraphrase-multilingual-MiniLM-L12-v2
+
+**Lint:** ruff check — 0 errors after fix (Optional→X|None)
+
+**Imports:** All three modules load cleanly. langdetect works on Hindi text.
+
+**Decisions:**
+- Translation pipeline uses stub implementation for now — real opus-mt models are too large (~300MB each) for the 5min/16GB hackathon constraint. Will enable when needed.
+- MultilingualEmbedder uses normalize_embeddings=True so cosine similarity = dot product
+
+**Next Steps:**
+- Phase 5: Search pipeline (vector search, BM25, hybrid, reranker, filters)
