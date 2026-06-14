@@ -1,0 +1,48 @@
+app:
+  name: "india-runs"
+  version: "0.1.0"
+  log_level: "INFO"
+
+database:
+  url: "${DATABASE_URL}"
+  pool_size: 10
+  max_overflow: 20
+
+redis:
+  url: "${REDIS_URL}"
+  cache_ttl_seconds: 3600
+
+models:
+  embedding:
+    name: "paraphrase-multilingual-MiniLM-L12-v2"
+    dimension: 384
+    max_seq_length: 256
+    device: "cpu"
+  cross_encoder:
+    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    max_seq_length: 512
+    device: "cpu"
+  translation:
+    name: "Helsinki-NLP/opus-mt-mul"
+    fallback: "facebook/mbart-large-50-many-to-many-mmt"
+  planner:
+    provider: "${LLM_PROVIDER:-openai}"
+    model: "gpt-4o-mini"
+    temperature: 0.1
+  rationale:
+    provider: "${LLM_PROVIDER:-openai}"
+    model: "gpt-4o-mini"
+    temperature: 0.3
+
+search:
+  top_k_hybrid: 50
+  top_k_final: 10
+  rrf_k: 60
+  cross_encoder_timeout_ms: 500
+
+scoring:
+  weights_file: "configs/scoring_weights.yaml"
+
+agent:
+  max_replan_cycles: 3
+  min_good_matches_for_pass: 8

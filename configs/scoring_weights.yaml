@@ -1,0 +1,23 @@
+scoring_weights:
+  semantic_similarity: 0.25
+  keyword_match: 0.15
+  skill_match: 0.30
+  experience_match: 0.15
+  location_match: 0.05
+  education_match: 0.05
+  cross_encoder: 0.05
+
+skill_importance_weights:
+  required: 1.0
+  preferred: 0.6
+  nice_to_have: 0.3
+
+proficiency_scores:
+  beginner: 0.25
+  intermediate: 0.50
+  advanced: 0.75
+  expert: 1.00
+
+rrf_k: 60
+max_replan_cycles: 3
+min_good_matches_for_pass: 8
