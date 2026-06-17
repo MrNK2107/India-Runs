@@ -34,7 +34,21 @@ class ExecutorAgent:
     async def execute(self, parsed: ParsedQuery, top_k: int = 50) -> list[MatchResult]:
         search_text = self._query_to_search_text(parsed)
 
+        # RRF-fused hybrid search for ranking order
         hybrid_results = self.hybrid_search.search(search_text, top_k=top_k * 2)
+
+        # Separate vector + BM25 searches for actual similarity scores
+        query_vec = self.hybrid_search.embedder.embed_query(search_text)
+        vector_raw = self.hybrid_search.vector_search.search(query_vec, top_k=top_k * 2)
+        bm25_raw = self.hybrid_search.bm25_search.search(search_text, top_k=top_k * 2)
+
+        # Build score lookup: profile_id → (vec_score, bm25_score)
+        vec_scores: dict[str, float] = {
+            pid: self._norm_vec_score(s) for pid, s in vector_raw
+        }
+        bm25_scores: dict[str, float] = {
+            pid: self._norm_bm25_score(s, bm25_raw) for pid, s in bm25_raw
+        }
 
         filtered = self._apply_filters(hybrid_results, parsed)
 
@@ -55,20 +69,14 @@ class ExecutorAgent:
                 continue
 
             scores_dict: dict[str, float | None] = {
-                "semantic_similarity": None,
-                "keyword_match": None,
+                "semantic_similarity": vec_scores.get(pid),
+                "keyword_match": bm25_scores.get(pid),
                 "skill_match": None,
                 "experience_match": None,
                 "location_match": None,
                 "education_match": None,
                 "cross_encoder_score": rerank_score,
             }
-
-            for hpid, hscore in hybrid_results:
-                if hpid == pid:
-                    scores_dict["semantic_similarity"] = hscore
-                    scores_dict["keyword_match"] = hscore
-                    break
 
             match_scores = self.scorer.compute_overall(scores_dict)
 
@@ -104,6 +112,19 @@ class ExecutorAgent:
             )
 
         return results
+
+    @staticmethod
+    def _norm_vec_score(score: float) -> float:
+        return max(0.0, min(1.0, (score + 1.0) / 2.0))
+
+    @staticmethod
+    def _norm_bm25_score(score: float, all_results: list[tuple[str, float]]) -> float:
+        if not all_results:
+            return 0.0
+        max_score = max(s for _, s in all_results)
+        if max_score <= 0:
+            return 0.0
+        return max(0.0, min(1.0, score / max_score))
 
     def _query_to_search_text(self, parsed: ParsedQuery) -> str:
         parts: list[str] = []

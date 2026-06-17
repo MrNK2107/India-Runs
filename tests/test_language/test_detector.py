@@ -27,11 +27,21 @@ def test_detect_batch():
     assert len(results) == 2
 
 
-def test_translator_stub():
+def test_translator_english_passthrough():
     from src.language.translator import TranslationPipeline
     pipeline = TranslationPipeline()
     result = pipeline.translate_to_english("Hello", "en")
     assert result["translated"] == "Hello"
+    assert result["confidence"] == 1.0
+    assert result["translation_fallback"] is False
+
+
+def test_translator_french_success():
+    from src.language.translator import TranslationPipeline
+    pipeline = TranslationPipeline()
+    result = pipeline.translate_to_english("Bonjour le monde", "fr")
+    assert result["translation_fallback"] is False
+    assert "Hello" in str(result["translated"]) or "world" in str(result["translated"])
 
 
 def test_translator_batch():
@@ -39,6 +49,16 @@ def test_translator_batch():
     pipeline = TranslationPipeline()
     results = pipeline.translate_batch([("Hello", "en"), ("Hola", "es")])
     assert len(results) == 2
+    assert results[0]["translation_fallback"] is False
+    assert results[1]["translation_fallback"] is False
+    assert "Hello" in str(results[1]["translated"])
+
+
+def test_translator_supported_languages():
+    from src.language.translator import SUPPORTED_LANGUAGES
+    assert "hi" in SUPPORTED_LANGUAGES
+    assert "ta" in SUPPORTED_LANGUAGES
+    assert "fr" not in SUPPORTED_LANGUAGES
 
 
 def test_multilingual_embedder_dimension():
