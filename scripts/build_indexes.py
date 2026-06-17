@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+from tqdm import tqdm
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.config import DATA_DIR
@@ -53,6 +55,7 @@ def build_indexes(
     skipped = 0
 
     if profiles_path.suffix == ".jsonl":
+        log_interval = max(1, sample_count // 10) if sample_count > 0 else 10000
         for raw in parser.parse_jsonl_file(profiles_path):
             try:
                 normalized = normalize_redrob(raw)
@@ -62,6 +65,8 @@ def build_indexes(
                     continue
                 profiles.append(normalized)
                 loaded += 1
+                if loaded % log_interval == 0 and sample_count == 0:
+                    logger.info(f"  Loaded {loaded} profiles ({skipped} skipped so far)...")
             except Exception:
                 skipped += 1
                 continue
@@ -90,13 +95,13 @@ def build_indexes(
     embedder = MultilingualEmbedder()
     batch_size = 500
     all_embeddings = []
-    for i in range(0, len(raw_texts), batch_size):
-        batch = raw_texts[i : i + batch_size]
-        current = i // batch_size + 1
-        total = (len(raw_texts) - 1) // batch_size + 1
-        logger.info(f"  Embedding batch {current}/{total}")
-        batch_emb = embedder.embed_batch(batch)
-        all_embeddings.append(batch_emb)
+    num_batches = (len(raw_texts) + batch_size - 1) // batch_size
+    with tqdm(total=num_batches, desc="Embedding", unit="batch") as pbar:
+        for i in range(0, len(raw_texts), batch_size):
+            batch = raw_texts[i : i + batch_size]
+            batch_emb = embedder.embed_batch(batch)
+            all_embeddings.append(batch_emb)
+            pbar.update(1)
     import numpy as np
     embeddings = np.vstack(all_embeddings) if len(all_embeddings) > 1 else all_embeddings[0]
     logger.info(f"Generated {len(embeddings)} embeddings (dim={embeddings.shape[1]})")
