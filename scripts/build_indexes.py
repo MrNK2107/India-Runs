@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import argparse
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 
-from src.core.constants import PROFILES_PATH
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.core.config import DATA_DIR
+from src.core.constants import CANDIDATES_PATH, SAMPLE_PATH
 from src.core.models import Profile
+from src.ingestion.normalizer import normalize_redrob
+from src.ingestion.parser import ProfileParser
+from src.ingestion.quality_scorer import compute_data_quality_score
 from src.language.multilingual import MultilingualEmbedder
 from src.search.bm25_search import BM25Search
 from src.search.vector_search import VectorSearch
@@ -15,22 +23,81 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def build_indexes(profiles_path: Path = PROFILES_PATH) -> None:
+def build_indexes(
+    profiles_path: Path = CANDIDATES_PATH,
+    sample_count: int = 0,
+    force: bool = False,
+) -> None:
     start = time.perf_counter()
 
-    profiles = load_profiles(profiles_path)
-    if not profiles:
-        logger.error(f"No profiles found at {profiles_path}")
+    if not profiles_path.exists():
+        logger.warning(f"Profiles file not found: {profiles_path}")
+        logger.info(f"Falling back to sample data: {SAMPLE_PATH}")
+        profiles_path = SAMPLE_PATH
+
+    if not profiles_path.exists():
+        logger.error(f"No data found at {profiles_path} or {CANDIDATES_PATH}")
         return
-    logger.info(f"Loaded {len(profiles)} profiles")
+
+    index_dir = DATA_DIR / "indexes"
+    faiss_path = index_dir / "faiss_index.bin"
+    bm25_path = index_dir / "bm25_index.pkl"
+
+    if faiss_path.exists() and bm25_path.exists() and not force:
+        logger.info("Indexes already exist. Use --force to rebuild.")
+        return
+
+    logger.info(f"Loading profiles from {profiles_path}")
+    parser = ProfileParser()
+    profiles: list[Profile] = []
+    loaded = 0
+    skipped = 0
+
+    if profiles_path.suffix == ".jsonl":
+        for raw in parser.parse_jsonl_file(profiles_path):
+            try:
+                normalized = normalize_redrob(raw)
+                qs = compute_data_quality_score(normalized)
+                if qs < 0.3:
+                    skipped += 1
+                    continue
+                profiles.append(normalized)
+                loaded += 1
+            except Exception as e:
+                skipped += 1
+                continue
+            if sample_count > 0 and loaded >= sample_count:
+                break
+    else:
+        data = parser.parse_json_file(profiles_path)
+        for item in data:
+            try:
+                normalized = normalize_redrob(item)
+                profiles.append(normalized)
+                loaded += 1
+            except Exception:
+                skipped += 1
+    logger.info(f"Loaded {len(profiles)} profiles ({skipped} skipped)")
+
+    if not profiles:
+        logger.error("No valid profiles to index")
+        return
 
     raw_texts = [p.raw_text for p in profiles]
     profile_ids = [p.profile_id for p in profiles]
     document_texts = [_build_document_text(p) for p in profiles]
 
-    logger.info("Generating embeddings...")
+    logger.info("Generating embeddings (this may take a while)...")
     embedder = MultilingualEmbedder()
-    embeddings = embedder.embed_batch(raw_texts)
+    batch_size = 500
+    all_embeddings = []
+    for i in range(0, len(raw_texts), batch_size):
+        batch = raw_texts[i : i + batch_size]
+        logger.info(f"  Embedding batch {i // batch_size + 1}/{(len(raw_texts) - 1) // batch_size + 1}")
+        batch_emb = embedder.embed_batch(batch)
+        all_embeddings.append(batch_emb)
+    import numpy as np
+    embeddings = np.vstack(all_embeddings) if len(all_embeddings) > 1 else all_embeddings[0]
     logger.info(f"Generated {len(embeddings)} embeddings (dim={embeddings.shape[1]})")
 
     vector_search = VectorSearch(dimension=384)
@@ -67,20 +134,16 @@ def _build_document_text(profile: Profile) -> str:
     return " ".join(parts)
 
 
-def load_profiles(path: Path) -> list[Profile]:
-    if not path.exists():
-        logger.warning(f"Profiles file not found: {path}")
-        return []
-    with open(path) as f:
-        if path.suffix == ".jsonl":
-            profiles = [Profile(**json.loads(line)) for line in f if line.strip()]
-        else:
-            data = json.load(f)
-            if isinstance(data, dict):
-                data = [data]
-            profiles = [Profile(**p) for p in data]
-    return profiles
+def main():
+    parser = argparse.ArgumentParser(description="Build FAISS + BM25 indexes from profiles")
+    parser.add_argument("--sample", type=int, default=0,
+                        help="Process only N profiles (for quick testing)")
+    parser.add_argument("--force", action="store_true",
+                        help="Rebuild indexes even if they exist")
+    args = parser.parse_args()
+
+    build_indexes(sample_count=args.sample, force=args.force)
 
 
 if __name__ == "__main__":
-    build_indexes()
+    main()

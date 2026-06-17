@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 from statistics import mean, median
 
-from src.core.constants import GROUND_TRUTH_PATH, QUERIES_PATH
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.core.config import DATA_DIR
+from src.core.constants import QUERIES_PATH, GROUND_TRUTH_PATH
 from src.search.bm25_search import BM25Search
 from src.search.hybrid import HybridSearch
 from src.search.vector_search import VectorSearch
@@ -76,15 +80,29 @@ def latency_stats(latencies: list[float]) -> dict:
     }
 
 
+def find_indexes() -> Path | None:
+    for path in [DATA_DIR / "indexes" / "faiss_index.bin"]:
+        if path.exists():
+            return path.parent
+    return None
+
+
 def evaluate(
-    queries_path: Path = QUERIES_PATH, ground_truth_path: Path = GROUND_TRUTH_PATH,
+    queries_path: Path = QUERIES_PATH,
+    ground_truth_path: Path = GROUND_TRUTH_PATH,
 ) -> dict:
+    index_dir = find_indexes()
+    if index_dir is None:
+        logger.error("No indexes found. Run 'python scripts/build_indexes.py' first.")
+        return {}
+
     if not queries_path.exists():
-        logger.error(f"Queries file not found: {queries_path}")
-        return {}
+        logger.warning(f"Queries file not found: {queries_path}, running demo eval on loaded profiles")
+        return _demo_evaluate(index_dir)
+
     if not ground_truth_path.exists():
-        logger.error(f"Ground truth file not found: {ground_truth_path}")
-        return {}
+        logger.warning(f"Ground truth not found: {ground_truth_path}")
+        return _demo_evaluate(index_dir)
 
     with open(queries_path) as f:
         queries = json.load(f)
@@ -93,9 +111,9 @@ def evaluate(
     gt_map = ground_truth if isinstance(ground_truth, dict) else {}
 
     vector_search = VectorSearch()
-    vector_search.load()
+    vector_search.load(index_dir / "faiss_index.bin", index_dir / "faiss_id_map.json")
     bm25_search = BM25Search()
-    bm25_search.load()
+    bm25_search.load(index_dir / "bm25_index.pkl")
 
     from src.language.multilingual import MultilingualEmbedder
     embedder = MultilingualEmbedder()
@@ -156,6 +174,52 @@ def evaluate(
         if isinstance(vals, dict) and "mean" in vals:
             logger.info(f"  {metric}: mean={vals['mean']:.4f}, median={vals['median']:.4f}")
 
+    return summary
+
+
+def _demo_evaluate(index_dir: Path) -> dict:
+    logger.info("Running demo evaluation with 5 sample queries")
+    queries = [
+        "Senior Python developer with Django experience",
+        "DevOps engineer AWS Kubernetes",
+        "Frontend engineer React TypeScript",
+        "Data scientist machine learning Python",
+        "Product manager B2B SaaS",
+    ]
+
+    vector_search = VectorSearch()
+    vector_search.load(index_dir / "faiss_index.bin", index_dir / "faiss_id_map.json")
+    bm25_search = BM25Search()
+    bm25_search.load(index_dir / "bm25_index.pkl")
+
+    from src.language.multilingual import MultilingualEmbedder
+    embedder = MultilingualEmbedder()
+    hybrid = HybridSearch(vector_search, bm25_search, embedder)
+
+    all_metrics: dict[str, list] = {
+        "p@5": [], "p@10": [], "r@5": [], "r@10": [],
+        "mrr": [], "ndcg@10": [], "latencies": [],
+    }
+
+    for query_text in queries:
+        start = time.perf_counter()
+        results = hybrid.search(query_text, top_k=20)
+        elapsed = (time.perf_counter() - start) * 1000
+        all_metrics["latencies"].append(elapsed)
+
+        retrieved = [pid for pid, _ in results]
+        logger.info(f"  Query: {query_text[:50]}... -> {len(results)} results")
+
+    summary = {
+        "total_queries": len(queries),
+        "total_results": 0,
+        "latency": latency_stats(all_metrics["latencies"]),
+        "note": "Demo mode: queries executed, no ground truth for precision metrics",
+    }
+
+    logger.info("Demo evaluation complete:")
+    logger.info(f"  Queries: {summary['total_queries']}")
+    logger.info(f"  Latency: p50={summary['latency']['p50']:.0f}ms, p95={summary['latency']['p95']:.0f}ms")
     return summary
 
 

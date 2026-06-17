@@ -121,13 +121,7 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
 
     signals = _build_signals(raw.get("redrob_signals", {}), certs)
 
-    raw_text_parts = [
-        prof.get("headline", ""),
-        prof.get("summary", ""),
-    ]
-    for exp in experience:
-        raw_text_parts.append(exp.description)
-    raw_text = "\n\n".join(p for p in raw_text_parts if p)
+    raw_text = _build_raw_text(prof, experience, skills, education, certs, languages)
 
     if native_langs:
         personal.native_language = native_langs[0]
@@ -187,6 +181,46 @@ def _infer_skill_category(name: str) -> Any:
         return SkillCategory.DOMAIN_KNOWLEDGE
 
     return SkillCategory.TOOL
+
+
+def _build_raw_text(
+    prof: dict[str, Any],
+    experience: list[WorkExperience],
+    skills: list[Skill],
+    education: list[Education],
+    certs: list[str],
+    languages: list[str],
+) -> str:
+    name = prof.get("anonymized_name", "")
+    title = prof.get("current_title", "")
+    company = prof.get("current_company", "")
+    summary = prof.get("summary", "")
+    skill_names = ", ".join(s.name for s in skills)
+    exp_strs = [
+        f"{e.title} at {e.company} ({e.start_date or ''}-{e.end_date or ''}): {e.description}"
+        for e in experience
+    ]
+    exp_text = "; ".join(exp_strs) if exp_strs else ""
+    edu_strs = [
+        f"{e.degree or ''} in {e.field or ''} at {e.institution}"
+        for e in education
+    ]
+    edu_text = "; ".join(edu_strs) if edu_strs else ""
+    certs_text = ", ".join(certs) if certs else ""
+    langs_text = ", ".join(languages) if languages else ""
+
+    parts = [
+        f"Name: {name}.",
+        f"Title: {title}." if title else "",
+        f"Company: {company}." if company else "",
+        f"Summary: {summary}." if summary else "",
+        f"Skills: {skill_names}." if skill_names else "",
+        f"Experience: {exp_text}." if exp_text else "",
+        f"Education: {edu_text}." if edu_text else "",
+        f"Certifications: {certs_text}." if certs_text else "",
+        f"Languages: {langs_text}." if langs_text else "",
+    ]
+    return " ".join(p for p in parts if p)
 
 
 def _build_signals(rs: dict[str, Any], certs: list[str]) -> Signals:
