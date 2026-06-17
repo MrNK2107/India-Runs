@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 import time
@@ -63,7 +62,7 @@ def build_indexes(
                     continue
                 profiles.append(normalized)
                 loaded += 1
-            except Exception as e:
+            except Exception:
                 skipped += 1
                 continue
             if sample_count > 0 and loaded >= sample_count:
@@ -93,7 +92,9 @@ def build_indexes(
     all_embeddings = []
     for i in range(0, len(raw_texts), batch_size):
         batch = raw_texts[i : i + batch_size]
-        logger.info(f"  Embedding batch {i // batch_size + 1}/{(len(raw_texts) - 1) // batch_size + 1}")
+        current = i // batch_size + 1
+        total = (len(raw_texts) - 1) // batch_size + 1
+        logger.info(f"  Embedding batch {current}/{total}")
         batch_emb = embedder.embed_batch(batch)
         all_embeddings.append(batch_emb)
     import numpy as np

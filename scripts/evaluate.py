@@ -10,7 +10,7 @@ from statistics import mean, median
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.config import DATA_DIR
-from src.core.constants import QUERIES_PATH, GROUND_TRUTH_PATH
+from src.core.constants import GROUND_TRUTH_PATH, QUERIES_PATH
 from src.search.bm25_search import BM25Search
 from src.search.hybrid import HybridSearch
 from src.search.vector_search import VectorSearch
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    if k <= 0:
+    if k <= 0 or not retrieved:
         return 0.0
     top_k = retrieved[:k]
     if not top_k:
@@ -55,8 +55,10 @@ def ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
 
 
 def cross_lingual_mrr(results: dict) -> float:
-    non_en_queries = {qid for qid, q in results.get("queries", {}).items()
-                      if q.get("language", "en") != "en"}
+    non_en_queries = {
+        qid for qid, q in results.get("queries", {}).items()
+        if q.get("language", "en") != "en"
+    }
     if not non_en_queries:
         return 1.0
     mrr_sum = 0.0
@@ -80,35 +82,39 @@ def latency_stats(latencies: list[float]) -> dict:
     }
 
 
-def find_indexes() -> Path | None:
-    for path in [DATA_DIR / "indexes" / "faiss_index.bin"]:
-        if path.exists():
-            return path.parent
-    return None
+def find_index_dir() -> Path | None:
+    path = DATA_DIR / "indexes" / "faiss_index.bin"
+    return path.parent if path.exists() else None
 
 
 def evaluate(
     queries_path: Path = QUERIES_PATH,
     ground_truth_path: Path = GROUND_TRUTH_PATH,
 ) -> dict:
-    index_dir = find_indexes()
+    index_dir = find_index_dir()
     if index_dir is None:
-        logger.error("No indexes found. Run 'python scripts/build_indexes.py' first.")
+        logger.error("No indexes found. Run 'python scripts/build_indexes.py --sample 50' first.")
         return {}
 
+    errors: list[str] = []
     if not queries_path.exists():
-        logger.warning(f"Queries file not found: {queries_path}, running demo eval on loaded profiles")
-        return _demo_evaluate(index_dir)
-
+        errors.append(f"Queries file not found: {queries_path}")
     if not ground_truth_path.exists():
-        logger.warning(f"Ground truth not found: {ground_truth_path}")
-        return _demo_evaluate(index_dir)
+        errors.append(f"Ground truth file not found: {ground_truth_path}")
+    if errors:
+        for e in errors:
+            logger.error(e)
+        return {}
 
     with open(queries_path) as f:
-        queries = json.load(f)
+        queries_raw = json.load(f)
     with open(ground_truth_path) as f:
         ground_truth = json.load(f)
+
+    queries_list = queries_raw if isinstance(queries_raw, list) else list(queries_raw.values())
     gt_map = ground_truth if isinstance(ground_truth, dict) else {}
+
+    logger.info(f"Loaded {len(queries_list)} queries and {len(gt_map)} ground truth entries")
 
     vector_search = VectorSearch()
     vector_search.load(index_dir / "faiss_index.bin", index_dir / "faiss_id_map.json")
@@ -127,18 +133,20 @@ def evaluate(
         "latencies": [],
     }
 
-    queries_list = queries if isinstance(queries, list) else list(queries.values())
+    evaluated = 0
+    skipped = 0
 
     for q in queries_list:
         query_text = q.get("query", q.get("raw_query", ""))
         qid = q.get("query_id", q.get("id", ""))
-        relevant = set(q.get("relevant_ids", q.get("profile_ids", gt_map.get(qid, []))))
+        relevant = set(gt_map.get(qid, []))
         if not query_text or not relevant:
+            skipped += 1
             continue
 
-        start = time.perf_counter()
+        t0 = time.perf_counter()
         results = hybrid.search(query_text, top_k=50)
-        elapsed = (time.perf_counter() - start) * 1000
+        elapsed = (time.perf_counter() - t0) * 1000
         all_metrics["latencies"].append(elapsed)
 
         retrieved = [pid for pid, _ in results]
@@ -149,80 +157,56 @@ def evaluate(
 
         all_metrics["mrr"].append(mean_reciprocal_rank(retrieved, relevant))
         all_metrics["ndcg@10"].append(ndcg_at_k(retrieved, relevant, 10))
+        evaluated += 1
 
-    summary = {}
+    if evaluated == 0:
+        logger.error("No queries could be evaluated (check ground truth IDs match query IDs)")
+        return {}
+
+    summary: dict = {}
     for metric, values in all_metrics.items():
         if values:
             summary[metric] = {
-                "mean": mean(values),
-                "median": median(values),
-                "min": min(values),
-                "max": max(values),
+                "mean": round(mean(values), 4),
+                "median": round(median(values), 4),
+                "min": round(min(values), 4),
+                "max": round(max(values), 4),
             }
         else:
             summary[metric] = {}
 
     summary["latency"] = latency_stats(all_metrics["latencies"])
-    summary["total_queries"] = len(all_metrics["mrr"])
-    summary["cross_lingual_mrr"] = cross_lingual_mrr({
+    for k in ("p50", "p95", "p99", "mean", "min", "max"):
+        if k in summary["latency"]:
+            summary["latency"][k] = round(summary["latency"][k], 1)
+
+    summary["total_queries"] = evaluated
+    summary["skipped"] = skipped
+    summary["cross_lingual_mrr"] = round(cross_lingual_mrr({
         "queries": {i: q for i, q in enumerate(queries_list)},
         "mrr": {i: v for i, v in enumerate(all_metrics["mrr"])},
-    })
+    }), 4)
 
     logger.info("Evaluation results:")
-    for metric, vals in summary.items():
-        if isinstance(vals, dict) and "mean" in vals:
-            logger.info(f"  {metric}: mean={vals['mean']:.4f}, median={vals['median']:.4f}")
+    for metric in ("p@5", "p@10", "r@5", "r@10", "mrr", "ndcg@10"):
+        if metric in summary:
+            s = summary[metric]
+            logger.info(f"  {metric}: mean={s['mean']:.4f}, median={s['median']:.4f}")
+    lat = summary["latency"]
+    logger.info(f"  latency: p50={lat['p50']:.0f}ms, p95={lat['p95']:.0f}ms")
+    logger.info(f"  cross-lingual MRR: {summary['cross_lingual_mrr']:.4f}")
 
-    return summary
-
-
-def _demo_evaluate(index_dir: Path) -> dict:
-    logger.info("Running demo evaluation with 5 sample queries")
-    queries = [
-        "Senior Python developer with Django experience",
-        "DevOps engineer AWS Kubernetes",
-        "Frontend engineer React TypeScript",
-        "Data scientist machine learning Python",
-        "Product manager B2B SaaS",
-    ]
-
-    vector_search = VectorSearch()
-    vector_search.load(index_dir / "faiss_index.bin", index_dir / "faiss_id_map.json")
-    bm25_search = BM25Search()
-    bm25_search.load(index_dir / "bm25_index.pkl")
-
-    from src.language.multilingual import MultilingualEmbedder
-    embedder = MultilingualEmbedder()
-    hybrid = HybridSearch(vector_search, bm25_search, embedder)
-
-    all_metrics: dict[str, list] = {
-        "p@5": [], "p@10": [], "r@5": [], "r@10": [],
-        "mrr": [], "ndcg@10": [], "latencies": [],
-    }
-
-    for query_text in queries:
-        start = time.perf_counter()
-        results = hybrid.search(query_text, top_k=20)
-        elapsed = (time.perf_counter() - start) * 1000
-        all_metrics["latencies"].append(elapsed)
-
-        retrieved = [pid for pid, _ in results]
-        logger.info(f"  Query: {query_text[:50]}... -> {len(results)} results")
-
-    summary = {
-        "total_queries": len(queries),
-        "total_results": 0,
-        "latency": latency_stats(all_metrics["latencies"]),
-        "note": "Demo mode: queries executed, no ground truth for precision metrics",
-    }
-
-    logger.info("Demo evaluation complete:")
-    logger.info(f"  Queries: {summary['total_queries']}")
-    logger.info(f"  Latency: p50={summary['latency']['p50']:.0f}ms, p95={summary['latency']['p95']:.0f}ms")
     return summary
 
 
 if __name__ == "__main__":
     result = evaluate()
-    print(json.dumps(result, indent=2))
+    if result:
+        report_path = DATA_DIR / "evaluation_report.json"
+        with open(report_path, "w") as f:
+            json.dump(result, f, indent=2)
+        logger.info(f"Report saved to {report_path}")
+        print(json.dumps(result, indent=2))
+    else:
+        logger.error("Evaluation failed")
+        sys.exit(1)
