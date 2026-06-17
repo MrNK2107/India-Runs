@@ -1,10 +1,10 @@
 # Project Context — India Runs
 
 > Last updated: June 17, 2026 by opencode agent
-> Lines: 88/300
+> Lines: 100/300
 
 ## Current Status
-Pipeline runs end-to-end with Ollama (qwen2.5:7b) for intelligent planning/reflection. ML models pre-loaded at server startup (no 40s first-request delay). Ground truth generated from 50 sample profiles (50 queries, 108 relevance labels). Evaluation reports real precision/recall/NDCG/MRR metrics. No demo mode. 86 tests pass, ruff clean, 0 warnings.
+**Phase 2 complete** — full 100K dataset indexed, evaluated, and server-validated. FAISS + BM25 indexes built on all 100K profiles (42 min). 500 evaluation queries generated from full dataset with 158K relevance labels via efficient hash-based clustering. Evaluation: MRR=0.346, p@5=15.2%, NDCG@10=0.102, p50 latency=399ms. Server starts in ~35s (profile loading bottleneck), indexes loaded successfully (FAISS 153MB, BM25 464MB). No demo mode. 86 tests pass, ruff clean, 0 warnings.
 
 ## Active Tasks
 - [x] Ollama integration (qwen2.5:7b) — LLM_PROVIDER set, local planner + reflector

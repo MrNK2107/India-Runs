@@ -599,3 +599,53 @@
 **Next Steps:**
 - Phase 2: Index full 100K dataset (needs candidates.jsonl downloaded)
 - Phase 3: Fairness dashboard + presentation prep
+
+---
+
+## June 17, 2026 — opencode (current agent) — Session 3
+
+**Task:** Phase 2 — index full 100K dataset, generate ground truth, evaluate, validate server
+**Status:** completed
+
+**Changes:**
+- `scripts/build_indexes.py`: Added tqdm progress bars for embedding step, periodic logging every 10K profiles
+- `scripts/generate_ground_truth.py`: Rewritten to handle 100K profiles — loads sample (50) + random sample from full set (450), uses hash-based skill clustering instead of O(n²) for efficiency
+
+**Data Generated:**
+- `data/indexes/faiss_index.bin`: FAISS index (100K × 384-dim, 153MB) → built in 41 min
+- `data/indexes/bm25_index.pkl`: BM25 index (100K documents, 464MB) → built in parallel
+- `data/queries/queries.json`: 500 queries from sample + random 100K profiles
+- `data/ground_truth/ground_truth.json`: 500 entries with 158K relevance labels (317 avg/query via skill-sharing)
+- `data/evaluation_report.json`: Full evaluation metrics on 100K
+
+**Evaluation Results (500 queries, 100K corpus):**
+```
+  p@5:   mean=0.1524, median=0.2000
+  p@10:  mean=0.0914, median=0.1000
+  MRR:   mean=0.3459, median=0.3333
+  NDCG@10: mean=0.1020, median=0.1224
+  latency: p50=399ms, p95=507ms
+  cross-lingual MRR: 1.0000
+```
+
+**Server Validation:**
+- FAISS index with 100K vectors → loaded successfully ✓
+- BM25 index with 100K documents → loaded successfully ✓
+- All 100K profiles loaded into memory from candidates.jsonl ✓
+- System initialized and running ✓
+- Startup time bottleneck: ~35s for profile loading (parsing + normalizing 100K JSONL)
+
+**Decisions:**
+- Hash-based clustering (skill → pid dictionary) replaces O(n²) Jaccard for 100K scale
+- Binary indexes not committed to git (153MB + 464MB) — only evaluation report tracked
+- Data dirs (queries, ground_truth, indexes) gitignored — regenerated locally
+
+**Issues:**
+- First evaluation query took 38 min (cross-encoder model load) — fixed by pre-loading model in server startup
+- Profile loading from 487MB JSONL takes ~35s — acceptable for startup, could be optimized with lazy loading
+- Recall is low (0.29% @10) because each query has ~317 relevant docs — inherent to broad skill-sharing clusters
+
+**Next Steps:**
+- Phase 3: Fairness dashboard — compute demographic parity, per-query bias scores, name/location/university skew detection
+- Generate presentation assets — startup GIF, 3 demo queries, Hinglish support showcase
+- Optimize server startup (lazy profile loading from FAISS id map)
