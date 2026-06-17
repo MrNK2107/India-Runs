@@ -11,8 +11,10 @@ from src.agents.planner import PlannerAgent
 from src.agents.reflector import ReflectorAgent
 from src.core.config import get_scoring_config
 from src.core.models import (
+    MatchRecommendation,
     MatchResult,
     ParsedQuery,
+    Rationale,
     SearchMetadata,
     SearchResponse,
     SearchResultItem,
@@ -32,6 +34,7 @@ class AgentState(TypedDict):
     search_metadata: dict
     total_candidates_searched: int
     start_time_ms: int
+    slider_weights: dict[str, float]
 
 
 class Orchestrator:
@@ -69,7 +72,10 @@ class Orchestrator:
 
         return workflow.compile()
 
-    async def run(self, raw_query: str) -> SearchResponse:
+    async def run(
+        self, raw_query: str,
+        slider_weights: dict[str, float] | None = None,
+    ) -> SearchResponse:
         initial_state: AgentState = {
             "raw_query": raw_query,
             "parsed_query": None,
@@ -81,6 +87,7 @@ class Orchestrator:
             "search_metadata": {},
             "total_candidates_searched": 0,
             "start_time_ms": int(time.time() * 1000),
+            "slider_weights": slider_weights or {},
         }
         final_state = await self.graph.ainvoke(initial_state)
         return self._build_response(final_state)
@@ -102,7 +109,8 @@ class Orchestrator:
     async def _execute_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
         parsed = ParsedQuery(**parsed_dict) if parsed_dict else ParsedQuery()
-        results = await self.executor.execute(parsed, top_k=50)
+        slider_weights = state.get("slider_weights") or None
+        results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
         methods_used = []
         if state.get("replan_count", 0) > 0:
             methods_used.append("hybrid+rerank+replan")
@@ -123,7 +131,12 @@ class Orchestrator:
         parsed = ParsedQuery(**parsed_dict) if parsed_dict else ParsedQuery()
         results = [MatchResult(**r) for r in state.get("results", [])]
         evaluations = await self.reflector.reflect(parsed, results)
-        return {"evaluations": evaluations}
+        replan_count = state.get("replan_count", 0)
+        ev = evaluations if isinstance(evaluations, dict) else {}
+        should_replan = ev.get("should_replan", False)
+        if should_replan:
+            replan_count += 1
+        return {"evaluations": evaluations, "replan_count": replan_count}
 
     def _should_continue(self, state: AgentState) -> str:
         evaluations = state.get("evaluations", {})
@@ -144,6 +157,9 @@ class Orchestrator:
 
         for i, r in enumerate(results_raw[:100], start=1):
             if isinstance(r, dict):
+                scores = r.get("scores", {})
+                if not isinstance(scores, dict):
+                    scores = {}
                 items.append(
                     SearchResultItem(
                         rank=i,
@@ -153,9 +169,21 @@ class Orchestrator:
                         current_company=r.get("current_company"),
                         location=r.get("location"),
                         experience_years=r.get("experience_years"),
-                        scores=r.get("scores", {}),
+                        scores=scores,
                         matched_skills=r.get("matched_skills", []),
                         missing_skills=r.get("missing_skills", []),
+                        rationale=Rationale(
+                            summary="",
+                            strengths=r.get("matched_skills", [])[:3],
+                            gaps=r.get("missing_skills", [])[:3],
+                            recommendation=(
+                                MatchRecommendation.STRONG
+                                if scores.get("overall", 0) >= 0.7
+                                else MatchRecommendation.GOOD
+                                if scores.get("overall", 0) >= 0.5
+                                else MatchRecommendation.POTENTIAL
+                            ),
+                        ),
                     )
                 )
 

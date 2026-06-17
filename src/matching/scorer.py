@@ -5,13 +5,35 @@ import numpy as np
 from src.core.config import get_scoring_config
 from src.core.models import MatchScores
 
+DEFAULT_SLIDER_WEIGHTS: dict[str, float] = {
+    "skill_match": 0.30,
+    "experience_match": 0.20,
+    "education_match": 0.10,
+    "assessment_score": 0.10,
+    "behavioral_signals": 0.15,
+    "cultural_fit": 0.10,
+}
+
+DIM_TO_ACTUAL: dict[str, str] = {
+    "skill_match": "skill_match",
+    "experience_match": "experience_match",
+    "education_match": "education_match",
+    "assessment_score": "cross_encoder_score",
+    "behavioral_signals": "behavioral_signals",
+    "cultural_fit": "cultural_fit",
+}
+
 
 class CandidateScorer:
     def __init__(self) -> None:
         config = get_scoring_config()
         self.weights = config["scoring_weights"]
 
-    def compute_overall(self, scores: dict[str, float | None]) -> MatchScores:
+    def compute_overall(
+        self,
+        scores: dict[str, float | None],
+        slider_weights: dict[str, float] | None = None,
+    ) -> MatchScores:
         total_weight = 0.0
         weighted_sum = 0.0
         components: dict[str, float | None] = {}
@@ -24,11 +46,24 @@ class CandidateScorer:
             "location_match": scores.get("location_match"),
             "education_match": scores.get("education_match"),
             "cross_encoder_score": scores.get("cross_encoder_score"),
+            "behavioral_signals": scores.get("behavioral_signals"),
+            "cultural_fit": scores.get("cultural_fit"),
         }
+
+        effective_weights: dict[str, float] = {}
+        if slider_weights:
+            for slider_dim, actual_dim in DIM_TO_ACTUAL.items():
+                if slider_dim in slider_weights and slider_weights[slider_dim] > 0:
+                    effective_weights[actual_dim] = slider_weights[slider_dim] / 100.0
+            for dim, w in self.weights.items():
+                if dim not in effective_weights:
+                    effective_weights[dim] = w
+        else:
+            effective_weights = dict(self.weights)
 
         for dim, score in dims.items():
             if score is not None:
-                weight = self.weights.get(dim, 0.05)
+                weight = effective_weights.get(dim, 0.0)
                 total_weight += weight
                 weighted_sum += weight * score
             components[dim] = score

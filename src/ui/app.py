@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
+import time
 
 import gradio as gr
 
+from src.core.models import MatchScores, SearchResultItem
+from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer
 from src.ui.components import (
     create_analytics_dashboard,
     create_candidate_card,
@@ -12,12 +16,28 @@ from src.ui.components import (
 
 logger = logging.getLogger(__name__)
 
+SLIDER_DIMS = [
+    ("Skill Match", "skill_match", DEFAULT_SLIDER_WEIGHTS["skill_match"]),
+    ("Experience", "experience_match", DEFAULT_SLIDER_WEIGHTS["experience_match"]),
+    ("Education", "education_match", DEFAULT_SLIDER_WEIGHTS["education_match"]),
+    ("Assessment", "assessment_score", DEFAULT_SLIDER_WEIGHTS["assessment_score"]),
+    ("Behavioral", "behavioral_signals", DEFAULT_SLIDER_WEIGHTS["behavioral_signals"]),
+    ("Cultural Fit", "cultural_fit", DEFAULT_SLIDER_WEIGHTS["cultural_fit"]),
+]
+
+SLIDER_KEYS = [k for _, k, _ in SLIDER_DIMS]
+
+
+def _parse_slider_weights(*slider_values: float) -> dict[str, float]:
+    return {key: val for key, val in zip(SLIDER_KEYS, slider_values)}
+
 
 async def search_handler(
     query: str, location: str, min_experience: int, remote_ok: bool, max_results: int,
-) -> tuple[str, str]:
+    *slider_values: float,
+) -> tuple[str, str, str]:
     if not query.strip():
-        return "<p style='color: #ef4444;'>Please enter a search query.</p>", ""
+        return "<p style='color: #ef4444;'>Please enter a search query.</p>", "", "[]"
 
     from src.api.routes.search import _orchestrator
 
@@ -26,13 +46,40 @@ async def search_handler(
             "<p style='color: #f59e0b;'>Search system not initialized. "
             "Please build indexes first.</p>",
             "",
+            "[]",
         )
 
+    slider_weights = _parse_slider_weights(*slider_values)
+
     try:
-        response = await _orchestrator.run(query)
+        t0 = time.time()
+        response = await _orchestrator.run(query, slider_weights=slider_weights)
+        elapsed = time.time() - t0
+        logger.info(f"Search completed in {elapsed:.1f}s")
     except Exception as e:
         logger.exception("Search failed")
-        return f"<p style='color: #ef4444;'>Search failed: {e}</p>", ""
+        return f"<p style='color: #ef4444;'>Search failed: {e}</p>", "", "[]"
+
+    # Serialize results to JSON for caching in Gradio State
+    raw_results = []
+    for item in response.results[:max_results]:
+        raw_results.append({
+            "rank": item.rank,
+            "profile_id": item.profile_id,
+            "name": item.name,
+            "current_title": item.current_title,
+            "current_company": item.current_company,
+            "location": item.location,
+            "experience_years": item.experience_years,
+            "scores": item.scores.model_dump() if hasattr(item.scores, "model_dump") else {},
+            "matched_skills": item.matched_skills,
+            "missing_skills": item.missing_skills,
+            "rationale": (
+                item.rationale.model_dump() if hasattr(item.rationale, "model_dump") else {}
+            ),
+        })
+
+    results_json = json.dumps(raw_results)
 
     results_html = "<div class='results-container'>"
     for item in response.results[:max_results]:
@@ -43,7 +90,44 @@ async def search_handler(
     for item in response.results[:5]:
         rationales_html += create_rationale_panel(item.rationale, item.name)
 
-    return results_html, rationales_html
+    return results_html, rationales_html, results_json
+
+
+def re_rank_handler(results_json: str, *slider_values: float) -> str:
+    if not results_json or results_json == "[]":
+        return "<p>No results to re-rank. Search first.</p>"
+
+    raw = json.loads(results_json)
+    slider_weights = _parse_slider_weights(*slider_values)
+    scorer = CandidateScorer()
+
+    for r in raw:
+        scores_dict = r.get("scores", {})
+        match_scores = scorer.compute_overall(scores_dict, slider_weights)
+        r["_re_score"] = match_scores.overall
+        r["_re_scores"] = match_scores
+
+    raw.sort(key=lambda x: x.get("_re_score", 0), reverse=True)
+
+    html = "<div class='results-container'>"
+    for rank, r in enumerate(raw, 1):
+        r["rank"] = rank
+        item = SearchResultItem(
+            rank=rank,
+            profile_id=r.get("profile_id", ""),
+            name=r.get("name", ""),
+            current_title=r.get("current_title"),
+            current_company=r.get("current_company"),
+            location=r.get("location"),
+            experience_years=r.get("experience_years"),
+            scores=r.get("_re_scores", MatchScores()),
+            matched_skills=r.get("matched_skills", []),
+            missing_skills=r.get("missing_skills", []),
+        )
+        html += create_candidate_card(item)
+    html += "</div>"
+
+    return html
 
 
 def create_app() -> gr.Blocks:
@@ -54,6 +138,8 @@ def create_app() -> gr.Blocks:
     ) as app:
         gr.Markdown("# India Runs \u2014 Intelligent Candidate Discovery")
         gr.Markdown("*Beyond keywords. Beyond filters. AI that understands hiring.*")
+
+        results_state = gr.State("")
 
         with gr.Tabs():
             with gr.Tab("Search"):
@@ -73,6 +159,22 @@ def create_app() -> gr.Blocks:
                             ],
                             inputs=query_input,
                         )
+
+                        search_btn = gr.Button("Search Candidates", variant="primary", size="lg")
+
+                        with gr.Accordion("Scoring Weights", open=True):
+                            gr.Markdown(
+                                "Adjust the importance of each dimension. "
+                                "Results re-rank automatically after search."
+                            )
+                            slider_inputs = []
+                            for label, key, default in SLIDER_DIMS:
+                                slider = gr.Slider(
+                                    minimum=0, maximum=100, step=5, value=int(default * 100),
+                                    label=label,
+                                )
+                                slider_inputs.append(slider)
+
                     with gr.Column(scale=1):
                         location_filter = gr.Textbox(label="Location")
                         experience_filter = gr.Slider(
@@ -83,18 +185,33 @@ def create_app() -> gr.Blocks:
                             label="Max Results", minimum=5, maximum=50, step=5, value=10,
                         )
 
-                search_btn = gr.Button("Search Candidates", variant="primary", size="lg")
                 results_area = gr.HTML(label="Results")
                 rationale_area = gr.HTML(label="Rationale Report")
 
+                search_inputs = [
+                    query_input, location_filter,
+                    experience_filter, remote_ok, max_results,
+                    *slider_inputs,
+                ]
                 search_btn.click(
                     fn=search_handler,
-                    inputs=[
-                        query_input, location_filter,
-                        experience_filter, remote_ok, max_results,
-                    ],
-                    outputs=[results_area, rationale_area],
+                    inputs=search_inputs,
+                    outputs=[results_area, rationale_area, results_state],
                 )
+
+                re_rank_btn = gr.Button("Re-Rank with Current Weights", variant="secondary")
+                re_rank_inputs = [results_state, *slider_inputs]
+                re_rank_btn.click(
+                    fn=re_rank_handler,
+                    inputs=re_rank_inputs,
+                    outputs=[results_area],
+                )
+                for slider in slider_inputs:
+                    slider.change(
+                        fn=re_rank_handler,
+                        inputs=re_rank_inputs,
+                        outputs=[results_area],
+                    )
 
             with gr.Tab("Analytics"):
                 analytics_html = gr.HTML(label="Analytics Dashboard")
@@ -117,6 +234,16 @@ def create_app() -> gr.Blocks:
                     "- **Agentic Workflow**: Plan -> Execute -> Reflect -> Re-plan (LangGraph)",
                     "- **Multilingual**: 30+ Indian languages via multilingual embeddings",
                     "- **Rationale Reports**: Every match comes with an explanation",
+                    "",
+                    "### Interactive Scoring",
+                    "- Adjust **6 recruiter-facing dimensions** via sliders",
+                    "- Results re-rank **instantly** without re-searching",
+                    "- Fine-tune for each role's unique priorities",
+                    "",
+                    "### Fairness",
+                    "- Bias monitoring across demographics, location, university",
+                    "- PII anonymization to prevent name-based bias",
+                    "- Transparent, explainable rankings",
                     "",
                     "### Tech Stack",
                     "- FastAPI, FAISS, sentence-transformers, LangGraph, Gradio",

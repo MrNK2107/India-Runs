@@ -31,7 +31,12 @@ class ExecutorAgent:
         self.scorer = scorer
         self.profiles = profiles
 
-    async def execute(self, parsed: ParsedQuery, top_k: int = 50) -> list[MatchResult]:
+    async def execute(
+        self,
+        parsed: ParsedQuery,
+        top_k: int = 50,
+        slider_weights: dict[str, float] | None = None,
+    ) -> list[MatchResult]:
         search_text = self._query_to_search_text(parsed)
 
         # RRF-fused hybrid search for ranking order
@@ -68,17 +73,30 @@ class ExecutorAgent:
             if profile is None:
                 continue
 
+            skills_set = set(s.name.lower() for s in profile.skills)
+            req_set = set(rs.name.lower() for rs in parsed.required_skills)
+            pref_set = set(ps.name.lower() for ps in parsed.preferred_skills)
+            all_req = req_set | pref_set
+            skill_overlap = len(all_req & skills_set) / max(len(all_req), 1)
+
+            total_years = (
+                profile.professional.total_experience_years
+                if profile.professional and profile.professional.total_experience_years
+                else 0
+            )
+            exp_match = min(1.0, total_years / 10.0)
+
             scores_dict: dict[str, float | None] = {
                 "semantic_similarity": vec_scores.get(pid),
                 "keyword_match": bm25_scores.get(pid),
-                "skill_match": None,
-                "experience_match": None,
+                "skill_match": skill_overlap,
+                "experience_match": exp_match,
                 "location_match": None,
                 "education_match": None,
                 "cross_encoder_score": rerank_score,
             }
 
-            match_scores = self.scorer.compute_overall(scores_dict)
+            match_scores = self.scorer.compute_overall(scores_dict, slider_weights)
 
             matched_skills = [s.name for s in profile.skills]
             req_names = [rs.name for rs in parsed.required_skills]

@@ -1,10 +1,13 @@
 scoring_weights:
+  skill_match: 0.30
+  experience_match: 0.20
+  education_match: 0.10
+  assessment_score: 0.10
+  behavioral_signals: 0.15
+  cultural_fit: 0.10
   semantic_similarity: 0.25
   keyword_match: 0.15
-  skill_match: 0.30
-  experience_match: 0.15
   location_match: 0.05
-  education_match: 0.05
   cross_encoder: 0.05
 
 skill_importance_weights:
