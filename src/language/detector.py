@@ -18,8 +18,7 @@ class LanguageDetector:
         return {
             "language": lang,
             "is_english": lang == "en",
-            "needs_translation": lang not in ("en", "hi", "ta", "te", "mr", "bn",
-                                               "kn", "ml", "gu", "pa", "or", "as"),
+            "needs_translation": lang != "en",
         }
 
     def detect_batch(self, texts: list[str]) -> list[dict[str, str | bool]]:
