@@ -1,62 +1,69 @@
 from __future__ import annotations
 
 import logging
+import time
+
+from deep_translator import GoogleTranslator
 
 logger = logging.getLogger(__name__)
 
+# ISO 639-1 codes supported by Google Translate
+SUPPORTED_LANGUAGES = {
+    "hi": "hindi", "ta": "tamil", "te": "telugu", "mr": "marathi",
+    "bn": "bengali", "kn": "kannada", "ml": "malayalam", "gu": "gujarati",
+    "pa": "punjabi", "or": "odia", "as": "assamese",
+    "ur": "urdu", "sd": "sindhi", "ks": "kashmiri", "ne": "nepali",
+}
+
 
 class TranslationPipeline:
-    def __init__(
-        self,
-        primary_model: str = "Helsinki-NLP/opus-mt-mul",
-        fallback_model: str = "facebook/mbart-large-50-many-to-many-mmt",
-    ) -> None:
-        self.primary_model = primary_model
-        self.fallback_model = fallback_model
-        self._primary: object | None = None
-        self._fallback: object | None = None
+    def __init__(self) -> None:
+        self._translator: GoogleTranslator | None = None
 
-    def load_models(self) -> None:
-        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-
-        if self._primary is None:
-            logger.info(f"Loading primary translation model: {self.primary_model}")
-            self._primary = AutoTokenizer.from_pretrained(self.primary_model)
-            self._fallback = AutoModelForSeq2SeqLM.from_pretrained(self.primary_model)
+    def _get_translator(self) -> GoogleTranslator:
+        if self._translator is None:
+            self._translator = GoogleTranslator(source="auto", target="en")
+        return self._translator
 
     def translate_to_english(
         self, text: str, source_lang: str
-    ) -> dict[str, str | float]:
+    ) -> dict[str, str | float | bool]:
         if source_lang == "en":
             return {
                 "original": text,
                 "translated": text,
                 "confidence": 1.0,
                 "model_used": "none",
+                "translation_fallback": False,
             }
 
-        return {
-            "original": text,
-            "translated": text,
-            "confidence": 0.0,
-            "model_used": "none",
-        }
+        try:
+            translator = self._get_translator()
+            translated_text = translator.translate(text)
+            return {
+                "original": text,
+                "translated": translated_text or text,
+                "confidence": 0.85,
+                "model_used": "GoogleTranslate",
+                "translation_fallback": False,
+            }
+
+        except Exception as e:
+            logger.warning(f"Translation failed for {source_lang}: {e}")
+            return {
+                "original": text,
+                "translated": text,
+                "confidence": 0.0,
+                "model_used": "none",
+                "translation_fallback": True,
+            }
 
     def translate_batch(
         self, texts: list[tuple[str, str]]
     ) -> list[dict]:
-        return [self.translate_to_english(t, lang) for t, lang in texts]
-
-    def _get_model_name(self, source_lang: str) -> str | None:
-        pair_map = {
-            "hi": "Helsinki-NLP/opus-mt-hi-en",
-            "ta": "Helsinki-NLP/opus-mt-ta-en",
-            "te": "Helsinki-NLP/opus-mt-te-en",
-            "bn": "Helsinki-NLP/opus-mt-bn-en",
-            "mr": "Helsinki-NLP/opus-mt-mr-en",
-            "gu": "Helsinki-NLP/opus-mt-gu-en",
-            "pa": "Helsinki-NLP/opus-mt-pa-en",
-            "kn": "Helsinki-NLP/opus-mt-kn-en",
-            "ml": "Helsinki-NLP/opus-mt-ml-en",
-        }
-        return pair_map.get(source_lang)
+        results: list[dict] = []
+        for i, (text, lang) in enumerate(texts):
+            if i > 0 and i % 10 == 0:
+                time.sleep(0.3)
+            results.append(self.translate_to_english(text, lang))
+        return results

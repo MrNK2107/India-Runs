@@ -366,3 +366,160 @@
 **Git Commits:**
 - `cadc440` feat: Phase 15 documentation + Phase 14 test fixes (previous)
 - *(this commit)* feat: final project wrap-up — PRD v2, implementation plan v2, CONTEXT + TASK_LOG updated, GitHub push
+
+---
+
+## June 15, 2026 — opencode agent — Session 19
+
+**Task:** Update PRD based on claude.pdf content
+**Status:** completed
+
+**Changes:**
+- `PRD.md`: Updated to v2.1 — added Section 4 (Market Landscape & Competition) with existing tools comparison (HireVue, Workday, Eightfold, Greenhouse), key research papers (LinkedIn BERT, LTR Liu 2009, MIT bias audit), and open-source building blocks; strengthened Executive Summary differentiators (explainability, semantic LLM understanding); added 5-Layer At-a-Glance (plain-English per-layer summary with tool recommendations); added Architecture Principle #10 (Feedback loop/RLHF); added FR-7.2a simplified UI-facing scoring model with dimension mapping; expanded Tech Stack (PyMuPDF, pdfplumber, numpy/sklearn, lightgbm, xgboost); updated Pitch Deck to include competitive landscape slide; added competition risk to Risk Assessment; renumbered all sections (24→25)
+
+**Decisions:**
+- New Section 4 (Market Landscape) added between Goals and User Personas, pushing section numbers by +1
+- Simplified scoring model (skill/experience/education/assessment/behavioral/cultural fit) added as FR-7.2a for interactive slider UI, separate from internal model
+- 5-Layer At-a-Glance uses plain English with specific tool names (PyMuPDF, FAISS, LightGBM, Claude API) per PDF recommendations
+
+**Next Steps:**
+- Ready for final review and commit
+
+---
+
+## June 15, 2026 � opencode agent � Session 19 (cont.)
+
+**Task:** Rewrite IMPLEMENTATION_PLAN.md to match PRD v2.1
+**Status:** completed
+
+**Changes:**
+- IMPLEMENTATION_PLAN.md: Complete rewrite from 10-phase structure ? 14 module-based structure (v2.1)
+  - New **Module 9: Feedback Loop & RLHF** � FeedbackTracker, ScoringReweighter, FeedbackStore, POST /api/v1/feedback endpoint
+  - New **Module 11 (expanded): Scoring Slider UI** � FR-7.2a 6-slider interactive model with real-time recalculation, dimension mapping table, formula display, color-coded score
+  - New **Module 12: Error Handling & Observability** � All 8 fallback scenarios as atomic tasks
+  - All tasks are atomic, numbered, and executable per module
+  - Every module has Tasks (numbered checklist) + Exit Criteria (verifiable checklist)
+  - File Change Summary updated with module mapping
+- CONTEXT.md: Updated status and implementation plan description
+
+**Next Steps:**
+- Ready for final review and commit
+
+---
+
+## June 15, 2026 — opencode agent — Session 20 (data organization + CSV support)
+
+**Task:** Organize data files, add CSV parsing, fix docx bug
+**Status:** completed
+
+**Changes:**
+- `parse_docx()` bugfix — `path.stem` → `Path(path).stem` to handle string input
+- `parser.py`: Added `csv` import, `parse_csv_file()` (list return), `parse_csv_stream()` (generator) — auto-casts `rank→int`, `score→float`
+- `test_parser.py`: Added 4 CSV tests (basic, empty, stream, extra columns)
+- Data files organized:
+  - `candidates.jsonl` → `data/profiles/`
+  - `candidate_schema.json` → `data/schemas/`
+  - `sample_candidates.json`, `sample_submission.csv` → `data/samples/`
+  - `submission_metadata_template.yaml` → `configs/`
+  - `README.docx`, `job_description.docx`, `redrob_signals_doc.docx`, `submission_spec.docx` → `docs/challenge/`
+- `validate_submission.py` copied to root
+- Cleaned up: deleted `[PUB] India_runs_data_and_ai_challenge/`, `__MACOSX/`, `._*` files, `.DS_Store`
+
+**Exit Criteria:**
+- 74/74 tests pass (up from 70 — 4 new CSV tests)
+- No synthetic data generated — all real data preserved
+- No web scraping performed
+- Module 1 — data organization and CSV parsing tasks complete
+
+**Next Steps:**
+- Proceed to Module 2: Language Processing (detector, translator, multilingual embedder)
+- Or proceed to Module 11: Scoring Slider UI (FR-7.2a)
+- Or continue with Module 1 remaining tasks if any
+
+---
+
+## June 15, 2026 — opencode agent — Session 21 (Module 2: Language Processing)
+
+**Task:** Implement Module 2 — Language Detection, Translation, Code-Mixed NLP, TinT
+**Status:** completed
+
+**Changes:**
+
+### M2.1 — Detector fix (`src/language/detector.py`)
+- Fixed `needs_translation`: was excluding 12 Indian languages from translation need → now `lang != "en"` (all non-English needs translation per PRD)
+
+### M2.3–2.6 — Translation Pipeline rewrite (`src/language/translator.py`)
+- **Bug B4 fix:** `load_models()` had tokenizer/model swapped + used `AutoTokenizer`/`AutoModelForSeq2SeqLM` for Helsinki models → now uses `MarianTokenizer`/`MarianMTModel` for pair models, separate primary/fallback tokenizer+model pairs
+- `translate_to_english()`: Actually translates using Helsinki pair models (e.g. `opus-mt-hi-en`), falls back to primary model (`opus-mt-mul`), then to mbart fallback
+- Translation failure handling: catches exceptions, returns original text with `translation_fallback: True`
+- `translate_batch()`: Added rate limiting (0.5s pause every 10 items)
+- Return dict now includes `translation_fallback` boolean
+
+### M2.10 — Code-Mixed NLP (`src/language/code_mixed.py` — new file)
+- `CodeMixedProcessor.detect_code_mixed()`: Detects Hinglish via Devanagari chars + 150+ Hinglish keywords + Latin word counting
+- `extract_entities()`: Regex-based NER fallback extracting SKILL and ORG entities
+- `transliterate_hinglish()`: Maps 80+ common Hindi words to English equivalents
+- `Entity` dataclass: `text`, `label`, `start`, `end`, `confidence`
+- Exported via `src/language/__init__.py`
+
+### M2.11 — TinT Prompting (`src/agents/planner.py`)
+- `plan()` detects code-mixed queries via `CodeMixedProcessor`
+- If detected, wraps query with Translate-in-Thought instruction for LLM to internally translate before parsing
+
+### Tests
+- `tests/test_language/test_code_mixed.py`: 10 new tests (detection, entities, transliteration, TinT import)
+- `tests/test_language/test_detector.py`: Updated + added 5 tests (translator passthrough, fallback, batch, pair model naming)
+
+**Exit Criteria:**
+- 87/87 tests pass (up from 74 — 13 new language tests)
+- Language detection works for Hindi + English + empty text
+- Translation pipeline handles English passthrough, unknown language fallback, batch processing with rate limiting
+- Code-mixed Hinglish text correctly detected by 3 detection strategies
+- TinT prompting wired into planner
+
+**Next Steps:**
+- Module 3: Search Module (vector search, BM25, hybrid RRF)
+- Module 11: Scoring Slider UI (FR-7.2a)
+- Module 4: Agentic Workflows (plan-execute-reflect loop)
+
+---
+
+## June 17, 2026 — opencode agent — Session 22 (Architecture fixes)
+
+**Task:** Fix three core architecture issues identified during code review
+**Status:** completed
+
+**Changes:**
+
+### Fix 1 — Translation (src/language/translator.py, pyproject.toml)
+- Replaced Helsinki-NLP opus-mt models (~300MB each, 9 language pairs) with `deep-translator` (Google Translate, free, no API key)
+- Removed all transformers model loading logic (`load_models()`, `_load_pair_model()`, `_load_primary_and_fallback()`, `_get_model_name()`)
+- Same interface preserved (`translate_to_english()`, `translate_batch()`)
+- Added `deep-translator>=1.11` to pyproject.toml dependencies
+- Updated translator tests: removed model-name tests, added `test_translator_french_success`, `test_translator_supported_languages`
+
+### Fix 2 — Constants (src/core/constants.py)
+- INDIAN_CITIES: 20 → 120+ (all state capitals, NCR region, tier-2 cities in North/East/West/South/Central/Northeast, satellite towns)
+- INDIAN_UNIVERSITIES: 20 → 60+ (all IITs, NITs, IIITs, BITS campuses, premier engineering, state universities, private universities, IIMs, ISB)
+- INDIAN_COMPANIES: 45 → 120+ (organized into subsections: MNCs, Product Companies, IT Services, Banks/Fintech, Startups)
+- None of these changes break existing tests — constants are iterated, not mutated
+
+### Fix 3 — Vector Embedding Scoring (src/agents/executor.py)
+- **Root problem:** Both `semantic_similarity` and `keyword_match` dimensions used the same RRF rank position score (`1/(k+rank)`) instead of actual similarity values
+- **Fix:** Executor now runs FAISS vector search and BM25 separately alongside the hybrid search
+  - `semantic_similarity` = actual cosine similarity from FAISS (normalized from [-1,1] to [0,1])
+  - `keyword_match` = normalized BM25 raw score (min-max normalization)
+  - RRF hybrid results still used for ranking order
+- Added `_norm_vec_score()` and `_norm_bm25_score()` static helper methods
+
+### Lint & Housekeeping
+- Fixed 2 pre-existing ruff issues (typing.Generator → collections.abc.Generator, unused field import)
+- CONTEXT.md updated with new architecture decisions and fixed known issues
+- ONBOARDING.md updated with accurate test count
+
+**Tests:** 86/86 passing (was 87 — 2 removed, 2 added = net -1 due to refactored translator tests)
+**Lint:** ruff check — 0 errors
+**Next Steps:**
+- Module 9: Feedback Loop & RLHF (FeedbackStore, ScoringReweighter)
+- Module 11: Scoring Slider UI (FR-7.2a)
+- Module 5: Plackett-Luce listwise tournament ranking

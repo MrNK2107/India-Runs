@@ -1,25 +1,26 @@
 # Project Context — India Runs
 
-> Last updated: June 14, 2026 by current session
-> ⚠️ Lines: 60/600 — keep under limit!
+> Last updated: June 17, 2026 by opencode agent
+> ⚠️ Lines: 56/300 — keep under limit!
 
 ## Current Status
-All 15 phases complete. PRD.md + IMPLEMENTATION_PLAN.md updated to v2 with architectural blueprint strategies (listwise ranking, PII redaction, scoped retrieval, multi-dimensional rationale, code-mixed NLP). All 57 tests pass, ruff clean. Repository pushed to GitHub.
+All 15 phases complete. Three core architectural issues fixed: (1) Translation replaced heavy opus-mt models with deep-translator (Google Translate, free, no API key), (2) Constants expanded from ~85 to 400+ entries (cities 20→120, universities 20→60, companies 45→120+), (3) Vector embeddings now properly used for semantic similarity scoring (previously both semantic_similarity and keyword_match used the same RRF rank position score). 86 tests pass, ruff clean.
 
 ## Architecture Decisions
 - **UI Framework:** Gradio only (not Streamlit) — simpler for demos, free HuggingFace Spaces hosting
 - **Embedding Model:** paraphrase-multilingual-MiniLM-L12-v2 (384-dim, 50+ languages, local)
 - **Search:** Hybrid BM25 + FAISS + RRF fusion + cross-encoder reranking
+- **Scoring:** Semantic_similarity uses actual FAISS cosine similarity (normalized to 0-1), keyword_match uses normalized BM25 raw score — no longer both using same RRF rank
 - **Agents:** LangGraph state machine (Plan → Execute → Reflect → Re-plan)
 - **LLM:** Multi-provider support — OpenAI (GPT-4o-mini), Google Gemini, local Ollama
 - **Scoring weights:** Loaded from configs/scoring_weights.yaml at runtime, never hardcoded
-- **TranslationPipeline is stubbed:** opus-mt models too large for 16GB/5min CPU constraint; all 100K profiles are English
+- **Translation:** deep-translator / Google Translate API (free, no API key needed) — replaces opus-mt models (~300MB each)
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `PRD.md` | Complete product requirements document (24 sections) |
-| `IMPLEMENTATION_PLAN.md` | File-by-file execution blueprint (78 files, ~7230 lines) |
+| `PRD.md` | Complete product requirements document (25 sections) — v2.1 with competitive landscape, 5-layer ref, simplified scoring model |
+| `IMPLEMENTATION_PLAN.md` | Module-based execution blueprint (14 modules, atomic action-level tasks) — v2.1 with Feedback/RLHF module, Scoring Slider UI, code-mixed NLP |
 | `README.md` | Project overview and quick start |
 | `docs/architecture.md` | System architecture deep-dive |
 | `docs/api.md` | API documentation with curl examples |
@@ -34,6 +35,9 @@ All 15 phases complete. PRD.md + IMPLEMENTATION_PLAN.md updated to v2 with archi
 ## Known Issues
 - Pip dependency conflict with supabase packages (httpx<0.28) — unrelated, not a project issue
 - Phase 2 (synthetic data generation) obsoleted by real dataset
+- ~~TranslationPipeline stubbed with heavy opus-mt models~~ **FIXED**: now uses deep-translator (Google Translate, free)
+- ~~Constants too limited for Indian market coverage~~ **FIXED**: 120+ cities, 60+ universities, 120+ companies
+- ~~Vector embeddings not used in scoring (both semantic_similarity and keyword_match used same RRF rank)~~ **FIXED**: semantic_similarity now uses actual FAISS cosine similarity, keyword_match uses normalized BM25 score
 
 ## Environment
 - Project path: `C:\Users\nanda\Desktop\india-runs`
@@ -59,3 +63,5 @@ All 15 phases complete. PRD.md + IMPLEMENTATION_PLAN.md updated to v2 with archi
 - Session 15: Phase 13 (evaluation)
 - Session 16: Phase 14 (testing) + test fixes — 57/57 passing, ruff clean
 - Session 17: Phase 15 (documentation) — README, docs/*.md
+- Session 18: Final commit + push, PRD v2 + implementation plan v2
+- Session 19: PRD v2.1 — added competitive landscape, 5-layer ref, simplified scoring model, RLHF feedback, expanded tech stack from claude.pdf analysis

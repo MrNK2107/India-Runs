@@ -16,6 +16,7 @@ dependencies = [
     "torch>=2.4",
     "transformers>=4.46",
     "langdetect>=1.0.9",
+    "deep-translator>=1.11",
     "spacy>=3.8",
     # Search
     "faiss-cpu>=1.8",
