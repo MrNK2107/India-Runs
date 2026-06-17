@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
     from src.search.vector_search import VectorSearch
 
     embedder = MultilingualEmbedder()
+    logger.info("Pre-loading embedding model...")
+    _ = embedder.model
+    logger.info("Embedding model loaded")
 
     vector_search = VectorSearch()
     vector_search.load(faiss_path, id_map_path)
@@ -62,6 +65,9 @@ async def lifespan(app: FastAPI):
 
     hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
     reranker = CrossEncoderReranker(timeout_ms=500)
+    logger.info("Pre-loading cross-encoder model...")
+    _ = reranker.model
+    logger.info("Cross-encoder model loaded")
     scorer = CandidateScorer()
 
     profiles: dict[str, Profile] = {}
