@@ -1,67 +1,51 @@
 # Project Context — India Runs
 
 > Last updated: June 17, 2026 by opencode agent
-> ⚠️ Lines: 56/300 — keep under limit!
+> Lines: 78/300
 
 ## Current Status
-All 15 phases complete. Three core architectural issues fixed: (1) Translation replaced heavy opus-mt models with deep-translator (Google Translate, free, no API key), (2) Constants expanded from ~85 to 400+ entries (cities 20→120, universities 20→60, companies 45→120+), (3) Vector embeddings now properly used for semantic similarity scoring (previously both semantic_similarity and keyword_match used the same RRF rank position score). 86 tests pass, ruff clean.
+Pipeline runs end-to-end: server start → load indexes (50 profiles) → POST /api/v1/search → returns 50 ranked candidates with scores/skills/rationale. 3 core pipeline bugs fixed (infinite replan loop, missing rationale field, profile loading). Interactive scoring sliders (6 dimensions) with live re-rank. 86 tests pass, ruff clean, 0 warnings.
+
+## Active Tasks
+- [x] Phase A3: Wire UI to return results (src/main.py lifespan)
+- [x] Phase B1: Scoring slider UI (6 recruiter sliders, live re-rank)
+- [x] Phase B3: Better candidate cards (score bars, color badges)
+- [ ] Phase C1: Plackett-Luce listwise ranking
+- [ ] Phase C2: PII anonymizer
+- [ ] Phase D2: Generate submission CSV
 
 ## Architecture Decisions
-- **UI Framework:** Gradio only (not Streamlit) — simpler for demos, free HuggingFace Spaces hosting
-- **Embedding Model:** paraphrase-multilingual-MiniLM-L12-v2 (384-dim, 50+ languages, local)
+- **UI Framework:** Gradio only — simpler for demos, free HF Spaces hosting
 - **Search:** Hybrid BM25 + FAISS + RRF fusion + cross-encoder reranking
-- **Scoring:** Semantic_similarity uses actual FAISS cosine similarity (normalized to 0-1), keyword_match uses normalized BM25 raw score — no longer both using same RRF rank
-- **Agents:** LangGraph state machine (Plan → Execute → Reflect → Re-plan)
-- **LLM:** Multi-provider support — OpenAI (GPT-4o-mini), Google Gemini, local Ollama
-- **Scoring weights:** Loaded from configs/scoring_weights.yaml at runtime, never hardcoded
-- **Translation:** deep-translator / Google Translate API (free, no API key needed) — replaces opus-mt models (~300MB each)
+- **Scoring:** 6 recruiter-facing slider dimensions (Skill, Experience, Education, Assessment, Behavioral, Cultural Fit). Sliders map to actual score fields via DIM_TO_ACTUAL. Live re-rank via Gradio state cache.
+- **Agents:** LangGraph state machine (Plan → Execute → Reflect → Re-plan). Max 3 replans (increment bug FIXED).
+- **LLM:** Multi-provider (OpenAI, Gemini, Ollama). Falls back gracefully when no API key.
+- **Translation:** deep-translator (Google Translate, free) — replaces opus-mt models (~300MB each)
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `PRD.md` | Complete product requirements document (25 sections) — v2.1 with competitive landscape, 5-layer ref, simplified scoring model |
-| `IMPLEMENTATION_PLAN.md` | Module-based execution blueprint (14 modules, atomic action-level tasks) — v2.1 with Feedback/RLHF module, Scoring Slider UI, code-mixed NLP |
-| `README.md` | Project overview and quick start |
-| `docs/architecture.md` | System architecture deep-dive |
-| `docs/api.md` | API documentation with curl examples |
-| `docs/evaluation.md` | Evaluation metrics and interpretation |
-| `docs/deployment.md` | Deployment guide (local, Docker, Spaces, Railway) |
-| `configs/settings.yaml` | Application settings with env var interpolation |
-| `configs/scoring_weights.yaml` | Tunable scoring weights (6 dimensions) |
-| `configs/models.yaml` | ML model configurations |
-| `src/core/config.py` | Pydantic Settings, YAML loaders, get_llm_client() factory |
-| `src/core/models.py` | 30 Pydantic models + 7 StrEnums |
+| `configs/scoring_weights.yaml` | Tunable scoring weights (10 dimensions + 6 slider dims) |
+| `src/main.py` | FastAPI startup with lifespan: loads indexes, profiles, creates orchestrator |
+| `src/agents/orchestrator.py` | LangGraph workflow with replan_count fix |
+| `src/agents/executor.py` | Computes skill_match + experience_match from profile data |
+| `src/matching/scorer.py` | Multi-dim scoring with slider weight override |
+| `src/ui/app.py` | Gradio UI with 6 scoring sliders + live re-rank |
+| `src/ui/components.py` | Candidate cards with score breakdown bars + color badges |
 
 ## Known Issues
-- Pip dependency conflict with supabase packages (httpx<0.28) — unrelated, not a project issue
-- Phase 2 (synthetic data generation) obsoleted by real dataset
-- ~~TranslationPipeline stubbed with heavy opus-mt models~~ **FIXED**: now uses deep-translator (Google Translate, free)
-- ~~Constants too limited for Indian market coverage~~ **FIXED**: 120+ cities, 60+ universities, 120+ companies
-- ~~Vector embeddings not used in scoring (both semantic_similarity and keyword_match used same RRF rank)~~ **FIXED**: semantic_similarity now uses actual FAISS cosine similarity, keyword_match uses normalized BM25 score
+- Pip dependency conflict with supabase packages (httpx<0.28) — unrelated
+- Phase 2 (synthetic data) obsoleted by real dataset
+- First request slow (~40s) due to lazy model loading. Set HF_TOKEN for faster downloads.
+- No real ground truth data — evaluate.py falls back to demo mode with 5 sample queries
 
 ## Environment
-- Project path: `C:\Users\nanda\Desktop\india-runs`
-- OS: Windows (win32), bash shell
-- Python 3.11+ required
-- Docker available for PostgreSQL + Redis
-- No virtual environment set up yet
+- HF_TOKEN set via env var — eliminates unauthenticated warnings on model download
+- Scoring weights: default Skill=30%, Exp=20%, Education=10%, Assessment=10%, Behavioral=15%, Cultural Fit=10%
+- Embedding model: paraphrase-multilingual-MiniLM-L12-v2 (384-dim, 50+ langs)
+- Cross-encoder: ms-marco-MiniLM-L6-v2
 
 ## Recent History
-- Sessions 1-2: PRD, IMPLEMENTATION_PLAN, agent rules
-- Session 3: Phase 0 (environment setup)
-- Session 4: Phase 1 (core/config)
-- Session 5: Phase 3 (ingestion)
-- Session 6: Phase 4 (language)
-- Session 7: Phase 5 (search)
-- Session 8: Phase 6 (matching)
-- Session 9: Phase 7 (agents)
-- Session 10: Phase 8 (rationale)
-- Session 11: Phase 9 (fairness)
-- Session 12: Phase 10 (API)
-- Session 13: Phase 11 (UI)
-- Session 14: Phase 12 (index building)
-- Session 15: Phase 13 (evaluation)
-- Session 16: Phase 14 (testing) + test fixes — 57/57 passing, ruff clean
-- Session 17: Phase 15 (documentation) — README, docs/*.md
-- Session 18: Final commit + push, PRD v2 + implementation plan v2
-- Session 19: PRD v2.1 — added competitive landscape, 5-layer ref, simplified scoring model, RLHF feedback, expanded tech stack from claude.pdf analysis
+- Sessions 1-18: PRD, IMPLEMENTATION_PLAN, Phase 0-15 (all 15 phases)
+- Session 19: PRD v2.1 — competitive landscape, 5-layer ref
+- Session 20: 3 architecture fixes (translation, constants, vector scoring) + build_indexes + evaluate + Phase A3/B1/B3

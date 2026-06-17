@@ -523,3 +523,43 @@
 - Module 9: Feedback Loop & RLHF (FeedbackStore, ScoringReweighter)
 - Module 11: Scoring Slider UI (FR-7.2a)
 - Module 5: Plackett-Luce listwise tournament ranking
+
+## June 17, 2026 — opencode — Phase A3/B1/B3 (Pipeline + UI)
+
+**Task:** Wire the UI to return real results, add interactive scoring sliders, improve candidate cards
+**Status:** completed
+
+**Changes:**
+- `src/main.py`: Rewrote lifespan — loads FAISS + BM25 indexes, creates orchestrator with all deps, calls init_orchestrator/init_health/init_profiles
+- `src/agents/orchestrator.py`: Fixed infinite replan loop (replan_count never incremented); added slider_weights through pipeline; added Rationale to SearchResultItem
+- `src/agents/executor.py`: Added slider_weights param; computes skill_match + experience_match from actual profile data
+- `src/matching/scorer.py`: Added DIM_TO_ACTUAL slider mapping; slider_weights override for runtime re-ranking
+- `src/ui/app.py`: 6 scoring sliders (Skill/Experience/Education/Assessment/Behavioral/Cultural Fit); Gradio state caches results; sliders emit change events for live re-rank
+- `src/ui/components.py`: Color-coded score badges (strong/good/potential/weak); per-dimension score bars; removed unsed imports, fixed E501 lines
+- `src/core/models.py`: Fixed datetime.utcnow() deprecation → datetime.now(timezone.utc)
+- `configs/scoring_weights.yaml`: Added 6 slider dimension entries
+- `.env.example`: Added HF_TOKEN docs
+- `pyproject.toml`: Added asyncio_default_fixture_loop_scope = "function"
+
+**Bugs Fixed:**
+- Infinite replan loop: replan_count never incremented in reflect_node
+- SearchResultItem missing required rationale field
+- Profile loading used wrong format (Profile(**p) instead of normalize_redrob(p))
+- datetime.utcnow() deprecation warning
+- pytest-asyncio fixture loop scope warning
+
+**Tests:** 86/86 passing, 0 warnings, ruff check clean
+**Decisions:**
+- Slider dims map to actual score fields via DIM_TO_ACTUAL dict in scorer.py
+- Behavioral_signals and cultural_fit are future dimensions (score = None = skipped)
+- Gradio state caches serialized results for instant slider re-rank (no re-search)
+- set HF_TOKEN env var from user-provided token to eliminate unauthenticated HF warnings
+
+**Issues:**
+- First request ~40s (model download). Set HF_TOKEN for faster downloads.
+- No real ground truth — evaluate.py falls back to demo mode
+
+**Next Steps:**
+- Phase C1: Plackett-Luce listwise tournament ranking
+- Phase C2: PII anonymizer
+- Phase D2: Generate submission CSV
