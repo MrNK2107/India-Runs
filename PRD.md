@@ -5,8 +5,8 @@
 > **Prize Pool:** ₹10 Lakhs (₹2,00,000 Grand Champion)  
 > **Platform:** Hack2Skill  
 > **Event Duration:** 42 days (Registration closes June 28, 2026; Event ends July 31, 2026)  
-> **PRD Version:** 2.0  
-> **Last Updated:** June 14, 2026 (updated: comprehensive gap analysis + winning strategies from Architectural Blueprint)
+> **PRD Version:** 2.1  
+> **Last Updated:** June 15, 2026 (updated: Market Landscape from competitive analysis, 5-Layer At-a-Glance, Feedback/RLHF architecture, simplified scoring model reference)
 
 ---
 
@@ -15,27 +15,28 @@
 1. [Executive Summary](#1-executive-summary)
 2. [Problem Statement](#2-problem-statement)
 3. [Goals & Success Metrics](#3-goals--success-metrics)
-4. [User Personas](#4-user-personas)
-5. [System Architecture](#5-system-architecture)
-6. [Data Requirements](#6-data-requirements)
-7. [Data Models & Schemas](#7-data-models--schemas)
-8. [Core Features — Functional Requirements](#8-core-features--functional-requirements)
-9. [API Specifications](#9-api-specifications)
-10. [Agentic Workflow — Detailed Design](#10-agentic-workflow--detailed-design)
-11. [Multilingual Processing Pipeline](#11-multilingual-processing-pipeline)
-12. [Ranking & Matching Engine](#12-ranking--matching-engine)
-13. [Rationale Generation System](#13-rationale-generation-system)
-14. [Bias Mitigation & Fairness](#14-bias-mitigation--fairness)
-15. [UI/UX Requirements](#15-uiux-requirements)
-16. [Non-Functional Requirements](#16-non-functional-requirements)
-17. [Tech Stack — Pinned Versions](#17-tech-stack--pinned-versions)
-18. [Project Structure](#18-project-structure)
-19. [Implementation Phases & Timeline](#19-implementation-phases--timeline)
-20. [Testing Strategy](#20-testing-strategy)
-21. [Deployment Requirements](#21-deployment-requirements)
-22. [Submission Package](#22-submission-package)
-23. [Risk Assessment](#23-risk-assessment)
-24. [Appendix](#24-appendix)
+4. [Market Landscape & Competition](#4-market-landscape--competition)
+5. [User Personas](#5-user-personas)
+6. [System Architecture](#6-system-architecture)
+7. [Data Requirements](#7-data-requirements)
+8. [Data Models & Schemas](#8-data-models--schemas)
+9. [Core Features — Functional Requirements](#9-core-features--functional-requirements)
+10. [API Specifications](#10-api-specifications)
+11. [Agentic Workflow — Detailed Design](#11-agentic-workflow--detailed-design)
+12. [Multilingual Processing Pipeline](#12-multilingual-processing-pipeline)
+13. [Ranking & Matching Engine](#13-ranking--matching-engine)
+14. [Rationale Generation System](#14-rationale-generation-system)
+15. [Bias Mitigation & Fairness](#15-bias-mitigation--fairness)
+16. [UI/UX Requirements](#16-uiux-requirements)
+17. [Non-Functional Requirements](#17-non-functional-requirements)
+18. [Tech Stack — Pinned Versions](#18-tech-stack--pinned-versions)
+19. [Project Structure](#19-project-structure)
+20. [Implementation Phases & Timeline](#20-implementation-phases--timeline)
+21. [Testing Strategy](#21-testing-strategy)
+22. [Deployment Requirements](#22-deployment-requirements)
+23. [Submission Package](#23-submission-package)
+24. [Risk Assessment](#24-risk-assessment)
+25. [Appendix](#25-appendix)
 
 ---
 
@@ -43,16 +44,20 @@
 
 Build an **Intelligent Candidate Discovery System** that goes beyond traditional keyword-based Applicant Tracking Systems (ATS). The system uses **hybrid semantic search** (vector + keyword), **agentic AI workflows** (plan → execute → reflect), and **multilingual NLP** to match candidates to job roles with high precision, explainability, and fairness — specifically tuned for the Indian hiring landscape where profiles are messy, multilingual, and spread across 50+ platforms.
 
-**What makes this a winner:**
+**What makes this a winner — and why existing tools fall short:**
+- **Key differentiator: Explainability.** Existing tools (HireVue, Eightfold, Workday) rank candidates but don't clearly tell you why. Our system generates plain-English rationales for every match — not just a ranked list.
+- **Key differentiator: Semantic understanding with modern LLMs.** Most tools still rely on heavy keyword matching under the hood. Our system uses LLMs (Claude/GPT) as the semantic brain — not just for keyword extraction.
 - Hybrid retrieval (BM25 + dense embeddings + cross-encoder reranking) outperforms pure vector search by ~25%
-- Agentic architecture with reflection/critique loop catches false positives before they reach the recruiter
+- Agentic architecture (Plan → Execute → Reflect → Re-plan) with reflection/critique loop catches false positives before they reach the recruiter
 - Multilingual support (30+ Indian languages) — aligned with Redrob AI's core mission
 - Rationale reports for every match — not just a ranked list
 - Bias-aware ranking that matches on skills, not proxies
 - **Listwise tournament ranking** (Plackett-Luce) — candidates compete head-to-head in tournament rounds for globally coherent rankings
 - **PII redaction layer** — names, universities, locations stripped before LLM evaluation to prevent name-based and institution-based bias
+- **Style anonymization** — strips LLM-writing artifacts (spearheaded, fostered, architected) to prevent LLM self-preferencing bias
 - **Scoped pre-search retrieval** — structural filters narrow the candidate pool before expensive vector search runs, solving Vector Search Dilution at scale
 - **Multi-dimensional YAML rationale** — 12-20 granular dimensions per candidate (not just 6)
+- **Feedback loop (RLHF-style)** — recruiters accept/reject candidates, system learns and re-weights scores over time
 
 ---
 
@@ -109,7 +114,47 @@ Hackathon judges will evaluate on:
 
 ---
 
-## 4. User Personas
+## 4. Market Landscape & Competition
+
+### 4.1 Existing Commercial Tools
+
+No existing tool solves the full problem. Every major option has critical gaps — and this is exactly why our system can win.
+
+| Tool | Strengths | Gaps | Target Customer |
+|------|-----------|------|-----------------|
+| **HireVue** | Multi-signal evaluation from video interviews, NLP + behavioral signals | Requires video interview first — no text-only JD matching | Enterprise (thousands/mo) |
+| **Workday Recruiting + AI** | Deep ATS integration, profile matching | Heavy keyword reliance under the hood, expensive | Enterprise (large companies) |
+| **Eightfold AI** | Semantic + contextual matching, trained on billions of career paths | Black box — limited explainability, expensive | Enterprise |
+| **Greenhouse + Resume AI** | Easy to use, integrates with LinkedIn | Mostly keyword-based scoring, no semantic understanding | Mid-market |
+
+### 4.2 Key Research Papers
+
+| Paper / Study | Key Insight | Relevance to Our System |
+|---------------|-------------|------------------------|
+| **"BERT for Job Recommendation"** — LinkedIn Engineering | How LinkedIn uses BERT embeddings to match candidates to jobs semantically | Backbone of our embedding-based semantic matching layer |
+| **"Learning to Rank for Information Retrieval"** — Liu (2009) | Foundational paper behind LTR (Learning to Rank) algorithms | Core algorithm for our LightGBM ranker + Plackett-Luce model |
+| **"Auditing AI Hiring Tools for Discrimination"** — MIT Media Lab | Critical research on bias in AI recruiting; Amazon's failed AI hiring tool | Motivates our PII redaction, bias detection, and fairness automation |
+
+### 4.3 Open-Source Building Blocks
+
+| Tool | What It Does | How We Use It |
+|------|-------------|---------------|
+| **sentence-transformers** (HuggingFace) | Convert JDs and resumes into dense vectors for semantic comparison | Core embedding model for hybrid search |
+| **Kaggle Resume Dataset** | Public datasets with labelled resumes by category | Training/evaluation data for ranking model |
+| **FAISS** (Facebook AI) | Fast vector similarity search at scale | Dense vector retrieval |
+| **rank_bm25** | Probabilistic keyword matching | Sparse retrieval for hybrid search |
+
+### 4.4 Why Our System Wins
+
+The biggest gap across *all* existing tools is **explainability** — they rank candidates but don't clearly tell you why. Amazon's own AI hiring tool was famously shut down because it was biased against women.
+
+Our system stands out by focusing on the two things they all miss:
+1. **Semantic understanding using modern LLMs** (Claude/GPT as the brain, not just keyword extraction)
+2. **Explainable reasoning** for every ranking decision with clear, evidence-backed rationales
+
+---
+
+## 5. User Personas
 
 ### Persona 1: Technical Recruiter (Primary)
 - **Name:** Priya
@@ -136,7 +181,7 @@ Hackathon judges will evaluate on:
 
 ---
 
-## 5. System Architecture
+## 6. System Architecture
 
 ### High-Level Architecture
 
@@ -257,12 +302,25 @@ Hackathon judges will evaluate on:
 7. **Parallel execution:** BM25 and FAISS searches run concurrently (not sequentially) to minimize latency.
 8. **PII-free evaluation pipeline:** Candidate names, institutions, and locations are stripped before any LLM evaluation to prevent name-based and institution-based bias.
 9. **Listwise over pointwise:** Final ranking uses a Plackett-Luce tournament model where candidates compete in small groups, producing globally coherent rankings rather than independent pointwise scores.
+10. **Feedback loop (RLHF-style):** Every recruiter accept/reject decision feeds back to re-train and re-weight the scoring model over time.
+
+### 5-Layer At-a-Glance (Quick Reference)
+
+Layer 1 — **Input & Parsing Layer:** Extract structured data from messy PDF resumes using PyMuPDF/pdfplumber. Parse JDs into required skills, seniority, domain, responsibilities using LLM prompts (Claude/GPT-4). Clean and standardize with spaCy NLP.
+
+Layer 2 — **Semantic Understanding Layer (The AI Brain):** Convert JDs and resumes into dense vectors using sentence-transformers (BERT) — captures meaning, not just keywords. "NLP" matches "language models" automatically. Store vectors in FAISS/Pinecone for fast retrieval. Measure similarity with cosine similarity via numpy/sklearn.
+
+Layer 3 — **Multi-Signal Scoring Layer (6 Dimensions):** Evaluate across: Skill match (30%), Experience (25%), Education (15%), Assessment scores (15%), Behavioral signals (10%), Cultural fit (5%). Use embedding similarity, rule-based scoring, LLM-based analysis, and direct numeric tracking.
+
+Layer 4 — **Ranking & Explanation Layer:** Use Learning to Rank (LambdaMART/XGBoost/LightGBM) trained on recruiter feedback to produce the final ordering. Claude API generates plain-English 3-sentence justification per candidate. Bias detector audits for gender, age, or name-based bias before surfacing results.
+
+Layer 5 — **Output & Feedback Layer:** React + FastAPI recruiter dashboard shows ranked list with score, reasoning, and skill breakdown. Feedback loop: recruiter approves/rejects candidates → system learns and re-weights scores over time (RLHF-style). Push ranked lists into Greenhouse/Workday/Lever via webhook/REST API.
 
 ---
 
-## 6. Data Requirements
+## 7. Data Requirements
 
-### 6.1 Input Data Sources
+### 7.1 Input Data Sources
 
 The system must handle profiles from multiple sources with varying formats:
 
@@ -274,7 +332,7 @@ The system must handle profiles from multiple sources with varying formats:
 | Resume PDFs | Unstructured text | everything (parsed via NLP) | Low-Medium |
 | Company career pages | HTML/JSON | varies wildly | Low |
 
-### 6.2 Profile Schema (Normalized)
+### 7.2 Profile Schema (Normalized)
 
 Every profile, regardless of source, must be normalized to this schema:
 
@@ -365,7 +423,7 @@ Every profile, regardless of source, must be normalized to this schema:
 }
 ```
 
-### 6.2a `raw_text` Construction
+### 7.2a `raw_text` Construction
 
 The `raw_text` field is constructed by concatenating profile fields in this order:
 
@@ -383,7 +441,7 @@ This text is used for:
 2. **BM25 indexing** — tokenized for keyword search
 3. **LLM context** — summarized for rationale generation
 
-### 6.2b `data_quality_score` Computation
+### 7.2b `data_quality_score` Computation
 
 ```python
 def compute_data_quality_score(profile: dict) -> float:
@@ -419,7 +477,7 @@ def compute_data_quality_score(profile: dict) -> float:
     return min(score, 1.0)
 ```
 
-### 6.3 Job Query Schema
+### 7.3 Job Query Schema
 
 ```json
 {
@@ -473,7 +531,7 @@ def compute_data_quality_score(profile: dict) -> float:
 }
 ```
 
-### 6.4 Match Result Schema
+### 7.4 Match Result Schema
 
 ```json
 {
@@ -518,7 +576,7 @@ def compute_data_quality_score(profile: dict) -> float:
 }
 ```
 
-### 6.5 Dataset Requirements for Demo/Evaluation
+### 7.5 Dataset Requirements for Demo/Evaluation
 
 Since this is a hackathon demo, we need a **synthetic but realistic dataset**. Create:
 
@@ -538,7 +596,7 @@ Since this is a hackathon demo, we need a **synthetic but realistic dataset**. C
    - Top-10 relevant candidates manually labeled per query
    - Used for evaluation metrics (precision@10, recall@50)
 
-### 6.6 Data Generation Strategy
+### 7.6 Data Generation Strategy
 
 Use LLM-generated profiles with these requirements:
 - Each profile must have at least 3 work experiences
@@ -549,9 +607,9 @@ Use LLM-generated profiles with these requirements:
 
 ---
 
-## 7. Data Models & Schemas
+## 8. Data Models & Schemas
 
-### 7.1 Database Schema (PostgreSQL)
+### 8.1 Database Schema (PostgreSQL)
 
 ```sql
 -- Core profile storage
@@ -674,7 +732,7 @@ CREATE INDEX idx_matches_rank ON matches(query_id, rank);
 
 ---
 
-## 8. Core Features — Functional Requirements
+## 9. Core Features — Functional Requirements
 
 ### FR-1: Profile Ingestion & Parsing
 - **FR-1.1:** Parse profiles from JSON, CSV, and raw text formats
@@ -750,6 +808,22 @@ CREATE INDEX idx_matches_rank ON matches(query_id, rank);
             + 0.15 * experience + 0.05 * location + 0.05 * education
             + 0.05 * cross_encoder
   ```
+- **FR-7.2a (UI-Facing Simplified Model):** For the recruiter-facing interactive demo, expose a simplified 6-dimension scoring model with adjustable sliders:
+  ```
+  score = (skill_match × 0.30) + (experience × 0.25) + (education × 0.15)
+          + (assessment × 0.15) + (behavioral × 0.10) + (cultural_fit × 0.05)
+  ```
+  This simplified model maps user-facing dimensions to the internal model as follows:
+  | Slider Dimension | Internal Mapping |
+  |------------------|-----------------|
+  | Skill match (30%) | `semantic_similarity + skill_match` weighted blend |
+  | Experience (25%) | `experience_match + keyword_match` weighted blend |
+  | Education (15%) | `education_match` |
+  | Assessment (15%) | `cross_encoder + skill_match` (certifications) |
+  | Behavioral (10%) | `keyword_match` (activity signals, engagement) |
+  | Cultural fit (5%) | `semantic_similarity` (work style preferences) |
+  
+  The interactive slider UI lets recruiters adjust weights in real-time and see the final fit score update immediately — making the ranking transparent and tunable.
 - **FR-7.3:** Compute `confidence` based on score variance (high confidence = all dimensions agree)
 
 ### FR-8: Listwise Tournament Ranking (Plackett-Luce)
@@ -768,9 +842,9 @@ CREATE INDEX idx_matches_rank ON matches(query_id, rank);
 
 ---
 
-## 9. API Specifications
+## 10. API Specifications
 
-### 9.1 POST /api/v1/search
+### 10.1 POST /api/v1/search
 
 **Request:**
 ```json
@@ -835,23 +909,23 @@ CREATE INDEX idx_matches_rank ON matches(query_id, rank);
 }
 ```
 
-### 9.2 GET /api/v1/profiles/{profile_id}
+### 10.2 GET /api/v1/profiles/{profile_id}
 
 Returns full normalized profile data.
 
-### 9.3 GET /api/v1/health
+### 10.3 GET /api/v1/health
 
 Returns system health status including index sizes, model loading status, and last update time.
 
-### 9.4 POST /api/v1/ingest
+### 10.4 POST /api/v1/ingest
 
 Bulk ingest profiles from uploaded JSON/CSV file. Returns ingestion report (profiles processed, errors, language distribution).
 
 ---
 
-## 10. Agentic Workflow — Detailed Design
+## 11. Agentic Workflow — Detailed Design
 
-### 10.1 State Machine (LangGraph)
+### 11.1 State Machine (LangGraph)
 
 ```
                     ┌─────────────────┐
@@ -908,7 +982,7 @@ Bulk ingest profiles from uploaded JSON/CSV file. Returns ingestion report (prof
                               (back to PLANNER)
 ```
 
-### 10.2 Agent Prompts
+### 11.2 Agent Prompts
 
 **Planner System Prompt:**
 ```
@@ -948,9 +1022,9 @@ Output valid JSON array.
 
 ---
 
-## 11. Multilingual Processing Pipeline
+## 12. Multilingual Processing Pipeline
 
-### 11.1 Language Detection
+### 12.1 Language Detection
 ```python
 # Use langdetect for initial detection
 from langdetect import detect, DetectorFactory
@@ -965,7 +1039,7 @@ def detect_language(text: str) -> dict:
     }
 ```
 
-### 11.2 Translation Pipeline
+### 12.2 Translation Pipeline
 ```python
 # For non-English profiles, produce English translation
 # Use Helsinki-NLP/opus-mt-mul for multi-pair translation
@@ -982,7 +1056,7 @@ def translate_to_english(text: str, source_lang: str) -> dict:
     }
 ```
 
-### 11.3 Multilingual Embedding
+### 12.3 Multilingual Embedding
 ```python
 # Use paraphrase-multilingual-MiniLM-L12-v2
 # This model maps 50+ languages into the same vector space
@@ -997,7 +1071,7 @@ hi_embedding = model.encode("पायथन अनुभव वाला सॉ
 # cosine_similarity(en_embedding, hi_embedding) ≈ 0.85+
 ```
 
-### 11.4 Supported Languages (Minimum 10)
+### 12.4 Supported Languages (Minimum 10)
 
 | Language | Code | Priority |
 |----------|------|----------|
@@ -1016,9 +1090,9 @@ hi_embedding = model.encode("पायथन अनुभव वाला सॉ
 
 ---
 
-## 12. Ranking & Matching Engine
+## 13. Ranking & Matching Engine
 
-### 12.1 Skill Matching Algorithm
+### 13.1 Skill Matching Algorithm
 
 ```python
 def compute_skill_match(required_skills: list, candidate_skills: list) -> float:
@@ -1072,7 +1146,7 @@ def find_best_match(required_skill: str, candidate_skills: list[dict]) -> dict |
     # ... implementation
 ```
 
-### 12.2 Experience Matching Algorithm
+### 13.2 Experience Matching Algorithm
 
 ```python
 def compute_experience_match(
@@ -1111,7 +1185,7 @@ def compute_experience_match(
     return score / components if components > 0 else 0.5  # Default neutral
 ```
 
-### 12.3 Reciprocal Rank Fusion
+### 13.3 Reciprocal Rank Fusion
 
 ```python
 def reciprocal_rank_fusion(
@@ -1141,7 +1215,7 @@ def reciprocal_rank_fusion(
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 ```
 
-### 12.4 Listwise Tournament Ranking (Plackett-Luce)
+### 13.4 Listwise Tournament Ranking (Plackett-Luce)
 
 The final ranking stage uses an **Active Listwise Tournament** mechanism:
 
@@ -1197,9 +1271,9 @@ This approach is superior to:
 
 ---
 
-## 13. Rationale Generation System
+## 14. Rationale Generation System
 
-### 13.1 Multi-Dimensional YAML Rationale Reports (12-20 Dimensions)
+### 14.1 Multi-Dimensional YAML Rationale Reports (12-20 Dimensions)
 
 For each candidate in the top-10, generate a **structured YAML report** breaking down evaluation across 12 granular dimensions:
 
@@ -1246,7 +1320,7 @@ candidate_evaluation:
   anonymization_note: "PII stripped before LLM evaluation — no name, university, or location data was visible to the evaluator"
 ```
 
-### 13.2 Rationale Generation Prompt
+### 14.2 Rationale Generation Prompt
 
 ```
 You are generating a candidate evaluation report for a recruiter.
@@ -1280,9 +1354,9 @@ Do NOT reference names, universities, or locations in the rationale — the cand
 
 ---
 
-## 14. Bias Mitigation & Fairness
+## 15. Bias Mitigation & Fairness
 
-### 14.1 PII Redaction Layer (Anonymization Pipeline)
+### 15.1 PII Redaction Layer (Anonymization Pipeline)
 
 Before any candidate data reaches the LLM (for reflection, rationale, or listwise ranking), run through an **anonymization pipeline**:
 
@@ -1337,7 +1411,7 @@ def style_anonymize(text: str) -> str:
     return cleaned_text
 ```
 
-### 14.2 Internalized Bias Risks
+### 15.2 Internalized Bias Risks
 
 | Risk | Mitigation |
 |------|-----------|
@@ -1349,7 +1423,7 @@ def style_anonymize(text: str) -> str:
 | Experience bias (gap years) | Do not penalize career gaps. Focus on total relevant experience. |
 | Language bias (English-only) | Multilingual support ensures non-English profiles are equally accessible. |
 
-### 14.3 Fairness Metrics + Automated Halting
+### 15.3 Fairness Metrics + Automated Halting
 
 ```python
 DISPARATE_IMPACT_THRESHOLD = 0.80  # 4/5ths rule
@@ -1402,9 +1476,9 @@ def check_and_flag_fairness(matches, profiles) -> dict:
 
 ---
 
-## 15. UI/UX Requirements
+## 16. UI/UX Requirements
 
-### 15.1 Demo Application (Gradio)
+### 16.1 Demo Application (Gradio)
 
 **Page 1: Search**
 - Large search bar with natural language input
@@ -1435,7 +1509,7 @@ def check_and_flag_fairness(matches, profiles) -> dict:
 - Passive vs. active candidate ratio
 - Fairness metrics visualization
 
-### 15.2 UI Framework: Gradio (Single Choice)
+### 16.2 UI Framework: Gradio (Single Choice)
 
 Use **Gradio** as the sole UI framework. Rationale:
 - Simpler API for demos (single-file UI possible)
@@ -1445,7 +1519,7 @@ Use **Gradio** as the sole UI framework. Rationale:
 
 All UI code lives in `src/ui/app.py`. No Streamlit.
 
-### 15.3 Visual Design Requirements
+### 16.3 Visual Design Requirements
 - Clean, professional look (think: Linear, Vercel dashboard aesthetic)
 - Color coding: Green (strong match), Blue (good), Yellow (potential), Red (weak)
 - Responsive layout (works on laptop/tablet)
@@ -1455,9 +1529,9 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 
 ---
 
-## 16. Non-Functional Requirements
+## 17. Non-Functional Requirements
 
-### 16.1 Performance
+### 17.1 Performance
 | Metric | Target |
 |--------|--------|
 | Search latency (hybrid search only) | < 500ms |
@@ -1466,18 +1540,18 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 | Concurrent searches | ≥ 10 |
 | Embedding generation | < 50ms per profile |
 
-### 16.2 Scalability
+### 17.2 Scalability
 - System must handle 1,000+ profiles in demo
 - Architecture must support scaling to 100K+ profiles (demo shows path to production)
 - Vector index should support incremental additions without full rebuild
 
-### 16.3 Reliability
+### 17.3 Reliability
 - Graceful degradation: if LLM is unavailable, return matches without rationale
 - If cross-encoder is too slow, skip reranking and return hybrid search results
 - All errors logged with context for debugging
 - System recovers from crashes without data loss (index persistence)
 
-### 16.3a Error Handling Specifications
+### 17.3a Error Handling Specifications
 
 | Scenario | Fallback Behavior | API Response |
 |----------|-------------------|--------------|
@@ -1489,7 +1563,7 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 | FAISS index corrupted | Rebuild from scratch using stored embeddings in PostgreSQL | System restarts with rebuilt index |
 | API rate limit exceeded | Return 429 with retry-after header | `{"error": "Rate limit exceeded", "retry_after_seconds": 60}` |
 
-### 16.3b No-Results Response Schema
+### 17.3b No-Results Response Schema
 
 ```json
 {
@@ -1506,12 +1580,12 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 }
 ```
 
-### 16.4 Security
+### 17.4 Security
 - No PII exposed in logs (names redacted in debug logs)
 - API keys stored in environment variables, never in code
 - Input validation on all API endpoints
 
-### 16.5 Observability
+### 17.5 Observability
 - Structured logging (JSON format) for all operations
 - Metrics tracking: latency, throughput, error rates
 - Search query logging for analysis
@@ -1519,7 +1593,7 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 
 ---
 
-## 17. Tech Stack — Pinned Versions
+## 18. Tech Stack — Pinned Versions
 
 ### Core
 | Technology | Version | Purpose |
@@ -1532,47 +1606,56 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 ### ML/NLP
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| sentence-transformers | 3.3+ | Multilingual embeddings |
-| torch | 2.4+ | Backend for transformers |
-| transformers | 4.46+ | Translation, cross-encoder |
+| sentence-transformers | 3.3+ | Multilingual embeddings (BERT bi-encoder) |
+| torch | 2.4+ | Backend for all transformers models |
+| transformers | 4.46+ | Translation models, cross-encoder |
 | langdetect | 1.0.9 | Language detection |
-| spacy | 3.8+ | NER, text processing |
+| spacy | 3.8+ | NER, text processing, entity extraction |
+| numpy / sklearn | latest | Cosine similarity, evaluation metrics |
+| lightgbm | 4.5+ | Learning to Rank (LambdaRank) |
+| xgboost | 2.1+ | Alternative LTR model (LambdaMART) |
+
+### PDF / Document Parsing
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| PyMuPDF (fitz) | 1.27+ | PDF text extraction and rendering |
+| pdfplumber | 0.11+ | Alternative PDF parsing (tables, structured) |
 
 ### Search
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| faiss-cpu | 1.8+ | Vector similarity search |
-| rank-bm25 | 0.2.2 | BM25 keyword search |
-| elastic-transport | (if using Elasticsearch) | Optional: production search |
+| faiss-cpu | 1.8+ | Vector similarity search (IndexFlatIP with 384-dim) |
+| rank-bm25 | 0.2.2 | BM25 keyword search (sparse retrieval) |
+| elastic-transport | (if using Elasticsearch) | Optional: production search at scale |
 
 ### Agent Framework
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| langgraph | 0.2+ | Agentic state machine |
-| langchain-core | 0.3+ | LLM abstractions |
+| langgraph | 0.2+ | Agentic state machine (Plan→Execute→Reflect) |
+| langchain-core | 0.3+ | LLM abstractions and tool definitions |
 | langchain-openai | 0.2+ | OpenAI / OpenAI-compatible endpoints |
 | langchain-google-genai | 2.0+ | Google Gemini integration |
-| langchain-ollama | 0.2+ | Local Ollama integration |
+| langchain-ollama | 0.2+ | Local Ollama integration (free, offline fallback) |
 | openai | 1.52+ | OpenAI SDK (also works with Ollama, vLLM, etc.) |
 
 ### Data & Storage
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| postgresql | 16+ | Profile storage |
-| sqlalchemy | 2.0+ | ORM |
-| redis | 7+ | Caching (optional) |
+| postgresql | 16+ | Profile and match storage |
+| sqlalchemy | 2.0+ | ORM with async support |
+| redis | 7+ | Response caching, rate limiting (optional) |
 
 ### UI
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| gradio | 5.0+ | Demo UI |
-| plotly | 5.24+ | Charts and visualizations |
+| gradio | 5.0+ | Demo UI (single-file deployment, free HuggingFace Spaces) |
+| plotly | 5.24+ | Interactive charts, radar charts, score visualizations |
 
 ### DevOps & Testing
 | Technology | Version | Purpose |
 |-----------|---------|---------|
 | pytest | 8.3+ | Testing framework |
-| httpx | 0.27+ | API testing |
+| httpx | 0.27+ | API testing (async) |
 | ruff | 0.7+ | Linting and formatting |
 | mypy | 1.12+ | Type checking |
 | docker | 27+ | Containerization |
@@ -1581,11 +1664,11 @@ All UI code lives in `src/ui/app.py`. No Streamlit.
 | Technology | Purpose |
 |-----------|---------|
 | python-dotenv | Environment variable management |
-| toml / pyproject.toml | Project configuration |
+| toml / pyproject.toml | Project configuration (single source of truth) |
 
 ---
 
-## 18. Project Structure
+## 19. Project Structure
 
 ```
 india-runs/
@@ -1742,7 +1825,7 @@ india-runs/
 
 ---
 
-## 19. Implementation Phases & Timeline
+## 20. Implementation Phases & Timeline
 
 ### Phase 1: Bug Fixes & API Wiring (Days 1-3)
 **Goal:** Fix all critical bugs from gap analysis — ensure core pipeline works correctly
@@ -1881,9 +1964,9 @@ india-runs/
 
 ---
 
-## 20. Testing Strategy
+## 21. Testing Strategy
 
-### 20.1 Test Types
+### 21.1 Test Types
 
 | Type | Framework | Coverage Target | When |
 |------|-----------|----------------|------|
@@ -1896,7 +1979,7 @@ india-runs/
 | Listwise Ranking Tests | pytest | Plackett-Luce correctness | Phase 4 |
 | Anonymization Tests | pytest | PII stripping, style stripping | Phase 5 |
 
-### 20.2 Critical Test Cases
+### 21.2 Critical Test Cases
 
 ```python
 # tests/test_search/test_hybrid.py
@@ -2009,7 +2092,7 @@ def test_faiss_corruption_rebuilds_from_embeddings():
     """Corrupted FAISS index triggers automatic rebuild from stored embeddings"""
 ```
 
-### 20.3 Evaluation Protocol
+### 21.3 Evaluation Protocol
 
 ```python
 # scripts/evaluate.py
@@ -2053,9 +2136,9 @@ def evaluate_search_system(test_queries, ground_truth, search_fn):
 
 ---
 
-## 21. Deployment Requirements
+## 22. Deployment Requirements
 
-### 21.1 Local Development
+### 22.1 Local Development
 ```bash
 # Quick start
 docker-compose up -d          # Start PostgreSQL + Redis
@@ -2065,7 +2148,7 @@ uvicorn src.main:app --reload     # Start API server
 python src/ui/app.py              # Start Gradio UI
 ```
 
-### 21.2 Docker Deployment
+### 22.2 Docker Deployment
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
@@ -2076,16 +2159,16 @@ RUN python scripts/build_indexes.py
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### 21.3 Demo Deployment Options
+### 22.3 Demo Deployment Options
 1. **Gradio Live** — Deploy via `gradio deploy` to HuggingFace Spaces (free)
 2. **Railway/Render** — Deploy Docker container (free tier available)
 3. **Local** — Run on laptop, present via screen share
 
 ---
 
-## 22. Submission Package
+## 23. Submission Package
 
-### 22.1 Required Deliverables
+### 23.1 Required Deliverables
 
 1. **Pitch Deck (PDF)** containing:
    - Problem statement (with the DevOps keyword example)
@@ -2104,26 +2187,27 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
    - Test suite passing
    - Architecture documentation
 
-### 22.2 Pitch Deck Structure (10-12 slides)
+### 23.2 Pitch Deck Structure (10-12 slides)
 
 | Slide | Content |
 |-------|---------|
 | 1 | Title: "Intelligent Candidate Discovery — Beyond Keywords" |
 | 2 | Problem: The keyword matching failure (DevOps example) |
 | 3 | Problem: Indian market challenges (multilingual, messy data, passive talent) |
-| 4 | Solution: High-level architecture diagram |
-| 5 | Innovation: Agentic workflow (Plan → Execute → Reflect) |
-| 6 | Innovation: Hybrid search (BM25 + Vector + Cross-Encoder) |
-| 7 | Innovation: Multilingual support (30+ languages) |
-| 8 | Demo: Live search + Rationale report screenshot |
-| 9 | Metrics: Precision, Recall, Latency, Cross-lingual MRR |
-| 10 | Impact: Passive talent discovery, fairness, accessibility |
-| 11 | Roadmap: Path to production (scale to 700M profiles) |
-| 12 | Thank you + Contact |
+| 4 | Competitive Landscape: Why existing tools fall short (HireVue, Eightfold, Workday — expensive, keyword-heavy, black-box) |
+| 5 | Solution: High-level architecture diagram (5-layer system) |
+| 6 | Innovation: Agentic workflow (Plan → Execute → Reflect → Re-plan) |
+| 7 | Innovation: Hybrid search (BM25 + Vector + Cross-Encoder) + Explainable rationales |
+| 8 | Innovation: Multilingual support (30+ languages) + PII-free evaluation |
+| 9 | Demo: Live search + Interactive sliders + Rationale report |
+| 10 | Metrics: Precision, Recall, Latency, Cross-lingual MRR |
+| 11 | Impact: Passive talent discovery, fairness, accessibility |
+| 12 | Roadmap: Path to production (scale to 700M profiles) |
+| 13 | Thank you + Contact |
 
 ---
 
-## 23. Risk Assessment
+## 24. Risk Assessment
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
@@ -2137,10 +2221,11 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 | LLM self-preferencing bias inflates scores | Medium | High | Style-anonymization preprocessor strips LLM-writing artifacts from profiles before evaluation |
 | Plackett-Luce model converges slowly | Low | Medium | Cap EM iterations at 20; fall back to pointwise if convergence fails |
 | PII redaction removes too much context | Medium | Medium | Selective redaction: preserve skills, years, industries; strip names, institutions, addresses |
+| Existing tools (HireVue, Eightfold) already have similar capabilities | Medium | Medium | Focus on what they lack — explainability + semantic LLM understanding + bias automation. Our differentiators are clearly documented in Section 4.4 |
 
 ---
 
-## 24. Appendix
+## 25. Appendix
 
 ### A. Glossary
 

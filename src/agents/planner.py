@@ -8,6 +8,7 @@ from src.agents.prompts import PLANNER_SYSTEM_PROMPT
 from src.core.config import get_llm_client, get_settings
 from src.core.constants import INDIAN_CITIES, INDIAN_COMPANIES
 from src.core.models import ParsedQuery, PreferredSkill, RequiredSkill, SkillImportance
+from src.language.code_mixed import CodeMixedProcessor
 from src.matching.skill_matcher import SKILL_ALIASES
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,23 @@ class PlannerAgent:
 
     async def plan(self, raw_query: str) -> ParsedQuery:
         try:
+            processor = CodeMixedProcessor()
+            if processor.detect_code_mixed(raw_query):
+                logger.info("Code-mixed query detected, applying TinT prompting")
+                tint_query = (
+                    "[Translate-in-Thought] The following query contains Hinglish "
+                    "(Hindi-English code-mixed text). Internally translate it to English "
+                    "before parsing, then output the JSON result.\n\n"
+                    "Query: " + raw_query
+                )
+            else:
+                tint_query = raw_query
+
             from langchain_core.messages import HumanMessage, SystemMessage
 
             messages = [
                 SystemMessage(content=PLANNER_SYSTEM_PROMPT),
-                HumanMessage(content=raw_query),
+                HumanMessage(content=tint_query),
             ]
             response = await self.client.ainvoke(messages)
             content = response.content if hasattr(response, "content") else str(response)

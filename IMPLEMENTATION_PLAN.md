@@ -1,614 +1,696 @@
-﻿# Implementation Plan — Intelligent Candidate Discovery System v2.0
-# Bug Fixes → Data → Differentiators → Polish
+﻿# Implementation Plan — Intelligent Candidate Discovery System v2.1
 
-> **This document is the execution blueprint for completing the India Runs Track-1 submission.**
-> It accounts for: the existing codebase (57 tests, all 15 phases done), the 7 critical bugs found in the gap analysis, and the new winning strategies from the Architectural Blueprint.
+> **Execution blueprint for India Runs Track-1 submission.**
+> Organized by **modules** with atomic, executable actions per file/subsystem.
+> PRD v2.1 source of truth: 25 sections covering competitive landscape, 5-layer architecture, RLHF feedback loop, simplified scoring UI.
 >
-> **Total phases: 10 | Estimated effort: 33 days | Primary goal: Precision@10 >= 0.85, DIR >= 0.80, cross-lingual MRR >= 0.75**
+> **Total modules: 14 | Primary goal: Precision@10 >= 0.85, DIR >= 0.80, cross-lingual MRR >= 0.75**
 
 ---
 
-## Phase 0: Bug Fixes & API Wiring (Days 1-3)
+## Module 1: Ingestion & Parsing
 
-**Mission:** Fix all 7 critical bugs identified in the gap analysis. Get the core pipeline working correctly before adding any new features.
+**Purpose:** Parse profiles from multiple sources, normalize to unified schema, compute data quality.
 
-### Bug B1: API search route ignores filters (src/api/routes/search.py)
+**Files:** `src/ingestion/parser.py`, `src/ingestion/normalizer.py`, `src/ingestion/extractor.py`, `src/ingestion/quality_scorer.py`
 
-**Current:** Line 27 passes request.query only, ignores request.filters, request.language, request.include_rationale.
+### Tasks
 
-**Fix:** Pass all request fields to orchestrator.run():
-- src/api/routes/search.py: update search_candidates to pass request.filters, request.language, request.include_rationale
-- src/agents/orchestrator.py: update run() signature to accept and wire filters into ExecutorAgent.execute()
+- [ ] **M1.1** `src/ingestion/parser.py` — Verify `ProfileParser` handles JSONL (streaming), JSON (array), and gzip formats. Confirm `parse_jsonl_file()` yields profiles without loading 487MB file into memory.
+- [ ] **M1.2** `src/ingestion/parser.py` — Add `.docx` parsing fallback using `zipfile + xml.etree` for unicode-safe extraction (handles cp1252 breakage).
+- [ ] **M1.3** `src/ingestion/normalizer.py` — Verify `normalize_redrob()` maps all 8 Redrob API fields into Profile model (30 Pydantic fields). Fix any mapping gaps.
+- [ ] **M1.4** `src/ingestion/normalizer.py` — Ensure `raw_text` construction matches PRD Section 7.2a exactly:
+      `"Name: {name}. Title: {title}. Company: {company}. Summary: {summary}. Skills: {...}. Experience: {...}. Education: {...}. Certifications: {...}. Languages: {...}."`
+- [ ] **M1.5** `src/ingestion/normalizer.py` — Verify skill categories auto-inferred via keyword matching (lang/framework/tool/domain).
+- [ ] **M1.6** `src/ingestion/quality_scorer.py` — Verify `compute_data_quality_score()` scoring: name +0.10, title +0.10, skills +0.15, experience +0.15, education +0.10, location +0.10, raw_text length thresholds, encoding artifacts check, evidence snippets +0.10.
+- [ ] **M1.7** `src/ingestion/extractor.py` — Verify `FieldExtractor` LLM-assisted extraction works as async fallback for unstructured data. Confirm prompt returns structured JSON.
+- [ ] **M1.8** `src/ingestion/parser.py` — Add noisy profile skip: if quality_score < 0.3, skip profile and increment `failed_profiles` counter.
 
-### Bug B2: Rationale node is stub (src/agents/orchestrator.py:138-139)
+**Exit Criteria:**
+- [ ] 100K Redrob profiles parse without errors
+- [ ] `raw_text` matches PRD spec exactly
+- [ ] Quality scores computed for all profiles
+- [ ] Noisy profiles skipped with counter
 
-**Current:** _rationale_node() returns {"should_continue": False} - no rationale generation in the agent loop.
+---
 
-**Fix:** Wire RationaleGenerator into the agent state machine, calling generator.generate() for each result profile.
+## Module 2: Language Processing
 
-### Bug B3: Same score for semantic_similarity and keyword_match (src/agents/executor.py:67-71)
+**Purpose:** Language detection, translation, multilingual embeddings, code-mixed NLP.
 
-**Current:** Both dimensions get the SAME hybrid fusion score.
+**Files:** `src/language/detector.py`, `src/language/translator.py`, `src/language/multilingual.py`, `src/language/code_mixed.py`
 
-**Fix:** Modify HybridSearch.search() to return individual FAISS and BM25 scores alongside the RRF score. Update executor to track separate semantic_similarity and keyword_match values.
+### Tasks
 
-### Bug B4: Translation model loading broken (src/language/translator.py:19-25)
+- [ ] **M2.1** `src/language/detector.py` — Verify `LanguageDetector.detect()` returns `{language, is_english, needs_translation}` using `langdetect`. Test on Hindi, Tamil, Telugu text.
+- [ ] **M2.2** `src/language/detector.py` — Verify `detect_batch()` processes list of texts efficiently.
+- [ ] **M2.3** `src/language/translator.py` — Fix `load_models()`: use `transformers.pipeline("translation", ...)` for primary model. Load fallback M2M100 model correctly. (Bug B4 fix)
+- [ ] **M2.4** `src/language/translator.py` — Implement `translate_to_english()` that actually translates non-English text. Set `translation_confidence` score.
+- [ ] **M2.5** `src/language/translator.py` — On translation failure, set `translation_fallback: true` in metadata. Return original text as fallback.
+- [ ] **M2.6** `src/language/translator.py` — Verify `translate_batch()` processes multiple texts with rate limiting.
+- [ ] **M2.7** `src/language/multilingual.py` — Verify `MultilingualEmbedder` loads `paraphrase-multilingual-MiniLM-L12-v2` and produces 384-dim vectors.
+- [ ] **M2.8** `src/language/multilingual.py` — Verify `normalize_embeddings=True` so cosine similarity = dot product. Test `cosine_similarity()` between English query and Hindi profile > 0.8.
+- [ ] **M2.9** `src/language/multilingual.py` — Verify `embed_batch()` processes multiple texts with progress tracking.
+- [ ] **M2.10** `src/language/code_mixed.py` — (New file) Implement `CodeMixedProcessor`:
+  - `detect_code_mixed(text) -> bool`: checks for mixed Hindi-English script
+  - `extract_entities(text) -> list[Entity]`: use HingBERT/HingRoBERTa for NER on code-mixed text
+  - `transliterate_hinglish(text) -> str`: convert between Devanagari and Latin script
+- [ ] **M2.11** `src/agents/planner.py` — Add Translate-in-Thought (TinT) prompting: if query is code-mixed, prompt LLM to internally translate + parse search params in one step. No explicit translation call.
 
-**Current:** Tokenizer assigned to _primary, model assigned to _fallback - wrong wiring.
+**Exit Criteria:**
+- [ ] Language detection works for 10+ Indian languages
+- [ ] Translation pipeline functional with confidence scores
+- [ ] Fallback on translation failure works
+- [ ] Cross-lingual embedding similarity > 0.8 for equivalent text
+- [ ] Code-mixed Hinglish text parsable via HingBERT NER
+- [ ] TinT prompting handles code-mixed queries
 
-**Fix:** Use transformers.pipeline("translation", ...) for primary. Load fallback model separately.
+---
 
-### Bug B5: compute_disparate_impact_ratio flawed (src/fairness/metrics.py:89-102)
+## Module 3: Search & Retrieval
 
-**Current:** _in_group iterates education entries, flagging profiles incorrectly.
+**Purpose:** Hybrid search (BM25 + FAISS + RRF), cross-encoder reranking, scoped pre-search filters, parallel execution.
 
-**Fix:** Rewrite _in_group to check protected group against profile attributes (language, location, university) independently of education entries.
+**Files:** `src/search/vector_search.py`, `src/search/bm25_search.py`, `src/search/hybrid.py`, `src/search/reranker.py`, `src/search/filters.py`
 
-### Bug B6: Health endpoint hardcoded (src/api/routes/health.py)
+### Tasks
 
-**Current:** models_loaded always {"embedding": False, "cross_encoder": False}.
+- [ ] **M3.1** `src/search/vector_search.py` — Verify `build_index()` creates FAISS `IndexFlatIP` (384-dim, inner product on normalized vectors). Confirm save/load with JSON `id_map`.
+- [ ] **M3.2** `src/search/vector_search.py` — Verify `search()` returns top-k results with distances. Handle empty index gracefully.
+- [ ] **M3.3** `src/search/vector_search.py` — Add `add_embeddings(ids, embeddings)` for incremental index updates without full rebuild. Update both FAISS index and `id_map`.
+- [ ] **M3.4** `src/search/vector_search.py` — Add auto-rebuild from stored embeddings if FAISS index is corrupted or missing.
+- [ ] **M3.5** `src/search/bm25_search.py` — Verify `build_index()` tokenizes with lowercase + split. Confirm save/load with pickle.
+- [ ] **M3.6** `src/search/bm25_search.py` — Verify `search()` returns top-k results with BM25 scores.
+- [ ] **M3.7** `src/search/filters.py` — Implement `ScopedRetriever`:
+  - `get_candidate_ids(filters) -> list[int]`: returns profile IDs passing structural filters
+  - Filters: location (city/country/remote), experience (min/max years), companies (include/exclude)
+  - If no filters, return ALL profile IDs
+  - This narrows search pool BEFORE vector search runs (solves Vector Search Dilution)
+- [ ] **M3.8** `src/search/hybrid.py` — Replace sequential BM25 + FAISS execution with parallel using `concurrent.futures.ThreadPoolExecutor`.
+- [ ] **M3.9** `src/search/hybrid.py` — `HybridSearch.search()` returns individual FAISS score, BM25 score, AND combined RRF score per candidate (not just combined). Fix Bug B3.
+- [ ] **M3.10** `src/search/hybrid.py` — Verify RRF formula: `RRF_score(d) = Σ 1/(k + rank_i(d))` with k=60 from `scoring_weights.yaml`.
+- [ ] **M3.11** `src/search/reranker.py` — Verify `CrossEncoderReranker` loads `cross-encoder/ms-marco-MiniLM-L-6-v2` and scores (query, profile_summary) pairs.
+- [ ] **M3.12** `src/search/reranker.py` — Verify timeout fallback: if reranking exceeds `cross_encoder_timeout_ms`, skip and return hybrid results directly.
+- [ ] **M3.13** `src/agents/executor.py` — Wire scoped retrieval into execution pipeline:
+  - Step 1: Call `ScopedRetriever.get_candidate_ids(filters)` FIRST
+  - Step 2: Pass narrowed IDs into `HybridSearch.search()`
+  - Step 3: Cross-encoder reranking on narrowed results
+  - Step 4: Build MatchResults with per-dimension scores (`semantic_similarity` from FAISS, `keyword_match` from BM25)
 
-**Fix:** Add init_health() function to inject real model loading state. Return index sizes and last_updated.
+**Exit Criteria:**
+- [ ] FAISS index builds, searches, saves, loads correctly
+- [ ] BM25 index builds, searches, saves, loads correctly
+- [ ] Scoped filters narrow pool before vector search
+- [ ] BM25 + FAISS run in parallel
+- [ ] Individual FAISS/BM25 scores tracked separately
+- [ ] Cross-encoder reranks with timeout fallback
+- [ ] Incremental FAISS updates work
+- [ ] Auto-rebuild on corruption works
 
-### Bug B7: InputValidationMiddleware not registered (src/main.py:35)
+---
 
-**Fix:** Import and register InputValidationMiddleware alongside RequestLoggingMiddleware.
+## Module 4: Matching & Scoring
 
-### Exit Criteria for Phase 0
-- [ ] All 7 bugs fixed and verified
-- [ ] API filters wired into orchestrator
+**Purpose:** Skill matching (fuzzy + semantic), experience scoring, weighted overall score computation, confidence calculation.
+
+**Files:** `src/matching/skill_matcher.py`, `src/matching/experience_matcher.py`, `src/matching/scorer.py`, `src/matching/confidence.py`, `configs/scoring_weights.yaml`
+
+### Tasks
+
+- [ ] **M4.1** `src/matching/skill_matcher.py` — Verify `SkillMatcher.find_best_match()` strategies:
+  - Exact match (normalized)
+  - Alias match (32 SKILL_ALIASES: "react.js" → "react", "ml" → "machine learning")
+  - Fuzzy match (token overlap)
+- [ ] **M4.2** `src/matching/skill_matcher.py` — Verify `compute_proficiency_match()` scoring: beginner=0.25, intermediate=0.50, advanced=0.75, expert=1.00.
+- [ ] **M4.3** `src/matching/skill_matcher.py` — Verify required skills (weight 1.0) vs preferred (0.6) vs nice-to-have (0.3) weighted scoring.
+- [ ] **M4.4** `src/matching/experience_matcher.py` — Verify `compute_experience_match()`:
+  - Years: deficit (ratio*0.7) vs excess (diminishing returns capped at 2x)
+  - Industry: exact=1.0, semantically similar=0.6, different=0.3
+- [ ] **M4.5** `src/matching/scorer.py` — Verify `CandidateScorer.compute()` loads weights from `scoring_weights.yaml` at runtime (never hardcoded).
+- [ ] **M4.6** `src/matching/scorer.py` — Verify default scoring formula (PRD FR-7.2):
+      `overall = 0.25*semantic + 0.15*keyword + 0.30*skill + 0.15*experience + 0.05*location + 0.05*education + 0.05*cross_encoder`
+- [ ] **M4.7** `src/matching/scorer.py` — Verify renormalization when dimensions are null (location not specified, education not specified).
+- [ ] **M4.8** `src/matching/scorer.py` — Verify `cross_encoder_score` defaults to 0.5 (neutral) if not reranked.
+- [ ] **M4.9** `src/matching/confidence.py` — Verify `compute_confidence()` returns high confidence when all dimensions agree, low when they disagree (based on score variance / std dev).
+- [ ] **M4.10** `configs/scoring_weights.yaml` — Verify all weights present: 6 scoring dimensions, skill importance (3 levels), proficiency scores (4 levels), `rrf_k: 60`, fairness thresholds.
+
+**Exit Criteria:**
+- [ ] Skill matching works for exact, alias, fuzzy matches
+- [ ] Experience scoring handles deficit/excess correctly
+- [ ] Weights loaded from YAML at runtime
+- [ ] Renormalization works when dimensions are null
+- [ ] Confidence computation based on variance
+
+---
+
+## Module 5: Ranking (Plackett-Luce)
+
+**Purpose:** Listwise tournament ranking using Plackett-Luce model. Primary innovation differentiator.
+
+**Files:** `src/ranking/listwise_ranker.py` (new), `configs/scoring_weights.yaml`
+
+### Tasks
+
+- [ ] **M5.1** `src/ranking/listwise_ranker.py` — Implement `PlackettLuceRanker` class:
+  - `rank(candidates, anonymized_profiles) -> list[(profile_id, merit_score)]`
+  - Divide candidates into random groups of 4-5
+  - LLM judges each group simultaneously (listwise, not pairwise)
+  - Aggregate partial rankings via Plackett-Luce MM algorithm
+  - Max 20 EM iterations
+  - 3 tournament rounds with reshuffled groups
+  - Fallback to pointwise scoring if LLM fails
+- [ ] **M5.2** `src/ranking/listwise_ranker.py` — Implement group judge LLM prompt:
+  - Present 4-5 anonymized candidates (only skills, experience years, industry — no PII)
+  - Output format: comma-separated list of candidate indices in rank order
+  - Structured output parsing with regex fallback
+- [ ] **M5.3** `src/ranking/listwise_ranker.py` — Implement Plackett-Luce MM algorithm:
+  - Initialize merit parameters theta = 1.0 for all candidates
+  - EM iteration: update theta based on partial rankings
+  - Sort candidates by final theta value (descending)
+- [ ] **M5.4** `configs/scoring_weights.yaml` — Add listwise ranking config:
+  ```yaml
+  listwise_ranking:
+    enabled: true
+    group_size: 5
+    max_em_iterations: 20
+    num_tournament_rounds: 3
+  ```
+- [ ] **M5.5** `src/agents/orchestrator.py` — Add `listwise_ranking` node in agent state machine after cross-encoder reranking:
+  - Takes top-20 from cross-encoder
+  - Runs through `PlackettLuceRanker`
+  - Produces final ordering
+  - Falls back to pointwise ordering if LLM unavailable
+
+**Exit Criteria:**
+- [ ] Plackett-Luce ranker produces consistent rankings
+- [ ] LLM group judge works with structured output parsing
+- [ ] MM algorithm converges within 20 iterations
+- [ ] Fallback to pointwise on LLM failure
+- [ ] Integrated into orchestrator as final ranking step
+
+---
+
+## Module 6: Agentic Workflow
+
+**Purpose:** LangGraph state machine (Plan → Execute → Reflect → Re-plan). LLM-powered query parsing and candidate evaluation.
+
+**Files:** `src/agents/orchestrator.py`, `src/agents/planner.py`, `src/agents/executor.py`, `src/agents/reflector.py`, `src/agents/prompts.py`
+
+### Tasks
+
+- [ ] **M6.1** `src/agents/prompts.py` — Verify PLANNER prompt extracts structured search params from NL query. Test with: "Find a senior DevOps engineer with 5+ years in AWS and Kubernetes, Bangalore".
+- [ ] **M6.2** `src/agents/prompts.py` — Verify REFLECTOR prompt evaluates candidates as strong/good/potential/weak match with specific evidence.
+- [ ] **M6.3** `src/agents/prompts.py` — Verify RATIONALE prompt generates detailed report with all 12 dimensions (M7 tasks).
+- [ ] **M6.4** `src/agents/prompts.py` — Verify REPLAN prompt broadens criteria when too few good matches found.
+- [ ] **M6.5** `src/agents/planner.py` — Verify `PlannerAgent.plan()`:
+  - Primary: LLM-based structured extraction
+  - Fallback: keyword extraction (skill aliases, regex years, city/company matching)
+  - `replan()` relaxes requirements when triggered
+- [ ] **M6.6** `src/agents/planner.py` — Add TinT prompt strategy (from M2.11): detect code-mixed queries and prompt LLM to internally translate + parse.
+- [ ] **M6.7** `src/agents/executor.py` — Verify `ExecutorAgent.execute()` runs the full search pipeline with scoped retrieval integration (from M3.13):
+  - Structural filters → Parallel BM25 + FAISS → RRF fusion → Cross-encoder reranking → Scoring
+  - Returns list of `MatchResult` with per-dimension scores
+- [ ] **M6.8** `src/agents/reflector.py` — Verify `ReflectorAgent.reflect()`:
+  - Primary: LLM-based evaluation per candidate
+  - Fallback: score-threshold evaluation
+  - `should_replan()` heuristic returns true if < 8/10 candidates are good matches
+- [ ] **M6.9** `src/agents/reflector.py` — Wire anonymization: ensure profiles are anonymized before LLM evaluation (uses Anonymizer from M8.1).
+- [ ] **M6.10** `src/agents/orchestrator.py` — Verify LangGraph state machine:
+  - Nodes: planner, executor, reflector, rationale_generator, listwise_ranker
+  - Edges: planner→executor→reflector→(replan→planner OR generate)
+  - Max `replan_cycles` from config (default 3)
+  - State tracked in `AgentState` TypedDict
+- [ ] **M6.11** `src/agents/orchestrator.py` — Fix `_rationale_node()` stub. Wire `RationaleGenerator.generate()` for each result profile. (Bug B2 fix)
+- [ ] **M6.12** `src/agents/orchestrator.py` — Add listwise ranking node (from M5.5) between reranking and rationale generation.
+- [ ] **M6.13** `src/api/routes/search.py` — Pass all request fields (filters, language, include_rationale) to orchestrator. (Bug B1 fix)
+
+**Exit Criteria:**
+- [ ] Planner extracts structured params from NL queries
+- [ ] Executor runs full search pipeline with scoped retrieval
+- [ ] Reflector evaluates candidates with fallback
+- [ ] Re-plan triggers correctly when < 8/10 matches are good
+- [ ] Max 3 re-plan cycles respected
 - [ ] Rationale generated in agent loop
-- [ ] Individual BM25/FAISS scores tracked
-- [ ] Translation models load correctly
-- [ ] DIR computation corrected
-- [ ] Health endpoint reflects real state
-- [ ] InputValidationMiddleware active
+- [ ] Listwise ranking integrated
+- [ ] TinT works for code-mixed queries
 
 ---
 
-## Phase 1: Data Generation (Days 4-6)
+## Module 7: Rationale Generation
 
-**Mission:** Build the synthetic dataset. Without this, nothing else works.
+**Purpose:** 12-dimension YAML rationale reports with evidence-based evaluation. PRD Section 14.
 
-### 1.1 scripts/generate_data.py (Full Rewrite)
+**Files:** `src/rationale/generator.py`, `src/rationale/templates.py`, `src/rationale/validator.py`
 
-Replace the current 11-line stub with a full synthetic profile generator producing:
-- 1,000 profiles across 5 domains (software engineering, data science, product, design, marketing)
-- 20% non-English names (Hindi, Tamil, Telugu)
-- 3-7 work experiences per profile
-- Raw_text per PRD Section 6.2a spec
-- Realistic Indian companies, cities, skills, and universities
-- 70% passive candidates, varying data quality scores
+### Tasks
 
-### 1.2 data/queries/queries.json
+- [ ] **M7.1** `src/rationale/generator.py` — Expand `RationaleGenerator` to evaluate all 12 dimensions:
+  1. `core_technical_skills` — exact match of required programming languages and frameworks
+  2. `tool_proficiency` — CI/CD, cloud, monitoring tools
+  3. `domain_expertise` — industry-specific knowledge (fintech, ecom, healthcare)
+  4. `role_stability` — average tenure, job changes
+  5. `leadership_indicators` — team lead, architect, mentoring roles
+  6. `communication_signals` — public speaking, technical writing, open source
+  7. `multilingual_fit` — language capabilities matching query requirements
+  8. `localized_salary_alignment` — compensation parity for location/seniority
+  9. `career_growth_trajectory` — promotions, expanding responsibilities
+  10. `industry_relevance` — experience in same sector as role
+  11. `company_prestige` — brand-name companies vs startups (signal, not bias)
+  12. `culture_fit_signals` — open source, side projects, community involvement
+- [ ] **M7.2** `src/rationale/generator.py` — Implement YAML output format (PRD Section 14.1):
+  ```yaml
+  candidate_evaluation:
+    profile_id: "..."
+    match_confidence: 0.92
+    dimensional_scores:
+      core_technical_skills: 0.95
+      ...
+    matching_evidence:
+      - dimension: "core_technical_skills"
+        skill: "React JS"
+        proven_years: 3.5
+        context_found: "Lead UI Developer at FinTech Startup"
+        proficiency_match: true
+    evaluation_rationale:
+      summary: "..."
+      strengths: [...]
+      gaps: [...]
+      recommendation: "strong_match"
+    anonymization_note: "..."
+  ```
+- [ ] **M7.3** `src/rationale/generator.py` — Add `anonymization_note` field to all outputs: "PII stripped before LLM evaluation — no name, university, or location data was visible to the evaluator".
+- [ ] **M7.4** `src/rationale/generator.py` — Wire anonymized profiles (from M8.x) into generator instead of raw profiles.
+- [ ] **M7.5** `src/rationale/templates.py` — Add `RATIONALE_12D_TEMPLATE` that explicitly requests evaluation across all 12 dimensions with evidence for each.
+- [ ] **M7.6** `src/rationale/validator.py` — Update `validate()` to check:
+  - All 12 dimensions present with valid scores (0.0-1.0)
+  - `matching_evidence` has >= 1 entry per matched dimension
+  - `evaluation_rationale.summary` not empty
+  - `anonymization_note` present
+  - Recommendation is one of: strong_match, good_match, potential_match, weak_match
+- [ ] **M7.7** `src/rationale/validator.py` — `validate_batch()` computes pass/fail statistics. Verify `should_continue` logic.
 
-Generate 50 search queries: 15 technical, 15 business, 10 creative, 10 cross-functional.
-Each query includes raw_query, parsed structure, and language field.
-
-### 1.3 data/ground_truth/ground_truth.json
-
-Ground truth relevance labels for 20 of the 50 queries. Each query maps to 10 top-relevant profile IDs based on skill/experience/location overlap.
-
-### 1.4 Fix raw_text Construction (src/ingestion/normalizer.py)
-
-Update normalizer to match PRD Section 6.2a:
-"Name: {name}. Title: {title}. Company: {company}. Summary: {summary}. Skills: {...}. Experience: {...}. Education: {...}. Certifications: {...}. Languages: {...}."
-
-### 1.5 Build Indexes
-
-Run scripts/build_indexes.py against the generated dataset to create FAISS + BM25 indexes.
-
-### Exit Criteria for Phase 1
-- [ ] 1,000 synthetic profiles generated
-- [ ] 50 queries generated
-- [ ] Ground truth for 20 queries
-- [ ] raw_text matches PRD spec
-- [ ] FAISS + BM25 indexes built
+**Exit Criteria:**
+- [ ] 12 dimensions in rationale output with valid scores
+- [ ] YAML output format matches PRD spec
+- [ ] Matching evidence references specific profile data
+- [ ] Anonymization note present in every report
+- [ ] Validator checks all 12 dimensions
 
 ---
 
-## Phase 2: Infrastructure Fixes (Days 7-10)
+## Module 8: Fairness & Bias
 
-**Mission:** Add error handling fallbacks, structured logging, metrics tracking.
+**Purpose:** PII redaction, style anonymization, bias detection, automated fairness halting. PRD Section 15.
 
-### 2.1 Error Handling - All 7 Fallback Scenarios
+**Files:** `src/fairness/anonymizer.py` (new), `src/fairness/bias_detector.py`, `src/fairness/metrics.py`, `configs/scoring_weights.yaml`
 
-| Scenario | Location | Implementation |
-|----------|----------|----------------|
-| 0 results | src/agents/orchestrator.py | Populate message + suggestions in SearchResponse |
-| Translation fails | src/language/translator.py | Set translation_fallback: true in metadata |
-| Noisy profile skip | src/ingestion/parser.py | If quality_score < 0.3, skip + increment counter |
-| LLM unavailable (planner) | src/agents/planner.py | Already done (keyword fallback) |
-| LLM unavailable (rationale) | src/rationale/generator.py | Already done (template fallback) |
-| FAISS corrupted | src/search/vector_search.py | Auto-rebuild from stored embeddings |
-| Rate limit | src/api/middleware/rate_limit.py | New middleware returning 429 with retry-after |
+### Tasks
 
-### 2.2 Structured JSON Logging (src/api/middleware/logging.py)
+- [ ] **M8.1** `src/fairness/anonymizer.py` — (New file) Implement `Anonymizer` class:
+  - `anonymize_profile(profile) -> dict` strips:
+    - Name → `"Candidate-{uuid8}"`
+    - Gendered pronouns → neutral (they/them)
+    - University names → `"University-{tier}"` (tier-1, tier-2, tier-3)
+    - Company names → `"Company-{size}-{domain}"`
+    - Specific addresses → city only
+    - Photo URLs → removed
+  - Preserves: skills, experience years, industries, seniority, certifications
+- [ ] **M8.2** `src/fairness/anonymizer.py` — Implement `style_anonymize(text) -> str`:
+  - Remove excessive bullet-point structures
+  - Replace overused LLM verbs: spearheaded, fostered, architected, orchestrated, pioneered, championed, drove, delivered
+  - Strip generic LLM power phrases
+  - Normalize formatting artifacts
+- [ ] **M8.3** `src/agents/executor.py` — Wire `Anonymizer.anonymize_profile()` before passing profiles to reflector and rationale generator.
+- [ ] **M8.4** `src/agents/reflector.py` — Use anonymized profiles (not raw) for LLM evaluation.
+- [ ] **M8.5** `src/rationale/generator.py` — Use anonymized profiles for rationale generation. Add `anonymization_note`.
+- [ ] **M8.6** `src/api/routes/search.py` — Add `anonymization_note` to search response metadata.
+- [ ] **M8.7** `src/fairness/bias_detector.py` — Verify 4 bias checks:
+  - Name-based (first character grouping)
+  - Language-based (en vs non-en scores)
+  - Location-based (tier-1 vs tier-2/3 cities)
+  - University-based (IIT/NIT/BITS vs other)
+  - Each returns: detected flag, observations, details
+- [ ] **M8.8** `src/fairness/metrics.py` — Fix `compute_disparate_impact_ratio()`. Rewrite `_in_group` to check protected group against profile attributes independently of education entries. (Bug B5 fix)
+- [ ] **M8.9** `src/fairness/metrics.py` — Add `compute_equal_opportunity()`:
+  - TPR comparison: correctly matched candidates in group / total relevant in group
+  - Returns ratio between protected and majority groups
+- [ ] **M8.10** `src/fairness/metrics.py` — Implement automated DIR halting:
+  - After every search, compute fairness metrics
+  - If DIR < 0.80, add `fairness_warning` to SearchResponse
+  - Warning: "Disparate Impact Ratio {value:.2f} < 0.80. Results flagged for review."
+  - Flag in UI with warning badge
 
-Replace basic INFO logging with structured JSON entries:
-- Timestamp, method, path, status_code, latency_ms
-- PII redacted from log messages
+**Exit Criteria:**
+- [ ] PII stripped before LLM evaluation (names, universities, companies removed)
+- [ ] Style anonymization removes LLM-writing artifacts
+- [ ] Skills/years/industry preserved after anonymization
+- [ ] All 4 bias checks functional
+- [ ] Equal opportunity metric computed
+- [ ] DIR < 0.80 triggers automated flagging
 
-### 2.3 Metrics Tracking (src/api/middleware/metrics.py)
+---
 
-In-memory metrics tracker:
-- Request count, error count, latency p50/p95/p99
-- Exposed via /api/v1/health endpoint
+## Module 9: Feedback Loop & RLHF (NEW — PRD v2.1)
 
-### 2.4 No-Results Response
+**Purpose:** Recruiter accept/reject feedback tracking, score re-weighting, RLHF-style retraining. Architecture Principle #10, Layer 5.
 
-When search returns 0 results, populate message and suggestions in SearchResponse.
-Suggestions include: try removing location filter, reduce min experience, move required to preferred.
+**Files:** `src/feedback/tracker.py` (new), `src/feedback/reweighter.py` (new), `src/feedback/store.py` (new), `src/api/routes/feedback.py` (new), `configs/scoring_weights.yaml`
 
-### Exit Criteria for Phase 2
-- [ ] All 7 error scenarios handled
+### Tasks
+
+- [ ] **M9.1** `configs/scoring_weights.yaml` — Add feedback loop config:
+  ```yaml
+  feedback:
+    enabled: true
+    store_size: 10000
+    min_feedback_for_retrain: 50
+    reweight_learning_rate: 0.1
+  ```
+- [ ] **M9.2** `src/feedback/store.py` — (New file) Implement `FeedbackStore`:
+  - `store_feedback(query_id, profile_id, action: accept|reject, timestamp)` — append feedback to local JSON store
+  - `get_feedback(limit=1000) -> list[FeedbackEntry]` — retrieve recent feedback
+  - `get_stats() -> dict` — total accept/reject counts, per-dimension breakdown
+  - File-backed persistence (JSON lines in `data/feedback/`)
+- [ ] **M9.3** `src/feedback/tracker.py` — (New file) Implement `FeedbackTracker`:
+  - `track_match_outcome(match_result, action)` — record recruiter decision for a match
+  - `get_per_dimension_accuracy() -> dict` — compute how well each scoring dimension predicted recruiter decisions
+  - Dimensions analyzed: skill_match, experience_match, location_match, education_match, semantic_similarity, keyword_match, cross_encoder_score
+- [ ] **M9.4** `src/feedback/reweighter.py` — (New file) Implement `ScoringReweighter`:
+  - `reweight(feedback_entries) -> dict` — adjust scoring weights based on feedback:
+    - Dimensions that correlate with accepted candidates get UP-weighted
+    - Dimensions that correlate with rejected candidates get DOWN-weighted
+    - Learning rate from config (default 0.1)
+    - New weights normalized to sum to 1.0
+  - `get_current_weights() -> dict` — return current active weights
+  - `reset_weights()` — restore weights from `scoring_weights.yaml` defaults
+- [ ] **M9.5** `src/api/routes/feedback.py` — (New file) Implement feedback endpoint:
+  - `POST /api/v1/feedback` — accepts `{query_id, profile_id, action: "accept"|"reject"}`
+  - Stores via FeedbackStore
+  - Triggers FeedbackTracker update
+  - If enough feedback accumulated (min_feedback_for_retrain), triggers ScoringReweighter
+  - Returns updated feedback stats
+- [ ] **M9.6** `src/main.py` — Import and mount feedback router at `/api/v1/feedback`. Initialize FeedbackStore on startup.
+- [ ] **M9.7** `src/agents/orchestrator.py` — Add optional feedback node at end of pipeline:
+  - After returning results, store processing metadata for potential future feedback
+  - No pipeline delay — feedback is async/post-process
+
+**Exit Criteria:**
+- [ ] Feedback accepted via API endpoint
+- [ ] Feedback persisted to file-backed store
+- [ ] Per-dimension accuracy computed
+- [ ] Scoring weights adjust based on feedback patterns
+- [ ] Retrain triggers after minimum feedback threshold
+- [ ] Config-driven enable/disable
+
+---
+
+## Module 10: API Layer
+
+**Purpose:** FastAPI endpoints, middleware, health monitoring.
+
+**Files:** `src/main.py`, `src/api/routes/search.py`, `src/api/routes/profiles.py`, `src/api/routes/ingest.py`, `src/api/routes/health.py`, `src/api/routes/feedback.py`, `src/api/middleware/logging.py`, `src/api/middleware/validation.py`, `src/api/middleware/rate_limit.py`, `src/api/middleware/metrics.py`
+
+### Tasks
+
+- [ ] **M10.1** `src/main.py` — Verify lifespan creates indexes, loads models on startup. Register all middleware.
+- [ ] **M10.2** `src/main.py` — Import and register `InputValidationMiddleware`. (Bug B7 fix)
+- [ ] **M10.3** `src/main.py` — Import and mount feedback router at `/api/v1/feedback`.
+- [ ] **M10.4** `src/api/routes/search.py` — Fix: pass `request.filters`, `request.language`, `request.include_rationale` to orchestrator. (Bug B1 fix)
+- [ ] **M10.5** `src/api/routes/search.py` — Add `anonymization_note` to search response metadata.
+- [ ] **M10.6** `src/api/routes/search.py` — Handle 0-results: return message + suggestions string array.
+- [ ] **M10.7** `src/api/routes/profiles.py` — Verify `GET /api/v1/profiles/{id}` returns full profile. Verify `GET /api/v1/profiles` pagination.
+- [ ] **M10.8** `src/api/routes/ingest.py` — Verify `POST /api/v1/ingest` validates filename, parses JSON, returns ingestion report (profiles processed, errors, language distribution).
+- [ ] **M10.9** `src/api/routes/health.py` — Fix: add `init_health()` to inject real model loading state. Return index sizes and `last_updated`. (Bug B6 fix)
+- [ ] **M10.10** `src/api/middleware/logging.py` — Replace basic INFO logging with structured JSON entries: timestamp, method, path, status_code, latency_ms. PII redacted.
+- [ ] **M10.11** `src/api/middleware/validation.py` — Verify InputValidationMiddleware rejects requests > 10MB body.
+- [ ] **M10.12** `src/api/middleware/rate_limit.py` — (New file) Implement rate limiting middleware: 429 with `retry-after` header.
+- [ ] **M10.13** `src/api/middleware/metrics.py` — (New file) Implement in-memory metrics tracker: request count, error count, latency p50/p95/p99. Exposed via `/api/v1/health`.
+
+**Exit Criteria:**
+- [ ] All 4 original endpoints working (search, profiles, ingest, health)
+- [ ] Feedback endpoint working
+- [ ] Input validation active
+- [ ] Rate limiting functional
 - [ ] Structured JSON logging active
 - [ ] Metrics tracking operational
-- [ ] 0-results response has suggestions
+- [ ] Health endpoint reflects real model state
 
 ---
 
-## Phase 3: Scoped Retrieval + Parallel Search (Days 11-13)
-
-**Mission:** Solve Bottleneck A (Vector Search Dilution). Apply filters BEFORE search. Run BM25 + FAISS in parallel.
-
-### 3.1 Scoped Pre-Search Filters (src/search/filters.py)
-
-Create ScopedRetriever class:
-- get_candidate_ids(filters) returns profile IDs that pass structural filters
-- Filters applied: location, experience years, company inclusion/exclusion
-- If no filters, returns ALL profile IDs
-- This narrows the search pool BEFORE vector search runs
-
-### 3.2 Parallel BM25 + FAISS (src/search/hybrid.py)
-
-Replace sequential execution with parallel using concurrent.futures.ThreadPoolExecutor + asyncio.gather:
-- BM25 and FAISS searches run concurrently
-- HybridSearch.search() returns individual FAISS and BM25 scores per candidate (not just combined RRF)
-
-### 3.3 Integrate into Executor (src/agents/executor.py)
-
-- Step 1: Call ScopedRetriever.get_candidate_ids(filters) FIRST
-- Step 2: Pass narrowed candidate_ids into HybridSearch.search()
-- Step 3: Cross-encoder reranking on narrowed results
-- Step 4: Build MatchResults with per-dimension scores (semantic_similarity from FAISS, keyword_match from BM25)
-
-### 3.4 Incremental FAISS Support (src/search/vector_search.py)
-
-Add method to add individual profile embeddings to existing index without full rebuild:
-- vector_search.add_embeddings(ids, embeddings)
-- Updates both faiss index and id_map
-
-### Exit Criteria for Phase 3
-- [ ] Pre-search filters narrow candidate pool
-- [ ] BM25 + FAISS run in parallel
-- [ ] Individual FAISS/BM25 scores tracked
-- [ ] Incremental FAISS updates work
-
----
-
-## Phase 4: Listwise Tournament Ranking (Days 14-17)
-
-**Mission:** Implement Strategy 1 (Plackett-Luce) from the Blueprint. The primary innovation differentiator.
-
-### 4.1 src/ranking/listwise_ranker.py (New File)
-
-Implement PlackettLuceRanker class:
-
-- rank(candidates, anonymized_profiles) -> list of (profile_id, merit_score) sorted by merit
-- Candidates divided into random groups of 4-5
-- LLM judges each group simultaneously (listwise, not pairwise)
-- Partial rankings aggregated via Plackett-Luce MM algorithm (max 20 EM iterations)
-- 3 tournament rounds with reshuffled groups
-- Fallback to pointwise scoring if LLM fails
-
-### 4.2 Group Judge Prompt
-
-LLM prompt that presents 4-5 anonymized candidates and asks for relative ordering:
-- Only skills, experience years, industry shown (no PII)
-- Output format: comma-separated list of candidate numbers in rank order
-- Structured output parsing with fallback
-
-### 4.3 Integrate into Orchestrator (src/agents/orchestrator.py)
-
-Add listwise_ranking node (or integrate into _rationale_node):
-- Takes top-20 from cross-encoder reranking
-- Runs through PlackettLuceRanker
-- Produces final ordering
-
-### 4.4 Tests (tests/test_matching/test_listwise_ranker.py)
-
-- test_plackett_luce_aggregation: verify MM algorithm produces consistent results
-- test_listwise_ranked_better_than_pointwise: compare precision@10
-- test_group_judge_prompt: verify LLM prompt structure
-- test_fallback_on_llm_failure: verify pointwise fallback
-
-### Exit Criteria for Phase 4
-- [ ] Plackett-Luce ranker functional
-- [ ] LLM group judge working with structured output
-- [ ] Integrated into orchestrator
-- [ ] Tests passing
-
----
-
-## Phase 5: PII Redaction + Bias Automation (Days 18-21)
-
-**Mission:** Implement PII redaction layer (Strategy 3) and automated fairness halting.
-
-### 5.1 src/fairness/anonymizer.py (New File)
-
-Implement Anonymizer class:
-
-- anonymize_profile(profile) -> dict with PII stripped:
-  - Name -> "Candidate-{uuid}"
-  - Gendered pronouns -> neutral
-  - University names -> "University-{tier}"
-  - Company names -> "Company-{size}-{domain}"
-  - Specific addresses -> city only
-  - Photo URLs removed
-
-- style_anonymize(text) -> str with LLM-writing artifacts removed:
-  - Remove excessive bullet-point structures
-  - Replace overused verbs: spearheaded, fostered, architected, orchestrated, pioneered, championed
-  - Strip generic LLM power phrases
-  - Other style normalization
-
-### 5.2 Wire Anonymization into Pipeline
-
-- src/agents/executor.py: anonymize profiles before reflection
-- src/agents/reflector.py: use anonymized profiles for LLM evaluation
-- src/rationale/generator.py: use anonymized profiles for rationale generation
-- src/api/routes/search.py: add anonymization_note to response
-
-### 5.3 Equal Opportunity Metric (src/fairness/metrics.py)
-
-Add compute_equal_opportunity():
-- True positive rate comparison between protected and majority groups
-- TPR = correctly matched candidates in group / total relevant in group
-- Returns ratio between groups
-
-### 5.4 Automated DIR Halting
-
-- After every search, compute fairness metrics
-- If DIR < 0.80, add fairness_warning to SearchResponse
-- Warning: "Disparate Impact Ratio {value:.2f} < 0.80. Results flagged for review."
-- Flag in UI with warning badge
-
-### 5.5 Update scoring_weights.yaml
-
-Add fairness thresholds:
-`yaml
-fairness:
-  disparate_impact_threshold: 0.80
-  auto_flag_on_violation: true
-`
-
-### 5.6 Tests (tests/test_fairness/)
-
-- test_pii_stripped_before_llm: verify names/universities removed
-- test_style_anonymization_removes_llm_artifacts: verify style stripping
-- test_dir_below_threshold_flags_results: verify halting logic
-- test_equal_opportunity_metric_computed: verify metric
-- test_anonymization_preserves_skills: verify skills/years/industry intact
-
-### Exit Criteria for Phase 5
-- [ ] PII stripped before LLM evaluation
-- [ ] Style anonymization active
-- [ ] Equal opportunity metric computed
-- [ ] Automated DIR halting with flags
-- [ ] Tests passing
-
----
-
-## Phase 6: 12-20 Dimension Rationale Reports (Days 22-24)
-
-**Mission:** Implement Strategy 2 - Multi-dimensional YAML rationale reports.
-
-### 6.1 Expand Rationale Generator (src/rationale/generator.py)
-
-Update RationaleGenerator to evaluate 12 dimensions:
-1. core_technical_skills
-2. tool_proficiency
-3. domain_expertise
-4. role_stability
-5. leadership_indicators
-6. communication_signals
-7. multilingual_fit
-8. localized_salary_alignment
-9. career_growth_trajectory
-10. industry_relevance
-11. company_prestige
-12. culture_fit_signals
-
-### 6.2 YAML Output Format
-
-Generate YAML rationale reports with:
-- dimensional_scores: all 12 dimensions with 0-1 scores
-- matching_evidence: per dimension, specific evidence from profile
-- evaluation_rationale: summary, strengths, gaps, recommendation
-- anonymization_note: PII stripping confirmation
-
-### 6.3 Update Rationale Prompt (src/rationale/templates.py)
-
-New RATIONALE_12D_TEMPLATE that explicitly requests evaluation across all 12 dimensions with evidence for each.
-
-### 6.4 Update RationaleValidator (src/rationale/validator.py)
-
-Validate all 12 dimensions are present with valid scores (0-1). Check matching_evidence has at least one entry per matched dimension. Validate anonymization_note is present.
-
-### 6.5 UI Components (src/ui/components.py)
-
-Add 12-dim radar chart component. Add YAML report viewer tab. Replace old 6-dim chart with 12-dim chart.
-
-### Exit Criteria for Phase 6
-- [ ] 12 dimensions in rationale output
-- [ ] YAML output format working
-- [ ] Validator checks all dimensions
-- [ ] UI shows 12-dim radar chart
-
----
-
-## Phase 7: Code-Mixed NLP + Translation (Days 25-27)
-
-**Mission:** Implement Bottleneck B mitigation - handle Hindi-English code-mixed text.
-
-### 7.1 src/language/code_mixed.py (New File)
-
-Implement CodeMixedProcessor:
-- Load HingBERT or HingRoBERTa for NER on code-mixed text
-- extract_entities(text) -> list of (entity_text, entity_type, confidence)
-- detect_code_mixed(text) -> bool
-- transliterate_hinglish(text) -> str (Devanagari <-> Latin)
-
-### 7.2 Translate-in-Thought (TinT) for Planner (src/agents/planner.py)
-
-Add TinT prompt strategy to PlannerAgent:
-- Detect if query is code-mixed (Hindi + English)
-- If yes, prompt LLM to translate internally + parse search params
-- No explicit translation call - LLM does both steps in one response
-- TinT prompt: "This query is in Hinglish (Hindi-English mixed). Parse it as if it were English for search purposes."
-
-### 7.3 Fix Translation Pipeline (src/language/translator.py)
-
-Fix load_models:
-- Load primary model via transformers.pipeline("translation", ...)
-- Load fallback M2M100 model correctly
-- translate_to_english() now actually translates non-English text
-- Set translation_confidence score
-- On failure, set translation_fallback: true in metadata
-
-### 7.4 Tests (tests/test_language/test_translator.py)
-
-- test_hingbert_ner_extracts_skills_from_hinglish
-- test_translate_in_thought_handles_code_mixed_query
-- test_translation_actual_translates_hindi
-- test_translation_fallback_on_failure
-
-### Exit Criteria for Phase 7
-- [ ] Code-mixed Hinglish text parsable
-- [ ] HingBERT NER extracts skills from code-mixed text
-- [ ] TinT prompting for planner works
-- [ ] Translation pipeline actually translates
-- [ ] Tests passing
-
----
-
-## Phase 8: UI Polish (Days 28-30)
-
-**Mission:** Demo-ready UI: dark mode, skeleton loading, live analytics data, experience timeline.
-
-### 8.1 Dark Mode (src/ui/styles.css, src/ui/app.py)
-
-Add dark mode CSS variables. Add toggle button in Gradio UI. Use prefers-color-scheme media query for auto-detection.
-
-### 8.2 Skeleton Loading States (src/ui/components.py)
-
-Add create_skeleton_card() component that shows animated placeholder while search runs. Wire into app.py search flow.
-
-### 8.3 Live Analytics Data (src/ui/app.py)
-
-Replace hardcoded fairness metrics values with actual computed values from orchestrator:
-- Language distribution from profiles
-- Source distribution
-- Average match scores from results
-- Passive vs active ratio
-- Fairness metrics from BiasDetector + Metrics module
-
-### 8.4 Left Panel / Right Panel Layout (src/ui/app.py)
-
-Implement click-to-select behavior:
-- Left panel: ranked candidate cards
-- Right panel: full rationale on card click
-- Use Gradio's gr.Row + gr.Column with visibility toggling
-
-### 8.5 Experience Timeline (src/ui/components.py)
-
-Add create_experience_timeline() component:
-- Visual horizontal timeline with company logos (or initials)
-- Role, company, dates, description
-- Color-coded by relevance to query
-
-### 8.6 Example Queries in Hindi
-
-Add Hindi example queries to search bar:
-- "Mujhe ek DevOps engineer chiye jisko AWS aur Kubernetes mein 5 saal ka experience hai"
-- "Python aur data science mein 3 saal ka anubhav wala candidate dhoondhein"
-
-### Exit Criteria for Phase 8
+## Module 11: UI (Gradio)
+
+**Purpose:** Demo application with search, results, rationale viewer, scoring slider, analytics, dark mode. PRD Section 16 + FR-7.2a.
+
+**Files:** `src/ui/app.py`, `src/ui/components.py`, `src/ui/styles.css`
+
+### Tasks
+
+- [ ] **M11.1** `src/ui/app.py` — Verify 3-tab layout: Search, Analytics, About. Each tab loads correctly.
+- [ ] **M11.2** `src/ui/app.py` — Verify search tab has: large input, example chips, advanced filters, search button.
+- [ ] **M11.3** `src/ui/app.py` — Add Hindi example queries (PRD Section 16.1):
+  - "Mujhe ek DevOps engineer chiye jisko AWS aur Kubernetes mein 5 saal ka experience hai"
+  - "Python aur data science mein 3 saal ka anubhav wala candidate dhoondhein"
+- [ ] **M11.4** `src/ui/app.py` — Implement left panel / right panel layout:
+  - Left: ranked candidate cards (scrollable list)
+  - Right: full rationale on card click
+  - Use Gradio's `gr.Row` + `gr.Column` with visibility toggling
+- [ ] **M11.5** `src/ui/app.py` — Replace hardcoded analytics with live computed values:
+  - Language distribution from actual profiles
+  - Source distribution from actual profiles
+  - Average match scores from results
+  - Passive vs active ratio
+  - Fairness metrics from BiasDetector + Metrics module
+- [ ] **M11.6** `src/ui/app.py` — Add fairness warning badge when DIR < 0.80.
+- [ ] **M11.7** `src/ui/components.py` — Create `create_candidate_card()`: score badge (color-coded), skill chips, quick rationale summary.
+- [ ] **M11.8** `src/ui/components.py` — Create `create_score_radar_chart()`: SVG radar chart showing all 12 dimensional scores.
+- [ ] **M11.9** `src/ui/components.py` — Create `create_skill_match_table()`: skill, required, found, proficiency_match, evidence columns.
+- [ ] **M11.10** `src/ui/components.py` — Create `create_analytics_dashboard()`: CSS grid with metric cards + bar chart.
+- [ ] **M11.11** `src/ui/components.py` — Create `create_rationale_panel()`: color-coded summary, strengths (green), gaps (red), recommendation badge.
+- [ ] **M11.12** `src/ui/components.py` — Create `create_experience_timeline()`: horizontal timeline with role, company, dates, color-coded by relevance.
+- [ ] **M11.13** `src/ui/components.py` — Create `create_loading_spinner()`: animated skeleton placeholder while search runs. Wire into `app.py` search flow.
+- [ ] **M11.14** **NEW — Scoring Slider UI (FR-7.2a):** Implement interactive slider for simplified scoring model:
+  - 6 sliders: Skill match (30%), Experience (25%), Education (15%), Assessment (15%), Behavioral (10%), Cultural fit (5%)
+  - Sliders update in real-time with recalculation of final fit score
+  - Dimension mapping from slider model to internal model:
+    | Slider Dimension | Internal Mapping |
+    |------------------|-----------------|
+    | Skill match (30%) | `semantic_similarity + skill_match` weighted blend |
+    | Experience (25%) | `experience_match + keyword_match` weighted blend |
+    | Education (15%) | `education_match` |
+    | Assessment (15%) | `cross_encoder + skill_match` (certifications) |
+    | Behavioral (10%) | `keyword_match` (activity signals, engagement) |
+    | Cultural fit (5%) | `semantic_similarity` (work style preferences) |
+  - Formula display: `score = (s1×0.30) + (s2×0.25) + (s3×0.15) + (s4×0.15) + (s5×0.10) + (s6×0.05)`
+  - Visual: color-coded final score (red < 40, yellow 40-60, blue 60-80, green > 80)
+- [ ] **M11.15** `src/ui/styles.css` — Add dark mode CSS variables. Add toggle button. Use `prefers-color-scheme` media query for auto-detection.
+- [ ] **M11.16** `src/ui/styles.css` — Ensure responsive layout (works on laptop/tablet). Skeleton screen animations.
+
+**Exit Criteria:**
+- [ ] 3-tab layout functional
+- [ ] Search with Hindi examples works
+- [ ] Left/right panel layout with click-to-select
+- [ ] Live analytics data from pipeline
+- [ ] Interactive scoring slider with real-time recalculation
+- [ ] Experience timeline component
 - [ ] Dark mode toggle working
 - [ ] Skeleton loading on search
-- [ ] Live analytics data from pipeline
-- [ ] Click-to-select candidate cards
-- [ ] Experience timeline component
-- [ ] Hindi example queries
+- [ ] Fairness warning badge visible
 
 ---
 
-## Phase 9: Full Test Coverage (Days 31-33)
+## Module 12: Error Handling & Observability
 
-**Mission:** All missing test files written. CI pipeline set up.
+**Purpose:** Graceful degradation for all failure scenarios, structured logging, metrics.
 
-### 9.1 Missing Test Files
+**Files:** `src/agents/orchestrator.py`, `src/language/translator.py`, `src/ingestion/parser.py`, `src/search/vector_search.py`, `src/search/reranker.py`, `src/api/middleware/rate_limit.py`, `src/api/middleware/metrics.py`, `src/api/middleware/logging.py`
 
-Create 11 missing test files from PRD spec:
-- tests/test_ingestion/test_extractor.py - LLM field extraction
-- tests/test_ingestion/test_normalizer.py - field normalization
-- tests/test_language/test_translator.py - actual translation
-- tests/test_search/test_vector.py - FAISS build/search/save/load
-- tests/test_search/test_bm25.py - BM25 build/search/save/load
-- tests/test_search/test_reranker.py - cross-encoder reranking
-- tests/test_matching/test_scorer.py - weighted scoring
-- tests/test_matching/test_confidence.py - confidence calculation
-- tests/test_agents/test_orchestrator.py - full state machine
-- tests/test_agents/test_reflector.py - LLM + fallback reflection
-- tests/test_api/test_health_endpoint.py - health endpoint
+### Tasks
 
-### 9.2 Missing Critical Test Cases
+- [ ] **M12.1** `src/agents/orchestrator.py` — 0-results: populate `message` + `suggestions` array in SearchResponse when no candidates match.
+- [ ] **M12.2** `src/language/translator.py` — Translation failure: set `translation_fallback: true` in metadata, return original text.
+- [ ] **M12.3** `src/ingestion/parser.py` — Noisy profile: if quality_score < 0.3, skip profile and increment `failed_profiles` counter.
+- [ ] **M12.4** `src/agents/planner.py` — LLM unavailable: fall back to keyword extraction via spaCy NER.
+- [ ] **M12.5** `src/rationale/generator.py` — LLM unavailable: return template-based rationale (already implemented, verify).
+- [ ] **M12.6** `src/search/vector_search.py` — FAISS index corrupted: auto-rebuild from stored embeddings in PostgreSQL.
+- [ ] **M12.7** `src/search/reranker.py` — Cross-encoder too slow: skip reranking if latency > `cross_encoder_timeout_ms`, return hybrid results directly.
+- [ ] **M12.8** `src/api/middleware/rate_limit.py` — (New) Rate limit exceeded: return 429 with `retry-after` header.
+- [ ] **M12.9** `src/api/middleware/logging.py` — Structured JSON logging: timestamp, method, path, status_code, latency_ms. PII redacted.
+- [ ] **M12.10** `src/api/middleware/metrics.py` — (New) In-memory metrics: request count, error count, latency p50/p95/p99. Exposed via health endpoint.
 
-From PRD Section 20.2:
-- test_cross_lingual_search_matches_hindi_to_english
-- test_multilingual_embedding_same_space
-- test_reranker_improves_precision
-- test_semantic_skill_match
-- test_required_skill_missing_penalizes
-- test_nice_to_have_skill_bonuses
-- test_full_pipeline_end_to_end
-- test_replan_triggered_on_poor_results
-- test_max_replan_limit
-- test_search_with_multilingual_profiles
-- test_search_with_messy_profiles
-- test_search_latency_under_2s
+**Exit Criteria:**
+- [ ] All 8 fallback scenarios verified
+- [ ] Structured JSON logging operational
+- [ ] Metrics tracking with p50/p95/p99
+- [ ] Rate limiting functional
 
-### 9.3 CI Pipeline (.github/workflows/test.yml)
+---
 
-`yaml
-name: CI
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -e ".[dev]"
-      - run: ruff check src/
-      - run: python -m pytest tests/ -v --tb=short
-`
+## Module 13: Testing
 
-### 9.4 Target
+**Purpose:** Comprehensive test suite: unit, integration, e2e. CI pipeline.
 
-- 100+ total tests (up from 57)
-- 80%+ code coverage
-- All tests passing in CI
-- Ruff clean
+**Files:** All files under `tests/`, `.github/workflows/test.yml`
 
-### Exit Criteria for Phase 9
-- [ ] 11 missing test files created
-- [ ] 10+ missing critical test cases added
+### Tasks
+
+- [ ] **M13.1** `tests/test_ingestion/test_extractor.py` — (New) LLM field extraction with mocked LLM.
+- [ ] **M13.2** `tests/test_ingestion/test_normalizer.py` — (New) Field normalization for all profile sources.
+- [ ] **M13.3** `tests/test_language/test_translator.py` — (New) Actual translation + fallback + code-mixed Hinglish via HingBERT.
+- [ ] **M13.4** `tests/test_search/test_vector.py` — (New) FAISS build/search/save/load/incremental add/auto-rebuild.
+- [ ] **M13.5** `tests/test_search/test_bm25.py` — (New) BM25 build/search/save/load.
+- [ ] **M13.6** `tests/test_search/test_reranker.py` — (New) Cross-encoder scoring + timeout fallback.
+- [ ] **M13.7** `tests/test_matching/test_scorer.py` — (New) Weighted scoring + YAML loading + renormalization.
+- [ ] **M13.8** `tests/test_matching/test_confidence.py` — (New) Confidence calculation + variance.
+- [ ] **M13.9** `tests/test_agents/test_orchestrator.py` — (New) Full state machine + replan cycles.
+- [ ] **M13.10** `tests/test_agents/test_reflector.py` — (New) LLM + fallback + anonymization integration.
+- [ ] **M13.11** `tests/test_api/test_health_endpoint.py` — (New) Health endpoint with real model state.
+- [ ] **M13.12** `tests/test_matching/test_listwise_ranker.py` — (New) Plackett-Luce aggregation, LLM judge, fallback.
+- [ ] **M13.13** `tests/test_fairness/test_anonymizer.py` — (New) PII stripped, style artifacts removed, skills preserved.
+- [ ] **M13.14** `tests/test_fairness/test_metrics.py` — (New) DIR halting, equal opportunity, bias detection.
+- [ ] **M13.15** `tests/test_search/test_hybrid.py` — Add critical cases:
+  - `test_cross_lingual_search_matches_hindi_to_english`
+  - `test_multilingual_embedding_same_space`
+  - `test_reranker_improves_precision`
+  - `test_scoped_retrieval_filters_before_search`
+  - `test_bm25_and_faiss_run_in_parallel`
+- [ ] **M13.16** `tests/test_matching/test_skill_matcher.py` — Add critical cases:
+  - `test_semantic_skill_match` ("cloud computing" matches "AWS")
+  - `test_required_skill_missing_penalizes`
+  - `test_nice_to_have_skill_bonuses`
+- [ ] **M13.17** `tests/test_integration/test_end_to_end.py` — Add critical cases:
+  - `test_full_pipeline_end_to_end`
+  - `test_replan_triggered_on_poor_results`
+  - `test_max_replan_limit`
+  - `test_search_with_multilingual_profiles`
+  - `test_search_with_messy_profiles`
+  - `test_search_latency_under_2s`
+- [ ] **M13.18** `.github/workflows/test.yml` — (New) CI pipeline:
+  ```yaml
+  name: CI
+  on: [push, pull_request]
+  jobs:
+    test:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions/setup-python@v5
+          with: { python-version: "3.11" }
+        - run: pip install -e ".[dev]"
+        - run: ruff check src/
+        - run: python -m pytest tests/ -v --tb=short
+  ```
+- [ ] **M13.19** `src/rationale/validator.py` — Add `validate_batch()` for rationale quality statistics. Used in tests.
+
+**Exit Criteria:**
+- [ ] 14 new test files created
+- [ ] 12+ critical test cases added to existing files
 - [ ] CI pipeline running
-- [ ] 100+ tests passing
-- [ ] Ruff clean
+- [ ] 100+ total tests passing
+- [ ] `ruff check src/` clean
+- [ ] 80%+ code coverage
 
 ---
 
-## Phase 10: Documentation + Submission Prep (Days 32-33 overlaps with 9)
+## Module 14: Documentation & Submission
 
-**Mission:** Complete documentation, pitch deck, deploy.
+**Purpose:** README, docs, pitch deck, deployment configuration, final submission.
 
-### 10.1 Update README.md
+**Files:** `README.md`, `docs/*.md`, `Dockerfile`, `docker-compose.yml`, `gradio_deploy.py`, `.github/workflows/test.yml`
 
-- Add new architecture diagram (3-stage + listwise + PII redaction)
-- Add new metrics targets
-- Add setup instructions for all 3 LLM providers
-- Add deployment options table
+### Tasks
 
-### 10.2 Update docs/
+- [ ] **M14.1** `README.md` — Update with:
+  - Problem statement and solution overview
+  - Architecture diagram (5-layer + listwise + PII redaction)
+  - Key metrics targets (precision@10 >= 0.85, etc.)
+  - Quick start with all 3 LLM providers
+  - Deployment options table (local, Docker, Spaces, Railway)
+  - Tech stack summary
+- [ ] **M14.2** `docs/architecture.md` — Update: add listwise ranking, scoped retrieval, RLHF feedback loop, competitive landscape context.
+- [ ] **M14.3** `docs/api.md` — Update: add feedback endpoint, update response schemas with new fields (anonymization_note, fairness_warning).
+- [ ] **M14.4** `docs/evaluation.md` — Update: add listwise ranking evaluation metrics, feedback loop metrics.
+- [ ] **M14.5** `docs/deployment.md` — Update: HuggingFace Spaces config, Railway config, environment variables for all providers.
+- [ ] **M14.6** `Dockerfile` — Fix: expose port 7860 for Gradio, run `build_indexes.py` on startup.
+- [ ] **M14.7** `docker-compose.yml` — Add Gradio service alongside FastAPI app.
+- [ ] **M14.8** `gradio_deploy.py` — (New) HuggingFace Spaces entry point.
+- [ ] **M14.9** `docs/pitch_deck.pdf` — (New) 13-slide pitch deck:
+  1. Title: "Intelligent Candidate Discovery — Beyond Keywords"
+  2. Problem: Keyword matching failure (DevOps example)
+  3. Problem: Indian market challenges
+  4. Competitive Landscape: Why existing tools fall short
+  5. Solution: 5-layer architecture diagram
+  6. Innovation: Agentic workflow (Plan → Execute → Reflect → Re-plan)
+  7. Innovation: Hybrid search + Explainable rationales
+  8. Innovation: Multilingual + PII-free evaluation
+  9. Demo: Search + Scoring sliders + Rationale report
+  10. Metrics: Precision, Recall, Latency, Cross-lingual MRR
+  11. Impact: Passive talent, fairness, accessibility
+  12. Roadmap: Path to production
+  13. Thank you + Contact
 
-- docs/architecture.md: add listwise ranking section, scoped retrieval
-- docs/api.md: update response schemas with new fields
-- docs/evaluation.md: add listwise evaluation metrics
-- docs/deployment.md: add Spaces deployment, Railway config
-
-### 10.3 Pitch Deck (docs/pitch_deck.pdf)
-
-12 slides from PRD Section 22.2:
-1. Title
-2-3. Problem (keyword failure + Indian market)
-4-5. Solution architecture (3-stage + listwise + PII)
-6. Innovation: Listwise Tournament Ranking
-7. Innovation: PII Redaction + Fairness
-8. Demo screenshots
-9. Metrics
-10. Impact
-11. Roadmap
-12. Thank you
-
-### 10.4 Docker / Deployment Fixes
-
-- Dockerfile: expose port 7860 for Gradio, run build_indexes.py on startup
-- docker-compose.yml: add gradio service alongside app
-- Add gradio_deploy.py for HuggingFace Spaces
-- Add railway.json for Railway deployment
-
-### 10.5 Final Commit + Push
-
-- git add -A
-- git commit -m "feat: PRD v2 + Implementation Plan v2 + Blueprint strategies"
-- git push origin main
-
-### Exit Criteria for Phase 10
-- [ ] README and docs updated
-- [ ] Pitch deck PDF ready
-- [ ] Dockerfile fixed, exposed ports
-- [ ] Deployed to Spaces or Railway
-- [ ] GitHub repo public with final commit
+**Exit Criteria:**
+- [ ] README updated with all sections
+- [ ] All 4 docs/*.md files updated
+- [ ] Dockerfile + docker-compose working
+- [ ] Gradio Spaces config ready
+- [ ] Pitch deck PDF complete
+- [ ] GitHub repo public
 
 ---
 
-## Appendix: File Change Summary
+## File Change Summary
 
-| File | Change Type | Phase |
-|------|-------------|-------|
-| src/api/routes/search.py | Bug fix | 0 |
-| src/agents/orchestrator.py | Bug fix + new nodes | 0, 4 |
-| src/agents/executor.py | Bug fix + scoped retrieval | 0, 3 |
-| src/agents/reflector.py | Anonymization integration | 5 |
-| src/agents/planner.py | TinT prompt | 7 |
-| src/language/translator.py | Bug fix + full translation | 0, 7 |
-| src/language/code_mixed.py | New file | 7 |
-| src/fairness/metrics.py | Bug fix + equal opportunity | 0, 5 |
-| src/fairness/anonymizer.py | New file | 5 |
-| src/search/hybrid.py | Parallel + individual scores | 3 |
-| src/search/filters.py | Scoped retriever | 3 |
-| src/search/vector_search.py | Incremental FAISS | 3 |
-| src/ranking/listwise_ranker.py | New file | 4 |
-| src/rationale/generator.py | 12 dimensions + YAML | 6 |
-| src/rationale/templates.py | 12D prompt | 6 |
-| src/rationale/validator.py | 12D validation | 6 |
-| src/ingestion/normalizer.py | Fix raw_text | 1 |
-| src/api/middleware/rate_limit.py | New file | 2 |
-| src/api/middleware/metrics.py | New file | 2 |
-| src/api/middleware/logging.py | Structured JSON | 2 |
-| src/main.py | Add middleware | 0 |
-| src/api/routes/health.py | Fix hardcoded state | 0 |
-| src/ui/app.py | Live analytics, dark mode, layout | 8 |
-| src/ui/components.py | Skeleton, timeline, 12D chart | 8 |
-| src/ui/styles.css | Dark mode CSS | 8 |
-| scripts/generate_data.py | Full rewrite | 1 |
-| scripts/build_indexes.py | Minor update | 1 |
-| scripts/init_db.py | New file | 2 |
-| data/queries/queries.json | New file | 1 |
-| data/ground_truth/ground_truth.json | New file | 1 |
-| configs/scoring_weights.yaml | Add fairness section | 5 |
-| tests/test_matching/test_listwise_ranker.py | New file | 4 |
-| tests/test_fairness/ | New files | 5 |
-| tests/* (11 missing files) | New files | 9 |
-| .github/workflows/test.yml | New file | 9 |
-| Dockerfile | Fix exposed ports | 10 |
-| docker-compose.yml | Add gradio service | 10 |
-| gradio_deploy.py | New file | 10 |
-| README.md | Update | 10 |
-| docs/*.md | Update | 10 |
-| docs/pitch_deck.pdf | New file | 10 |
+| File | Change Type | Module |
+|------|-------------|--------|
+| `src/ingestion/parser.py` | Verify + noisy skip | M1 |
+| `src/ingestion/normalizer.py` | Fix raw_text, verify | M1 |
+| `src/ingestion/extractor.py` | Verify | M1 |
+| `src/ingestion/quality_scorer.py` | Verify | M1 |
+| `src/language/detector.py` | Verify | M2 |
+| `src/language/translator.py` | Bug fix + full translation | M2 |
+| `src/language/multilingual.py` | Verify | M2 |
+| `src/language/code_mixed.py` | **New file** | M2 |
+| `src/search/vector_search.py` | Incremental FAISS + auto-rebuild | M3 |
+| `src/search/bm25_search.py` | Verify | M3 |
+| `src/search/hybrid.py` | Parallel execution + individual scores | M3 |
+| `src/search/reranker.py` | Verify + timeout fallback | M3 |
+| `src/search/filters.py` | ScopedRetriever | M3 |
+| `src/matching/skill_matcher.py` | Verify | M4 |
+| `src/matching/experience_matcher.py` | Verify | M4 |
+| `src/matching/scorer.py` | Verify YAML loading + renormalization | M4 |
+| `src/matching/confidence.py` | Verify | M4 |
+| `src/ranking/listwise_ranker.py` | **New file** | M5 |
+| `src/agents/prompts.py` | Verify + 12D rationale prompt | M6, M7 |
+| `src/agents/planner.py` | TinT prompt | M2, M6 |
+| `src/agents/executor.py` | Scoped retrieval + anonymization wiring | M3, M6, M8 |
+| `src/agents/reflector.py` | Anonymization integration | M6, M8 |
+| `src/agents/orchestrator.py` | Listwise node + feedback node + fix stub | M5, M6, M9 |
+| `src/rationale/generator.py` | 12 dimensions + YAML + anonymized profiles | M7, M8 |
+| `src/rationale/templates.py` | 12D prompt template | M7 |
+| `src/rationale/validator.py` | 12D validation + batch stats | M7 |
+| `src/fairness/anonymizer.py` | **New file** | M8 |
+| `src/fairness/bias_detector.py` | Verify | M8 |
+| `src/fairness/metrics.py` | Bug fix + equal opportunity + DIR halting | M8 |
+| `src/feedback/tracker.py` | **New file** | M9 |
+| `src/feedback/reweighter.py` | **New file** | M9 |
+| `src/feedback/store.py` | **New file** | M9 |
+| `src/api/routes/search.py` | Fix filters + anonymization_note + 0-results | M6, M8, M10, M12 |
+| `src/api/routes/feedback.py` | **New file** | M9, M10 |
+| `src/api/routes/health.py` | Fix hardcoded state | M10 |
+| `src/api/middleware/logging.py` | Structured JSON | M10, M12 |
+| `src/api/middleware/validation.py` | Register middleware | M10 |
+| `src/api/middleware/rate_limit.py` | **New file** | M10, M12 |
+| `src/api/middleware/metrics.py` | **New file** | M10, M12 |
+| `src/main.py` | Register middleware + feedback router | M9, M10 |
+| `src/ui/app.py` | Scoring slider, live analytics, Hindi examples | M11 |
+| `src/ui/components.py` | Slider, timeline, 12D chart, skeleton | M11 |
+| `src/ui/styles.css` | Dark mode, slider styles | M11 |
+| `configs/scoring_weights.yaml` | Add fairness + listwise + feedback configs | M4, M5, M9 |
+| `tests/*` (14 new files + updates) | All test files | M13 |
+| `.github/workflows/test.yml` | **New file** | M13 |
+| `README.md` | Update | M14 |
+| `docs/*.md` (4 files) | Update | M14 |
+| `docs/pitch_deck.pdf` | **New file** | M14 |
+| `Dockerfile` | Fix ports + startup | M14 |
+| `docker-compose.yml` | Add Gradio service | M14 |
+| `gradio_deploy.py` | **New file** | M14 |
