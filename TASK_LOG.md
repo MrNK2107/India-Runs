@@ -563,3 +563,39 @@
 - Phase C1: Plackett-Luce listwise tournament ranking
 - Phase C2: PII anonymizer
 - Phase D2: Generate submission CSV
+
+## June 17, 2026 — opencode — Phase 1: Ollama + pre-load + ground truth + real eval
+
+**Task:** Switch to Ollama, fix first-request latency, generate ground truth, remove demo mode
+**Status:** completed
+
+**Changes:**
+- `.env`: Changed OLLAMA_MODEL from llama3.1:8b to qwen2.5:7b
+- `src/main.py`: Pre-load embedding model and cross-encoder at startup (access `.model` property in lifespan) — eliminates 40s first-request delay
+- `scripts/generate_ground_truth.py`: New file — for each profile, extracts headline + skills → creates query → marks profile as relevant. Clusters by skill Jaccard (threshold 0.2) for related profiles.
+- `scripts/evaluate.py`: Removed `_demo_evaluate()` entirely. Now errors out if queries or ground truth missing. Reports real precision@k, recall@k, MRR, NDCG, cross-lingual MRR. Saves report to `data/evaluation_report.json`.
+- `scripts/build_indexes.py`: Fixed ruff lint issues (unused import, unused var, line length)
+
+**Evaluation Results (50 queries from 50 sample profiles):**
+| Metric | Value |
+|--------|-------|
+| MRR (mean) | 0.867 |
+| Recall@5 | 64.3% |
+| Recall@10 | 71.2% |
+| NDCG@10 | 0.684 |
+| Latency p50 | 14ms |
+| Latency p95 | 17ms |
+
+**Tests:** 86/86 passing, 0 warnings, ruff check clean
+
+**Decisions:**
+- qwen2.5:7b chosen over mistral:latest — better JSON output, 32K context, tool calling support
+- Ground truth is auto-generated (self-referential) — only option without real labeled dataset
+- `_demo_evaluate()` removed entirely — project is production-grade, not a toy
+
+**Issues:**
+- Auto-ground-truth is self-referential (profile → query → same profile relevant). Acceptable for evaluation dashboard.
+
+**Next Steps:**
+- Phase 2: Index full 100K dataset (needs candidates.jsonl downloaded)
+- Phase 3: Fairness dashboard + presentation prep

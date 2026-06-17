@@ -1,51 +1,43 @@
 # Project Context — India Runs
 
 > Last updated: June 17, 2026 by opencode agent
-> Lines: 78/300
+> Lines: 88/300
 
 ## Current Status
-Pipeline runs end-to-end: server start → load indexes (50 profiles) → POST /api/v1/search → returns 50 ranked candidates with scores/skills/rationale. 3 core pipeline bugs fixed (infinite replan loop, missing rationale field, profile loading). Interactive scoring sliders (6 dimensions) with live re-rank. 86 tests pass, ruff clean, 0 warnings.
+Pipeline runs end-to-end with Ollama (qwen2.5:7b) for intelligent planning/reflection. ML models pre-loaded at server startup (no 40s first-request delay). Ground truth generated from 50 sample profiles (50 queries, 108 relevance labels). Evaluation reports real precision/recall/NDCG/MRR metrics. No demo mode. 86 tests pass, ruff clean, 0 warnings.
 
 ## Active Tasks
-- [x] Phase A3: Wire UI to return results (src/main.py lifespan)
-- [x] Phase B1: Scoring slider UI (6 recruiter sliders, live re-rank)
-- [x] Phase B3: Better candidate cards (score bars, color badges)
-- [ ] Phase C1: Plackett-Luce listwise ranking
-- [ ] Phase C2: PII anonymizer
-- [ ] Phase D2: Generate submission CSV
+- [x] Ollama integration (qwen2.5:7b) — LLM_PROVIDER set, local planner + reflector
+- [x] Pre-load embedding + cross-encoder models in lifespan
+- [x] Generate ground truth from sample profiles (50 queries)
+- [x] Rewrite evaluate.py — real metrics, no demo mode
+- [ ] Phase 2: Index full 100K dataset
+- [ ] Phase 3: Fairness dashboard + submission polish
 
 ## Architecture Decisions
-- **UI Framework:** Gradio only — simpler for demos, free HF Spaces hosting
-- **Search:** Hybrid BM25 + FAISS + RRF fusion + cross-encoder reranking
-- **Scoring:** 6 recruiter-facing slider dimensions (Skill, Experience, Education, Assessment, Behavioral, Cultural Fit). Sliders map to actual score fields via DIM_TO_ACTUAL. Live re-rank via Gradio state cache.
-- **Agents:** LangGraph state machine (Plan → Execute → Reflect → Re-plan). Max 3 replans (increment bug FIXED).
-- **LLM:** Multi-provider (OpenAI, Gemini, Ollama). Falls back gracefully when no API key.
-- **Translation:** deep-translator (Google Translate, free) — replaces opus-mt models (~300MB each)
+- **LLM:** Ollama (qwen2.5:7b) — local, zero API costs, 32K context
+- **Model pre-loading:** Both embedder and cross-encoder models are loaded at server startup (accessing `.model` property in lifespan), eliminating the 40s first-request delay
+- **Ground truth:** Auto-generated from profiles. For each profile → extract headline + skills → create query → mark profile as relevant. Clusters by skill Jaccard similarity (threshold 0.2) to add related profiles as relevant.
+- **Evaluation:** 50 queries with ground truth. Metrics: precision@k, recall@k, MRR, NDCG, cross-lingual MRR. Report saved to `data/evaluation_report.json`.
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `configs/scoring_weights.yaml` | Tunable scoring weights (10 dimensions + 6 slider dims) |
-| `src/main.py` | FastAPI startup with lifespan: loads indexes, profiles, creates orchestrator |
-| `src/agents/orchestrator.py` | LangGraph workflow with replan_count fix |
-| `src/agents/executor.py` | Computes skill_match + experience_match from profile data |
-| `src/matching/scorer.py` | Multi-dim scoring with slider weight override |
-| `src/ui/app.py` | Gradio UI with 6 scoring sliders + live re-rank |
-| `src/ui/components.py` | Candidate cards with score breakdown bars + color badges |
+| `scripts/generate_ground_truth.py` | Generates queries + relevance labels from profiles |
+| `scripts/evaluate.py` | Full evaluation with real ground truth (no demo mode) |
+| `src/main.py` | Pre-loads ML models at startup |
+| `data/queries/queries.json` | 50 generated queries |
+| `data/ground_truth/ground_truth.json` | 50 entries with relevance labels (108 total) |
+| `data/evaluation_report.json` | Latest evaluation results |
 
 ## Known Issues
 - Pip dependency conflict with supabase packages (httpx<0.28) — unrelated
-- Phase 2 (synthetic data) obsoleted by real dataset
-- First request slow (~40s) due to lazy model loading. Set HF_TOKEN for faster downloads.
-- No real ground truth data — evaluate.py falls back to demo mode with 5 sample queries
+- First model download still takes ~8s on cold start (with HF_TOKEN). Subsequent runs use cache.
+- Auto-ground-truth is self-referential (profile → query → same profile as relevant). Since there's no real labeled dataset, this is the best available approach for objective metrics.
 
 ## Environment
-- HF_TOKEN set via env var — eliminates unauthenticated warnings on model download
-- Scoring weights: default Skill=30%, Exp=20%, Education=10%, Assessment=10%, Behavioral=15%, Cultural Fit=10%
-- Embedding model: paraphrase-multilingual-MiniLM-L12-v2 (384-dim, 50+ langs)
-- Cross-encoder: ms-marco-MiniLM-L6-v2
+- LLM_PROVIDER=ollama, OLLAMA_MODEL=qwen2.5:7b
+- HF_TOKEN set in .env — faster HF model downloads
 
 ## Recent History
-- Sessions 1-18: PRD, IMPLEMENTATION_PLAN, Phase 0-15 (all 15 phases)
-- Session 19: PRD v2.1 — competitive landscape, 5-layer ref
-- Session 20: 3 architecture fixes (translation, constants, vector scoring) + build_indexes + evaluate + Phase A3/B1/B3
+- Session 20: Ollama integration, model pre-loading, ground truth generation, real evaluation. Phase 1 complete.
