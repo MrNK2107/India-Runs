@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from src.core.models import Rationale, SearchResultItem
 
 
@@ -15,36 +17,92 @@ MATCH_COLORS = {
 }
 
 
+def _score_bar(label: str, value: float, color: str = "#3b82f6") -> str:
+    pct = max(0, min(100, int(value * 100)))
+    return f"""
+    <div style="display:flex;align-items:center;margin:2px 0;gap:6px;">
+        <span style="font-size:11px;color:#6b7280;width:85px;text-align:right;">{label}</span>
+        <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;">
+            <div style="width:{pct}%;height:100%;background:{color};border-radius:4px;"></div>
+        </div>
+        <span style="font-size:11px;color:#374151;width:30px;text-align:right;">{pct}%</span>
+    </div>"""
+
+
+def _score_badge(value: float) -> str:
+    pct = int(value * 100)
+    if pct >= 70:
+        color = "#10b981"
+        label = "strong"
+    elif pct >= 50:
+        color = "#3b82f6"
+        label = "good"
+    elif pct >= 30:
+        color = "#f59e0b"
+        label = "potential"
+    else:
+        color = "#ef4444"
+        label = "weak"
+    return f"""
+    <div class="score-badge score-{label}"
+         style="background:{color}15;color:{color};border:1px solid {color}30;">
+        <span style="font-size:20px;font-weight:700;">{pct}</span>
+        <span style="font-size:11px;opacity:0.8;">%</span>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">{label}</div>
+    </div>"""
+
+
 def create_candidate_card(item: SearchResultItem) -> str:
-    color = MATCH_COLORS.get("good_match", "#6b7280")
-    score_pct = int(item.scores.overall * 100)
+    s = item.scores
+    bars = ""
+    bars += _score_bar("Overall", s.overall, "#6366f1")
+    bars += _score_bar("Skill", s.skill_match, "#10b981")
+    bars += _score_bar("Experience", s.experience_match, "#3b82f6")
+    bars += _score_bar("Semantic", s.semantic_similarity, "#8b5cf6")
+    bars += _score_bar("Keyword", s.keyword_match, "#f59e0b")
+    if s.education_match is not None:
+        bars += _score_bar("Education", s.education_match, "#ec4899")
+    if s.cross_encoder_score is not None:
+        bars += _score_bar("AI Rerank", s.cross_encoder_score, "#06b6d4")
+
     skills_html = "".join(
-        f'<span class="skill-chip matched">{s}</span>' for s in item.matched_skills[:8]
+        f'<span class="skill-chip matched">{skill}</span>' for skill in item.matched_skills[:8]
     )
     missing_html = "".join(
-        f'<span class="skill-chip missing">{s}</span>' for s in item.missing_skills[:5]
+        f'<span class="skill-chip missing">{skill}</span>' for skill in item.missing_skills[:5]
     )
 
     return f"""
     <div class="candidate-card">
-        <div style="display:flex;justify-content:space-between;align-items:start;">
-            <div>
-                <strong style="font-size:18px;">{item.name}</strong>
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;">
+            <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <strong style="font-size:18px;">{item.name}</strong>
+                    <span style="font-size:12px;color:#9ca3af;">#{item.rank}</span>
+                </div>
                 <div style="color:#6b7280;margin-top:4px;">
                     {item.current_title or 'N/A'}
-                    {f" at {item.current_company}" if item.current_company else ""}
+                    {(
+            f' <span style="color:#9ca3af;">at</span> '
+            f'<strong>{item.current_company}</strong>'
+            if item.current_company else ""
+        )}
                 </div>
                 <div style="color:#9ca3af;font-size:13px;margin-top:2px;">
                     {item.location or 'Location N/A'}
                     {_bullet_years(item.experience_years)}
                 </div>
             </div>
-            <div class="score-badge score-strong" style="background:{color}20;color:{color};">
-                {score_pct}%
-            </div>
+            {_score_badge(item.scores.overall)}
         </div>
         <div style="margin-top:12px;">
-            <div style="font-size:13px;color:#374151;margin-bottom:4px;">Skills</div>
+            <div style="font-size:13px;color:#374151;margin-bottom:4px;">
+                Score Breakdown
+                <span style="color:#9ca3af;font-size:11px;">(confidence: {s.confidence:.0%})</span>
+            </div>
+            {bars}
+        </div>
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:4px;">
             {skills_html}
             {missing_html}
         </div>
@@ -60,22 +118,40 @@ def create_score_radar_chart(scores: dict) -> str:
     ]
     values = [int(scores.get(k, 0) * 100) for k in dim_keys]
 
-    points = " ".join(
-        f"{i * 72},{100 - v}" if i < 5 else f"0,{100 - v}"
-        for i, v in enumerate(values)
+    cx, cy, r = 100, 100, 80
+    angles = [math.radians(90 - i * 72) for i in range(5)]
+    outer_points = " ".join(
+        f"{cx + r * math.cos(a):.1f},{cy - r * math.sin(a):.1f}" for a in angles
+    )
+    data_points = " ".join(
+        f"{cx + v * r / 100 * math.cos(a):.1f},{cy - v * r / 100 * math.sin(a):.1f}"
+        for v, a in zip(values, angles)
     )
 
+    labels = "".join(
+        f'<text x="{cx + (r + 18) * math.cos(a):.1f}" y="{cy - (r + 18) * math.sin(a):.1f}" '
+        f'font-size="11" text-anchor="middle" fill="#374151">{dim}</text>'
+        for dim, a in zip(dims, angles)
+    )
+    grid_lines = "".join(
+        f'<polygon points="{cx + r * frac * math.cos(a):.1f},{cy - r * frac * math.sin(a):.1f} '
+        for frac in [0.25, 0.5, 0.75]
+        for a in angles
+    )
+    grid_lines = ""
+    for frac in [0.25, 0.5, 0.75]:
+        pts = " ".join(
+            f"{cx + r * frac * math.cos(a):.1f},{cy - r * frac * math.sin(a):.1f}" for a in angles
+        )
+        grid_lines += f'<polygon points="{pts}" fill="none" stroke="#e5e7eb" stroke-width="1"/>'
+
     return f"""
-    <svg width="200" height="200" viewBox="0 0 200 200">
-        <polygon points="100,10 190,60 190,160 100,190 10,160 10,60"
-                 fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
-        <polygon points="{points}"
-                 fill="#3b82f640" stroke="#3b82f6" stroke-width="2"/>
-        {''.join(
-            f'<text x="{i * 72 if i < 5 else 0}" y="{105 if i >= 5 else 100 - values[i]}'
-            f'" font-size="11" text-anchor="middle" fill="#374151">{dim}</text>'
-            for i, dim in enumerate(dims)
-        )}
+    <svg width="220" height="220" viewBox="0 0 220 220">
+        <polygon points="{outer_points}" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+        {grid_lines}
+        <polygon points="{data_points}" fill="#3b82f640" stroke="#3b82f6" stroke-width="2"/>
+        <circle cx="{cx}" cy="{cy}" r="2" fill="#3b82f6"/>
+        {labels}
     </svg>
     """
 
