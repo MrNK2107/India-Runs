@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.api.middleware.logging import RequestLoggingMiddleware
-from src.api.routes.health import init_health
+from src.api.middleware.validation import InputValidationMiddleware
+from src.api.routes.health import init_health, set_model_loaded
 from src.api.routes.health import router as health_router
 from src.api.routes.ingest import router as ingest_router
 from src.api.routes.profiles import init_profiles
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     embedder = MultilingualEmbedder()
     logger.info("Pre-loading embedding model...")
     _ = embedder.model
+    set_model_loaded("embedding", True)
     logger.info("Embedding model loaded")
 
     vector_search = VectorSearch()
@@ -63,9 +65,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loaded BM25 index with {bm25_search.size} documents")
 
     hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
-    reranker = CrossEncoderReranker(timeout_ms=500)
-    logger.info("Pre-loading cross-encoder model...")
+    timeout_ms = get_settings().cross_encoder_timeout_ms
+    reranker = CrossEncoderReranker(timeout_ms=timeout_ms)
+    logger.info(f"Pre-loading cross-encoder model (timeout={timeout_ms}ms)...")
     _ = reranker.model
+    set_model_loaded("cross_encoder", True)
     logger.info("Cross-encoder model loaded")
     scorer = CandidateScorer()
 
@@ -106,6 +110,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(InputValidationMiddleware)
 app.include_router(search_router, prefix="/api/v1")
 app.include_router(profiles_router, prefix="/api/v1")
 app.include_router(ingest_router, prefix="/api/v1")

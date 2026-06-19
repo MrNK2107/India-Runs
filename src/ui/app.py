@@ -136,11 +136,29 @@ async def search_handler(
         results_html += create_candidate_card(item)
     results_html += "</div>"
 
+    # Metadata header
+    md = response.search_metadata
+    methods_str = " + ".join(md.methods_used) if md and md.methods_used else "hybrid"
+    badges = ""
+    if md and md.listwise_ranked:
+        badges += '<span class="badge badge-listwise">\U0001f3c6 Listwise Ranked</span>'
+    badges += '<span class="badge badge-pii">\U0001f6e1\ufe0f PII Anonymized</span>'
+    badges += f'<span class="badge badge-method">{methods_str}</span>'
+    metadata_header = f"""
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+        {badges}
+        <span style="font-size:12px;color:#9ca3af;margin-left:auto;">
+            {response.total_candidates_searched} candidates searched
+            | {response.processing_time_ms}ms
+        </span>
+    </div>
+    """
+
     rationales_html = ""
     for item in response.results[:5]:
         rationales_html += create_rationale_panel(item.rationale, item.name)
 
-    return results_html, rationales_html, results_json
+    return metadata_header + results_html, rationales_html, results_json
 
 
 def re_rank_handler(results_json: str, *slider_values: float) -> str:
@@ -267,7 +285,13 @@ def create_app() -> gr.Blocks:
                 analytics_html = gr.HTML(label="Analytics Dashboard")
                 refresh_btn = gr.Button("Refresh Analytics", variant="secondary")
                 refresh_btn.click(
-                    fn=lambda: create_analytics_dashboard([]),
+                    fn=create_analytics_dashboard,
+                    inputs=[results_state],
+                    outputs=[analytics_html],
+                )
+                search_btn.click(
+                    fn=create_analytics_dashboard,
+                    inputs=[results_state],
                     outputs=[analytics_html],
                 )
 

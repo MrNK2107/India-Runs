@@ -33,3 +33,10 @@ proficiency_scores:
 rrf_k: 60
 max_replan_cycles: 3
 min_good_matches_for_pass: 8
+
+# Listwise tournament ranking (Plackett-Luce)
+listwise_ranking:
+  enabled: true
+  group_size: 5
+  max_em_iterations: 20
+  num_tournament_rounds: 3

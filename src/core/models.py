@@ -303,6 +303,9 @@ class SearchMetadata(BaseModel):
     methods_used: list[str] = Field(default_factory=list)
     replan_count: int = 0
     total_time_ms: int = 0
+    listwise_ranked: bool = False
+    pii_anonymized: bool = True
+    total_profiles_in_index: int = 0
 
 
 class SearchResponse(BaseModel):

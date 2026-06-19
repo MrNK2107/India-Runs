@@ -18,14 +18,27 @@ logger = logging.getLogger(__name__)
 
 class RationaleGenerator:
     def __init__(self) -> None:
-        self.client = get_llm_client()
+        self._client = None
         settings = get_settings()
         self.model = settings.openai_model
+
+    @property
+    def client(self):
+        if self._client is None:
+            try:
+                self._client = get_llm_client()
+            except Exception:
+                logger.warning("LLM client unavailable for rationale generator")
+                self._client = None
+        return self._client
 
     async def generate(
         self, match: MatchResult, profile: Profile, job_requirements: dict,
     ) -> Rationale:
         try:
+            if self.client is None:
+                raise RuntimeError("LLM client unavailable")
+
             prompt = self._build_prompt(match, profile, job_requirements)
             from langchain_core.messages import HumanMessage, SystemMessage
 
