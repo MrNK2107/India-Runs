@@ -9,6 +9,7 @@ Reference: https://en.wikipedia.org/wiki/Plackett%E2%80%93Luce_model
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -208,7 +209,10 @@ class PlackettLuceRanker:
         try:
             from langchain_core.messages import HumanMessage
 
-            response = await self.client.ainvoke([HumanMessage(content=prompt)])
+            response = await asyncio.wait_for(
+                self.client.ainvoke([HumanMessage(content=prompt)]),
+                timeout=30.0,
+            )
             content = response.content if hasattr(response, "content") else str(response)
             return self._parse_ranking(content, len(group))
         except Exception as e:

@@ -65,7 +65,7 @@ def _ensure_search_system() -> bool:
 
     hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
     reranker = CrossEncoderReranker()
-    _ = reranker.model
+    _ = reranker.model  # Lazy load — disabled by default, ok if None
     scorer = CandidateScorer()
 
     profiles = ProfileStore()

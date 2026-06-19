@@ -65,8 +65,12 @@ class PlannerAgent:
             )
             content = response.content if hasattr(response, "content") else str(response)
             content = _strip_json_fences(content)
-            parsed = json.loads(content)
-            return ParsedQuery(**parsed)
+            try:
+                parsed = json.loads(content)
+                return ParsedQuery(**parsed)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Planner LLM parse failed: {e}. Raw: {content[:150]}")
+                return self._fallback_parse(raw_query)
         except Exception as e:
             logger.warning(f"Planner LLM failed, using fallback: {e}")
             return self._fallback_parse(raw_query)

@@ -31,20 +31,20 @@ PLANNER_SYSTEM_PROMPT = (
     "- Location preferences (city, remote preference)\n"
     "- Education requirements\n"
     "- Any exclusion criteria\n\n"
-    "Output valid JSON matching this schema:\n"
+    "Output ONLY valid JSON, no other text. "
+    "Do NOT wrap in markdown code fences. Return raw JSON only.\n"
+    "Schema:\n"
     '{\n'
     '  "required_skills": [{"name": "...", "importance": "required",\n'
-    '    "min_proficiency": "...", "min_years": null}],\n'
-    '  "preferred_skills": [{"name": "...", "importance": "nice_to_have", "weight": 0.5}],\n'
+    '    "min_proficiency": null, "min_years": null}],\n'
+    '  "preferred_skills": [],\n'
     '  "experience": {"min_years": null, "max_years": null, "industry": null},\n'
     '  "location": {"city": null, "state": null, "country": null,\n'
     '    "remote_ok": false, "hybrid_ok": false},\n'
     '  "education": {"min_degree": null, "field": null},\n'
     '  "filters": {"exclude_companies": [], "include_companies": [],\n'
     '    "must_have_certifications": [], "languages_required": []}\n'
-    '}\n\n'
-    "If the query is ambiguous, make reasonable assumptions and note them.\n"
-    "Output ONLY valid JSON, no other text."
+    '}\n'
 )
 
 REFLECTOR_SYSTEM_PROMPT = (

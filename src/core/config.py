@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.1:8b"
     log_level: str = "INFO"
     max_replan_cycles: int = 3
-    cross_encoder_timeout_ms: int = 5000
+    cross_encoder_timeout_ms: int = 0
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
