@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -54,7 +55,10 @@ class ReflectorAgent:
                 SystemMessage(content=REFLECTOR_SYSTEM_PROMPT),
                 HumanMessage(content=f"Candidates:\n{candidates_text}"),
             ]
-            response = await self.client.ainvoke(messages)
+            response = await asyncio.wait_for(
+                self.client.ainvoke(messages),
+                timeout=15.0,
+            )
             content = response.content if hasattr(response, "content") else str(response)
             evaluations = json.loads(content)
 

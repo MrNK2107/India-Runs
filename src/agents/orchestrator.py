@@ -47,11 +47,28 @@ _SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\
 
 
 def _is_simple_query(query: str) -> bool:
+    """Detect queries that can skip LLM parsing and use rule-based extraction."""
     words = query.strip().split()
     if len(words) <= 3:
         return True
+    # Queries matching skill/location patterns known by the rule-based parser
     if _SIMPLE_QUERY_RE.match(query):
-        return len(words) <= 3
+        return len(words) <= 4
+    # Queries with 4-6 words that look like skill+role+location combos
+    # e.g. "Python developer AWS Bangalore", "Java spring boot Mumbai"
+    if len(words) <= 6:
+        from src.core.constants import INDIAN_CITIES
+        lower = query.strip().lower()
+        # Check if it contains a known Indian city
+        has_city = any(c.lower() in lower for c in INDIAN_CITIES)
+        # Check if it looks like a tech skills query (common tech terms)
+        tech_keywords = {"python", "java", "aws", "react", "node", "javascript", "typescript",
+                         "golang", "rust", "sql", "docker", "kubernetes", "devops", "ml",
+                         "machine learning", "data", "full stack", "backend", "frontend",
+                         "sde", "software", "engineering", "developer", "engineer", "analyst",
+                         "manager", "architect", "lead", "intern", "fresher"}
+        has_tech = any(kw in lower for kw in tech_keywords)
+        return has_city or has_tech
     return False
 
 

@@ -78,7 +78,7 @@ class ExecutorAgent:
         self.reranker = reranker
         self.scorer = scorer
         self.profile_store = profiles
-        self._rerank_top_k = 20
+        self._rerank_top_k = 100
 
     async def execute(
         self,
