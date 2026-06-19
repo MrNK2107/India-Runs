@@ -4,8 +4,10 @@ import logging
 import math
 import os
 
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+# Force offline mode — must be set before any sentence-transformers imports.
+# Overrides are redundant with main.py but critical if this module is loaded first.
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from src.core.config import get_settings
 
@@ -17,15 +19,11 @@ def _sigmoid(x: float) -> float:
 
 
 class CrossEncoderReranker:
-    """Reranks candidates using hybrid RRF scores.
+    """Reranks candidates using cross-encoder for fine-grained relevance scoring.
 
-    Cross-encoder reranking is disabled by default due to a
-    sentence-transformers 3.x bug causing infinite HuggingFace hub
-    HEAD request loops. Falls back to sigmoid-normalized hybrid
-    search scores.
-
-    Set `cross_encoder_enabled: true` in config to attempt cross-encoder
-    loading, or set env `CROSS_ENCODER_ENABLED=true`.
+    Uses cross-encoder/ms-marco-MiniLM-L-6-v2 with offline-mode enforcement
+    to prevent HuggingFace hub HEAD request loops. Model is pre-loaded eagerly
+    during construction so search requests never trigger lazy initialization.
     """
 
     def __init__(
@@ -40,43 +38,33 @@ class CrossEncoderReranker:
         self.timeout_ms = (
             timeout_ms if timeout_ms is not None else settings.cross_encoder_timeout_ms
         )
-        self.enabled = os.environ.get("CROSS_ENCODER_ENABLED", "false").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
-        if self.enabled:
-            logger.info("Cross-encoder is ENABLED — will attempt model loading on first use")
+        self.enabled = True
+        # Pre-load eagerly so first search call doesn't trigger lazy init
+        self._load_model()
 
-    def _try_load_model(self):
-        """Attempt to load cross-encoder, return None if it fails."""
+    def _load_model(self) -> None:
+        """Load the cross-encoder model synchronously."""
         if self._model_loaded:
-            return self._model
-        if not self.enabled:
-            self._model_loaded = True
-            logger.info("Cross-encoder disabled — skipping model load")
-            return None
+            return
         try:
             logger.info("Loading cross-encoder model: %s", self.model_name)
             from sentence_transformers import CrossEncoder
 
             self._model = CrossEncoder(self.model_name)
-            # Force tokenizer initialization with a dummy predict
+            # Force tokenizer and model initialization with a dummy warmup
             _ = self._model.predict(
-                [("test query", "test document")], show_progress_bar=False
+                [("warmup query", "warmup document")], show_progress_bar=False
             )
             self._model_loaded = True
             logger.info("Cross-encoder model loaded and ready")
-            return self._model
         except Exception as e:
             logger.warning("Failed to load cross-encoder model: %s", e)
             self._model_loaded = True  # don't retry
             self._model = None
-            return None
 
     @property
     def model(self):
-        return self._try_load_model()
+        return self._model
 
     def rerank(
         self,
@@ -84,11 +72,11 @@ class CrossEncoderReranker:
         candidates: list[tuple[str, str, float]],
         top_k: int = 10,
     ) -> list[tuple[str, float]]:
-        """Rerank candidates. Falls back to RRF scores if cross-encoder unavailable."""
+        """Rerank candidates using cross-encoder. Falls back to RRF scores if model unavailable."""
         if not candidates:
             return []
 
-        model = self._try_load_model()
+        model = self._model
         if model is None:
             return [(c[0], _sigmoid(c[2])) for c in candidates[:top_k]]
 
@@ -109,7 +97,7 @@ class CrossEncoderReranker:
         return scored[:top_k]
 
     def score_pair(self, query: str, document: str) -> float:
-        model = self._try_load_model()
+        model = self._model
         if model is None:
             return 0.5
         try:

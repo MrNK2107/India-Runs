@@ -1,13 +1,13 @@
 # Internal scoring model — 7 dimensions, must sum to 1.0
 # Used for backend candidate ranking (FR-7.2)
 scoring_weights:
-  semantic_similarity: 0.25
-  keyword_match: 0.15
-  skill_match: 0.30
-  experience_match: 0.15
+  semantic_similarity: 0.20
+  keyword_match: 0.10
+  skill_match: 0.25
+  experience_match: 0.10
   location_match: 0.05
   education_match: 0.05
-  cross_encoder_score: 0.05
+  cross_encoder_score: 0.25
 
 # UI-facing slider model — 6 dimensions, must sum to 1.0
 # Used for interactive recruiter demo (FR-7.2a)

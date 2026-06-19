@@ -1,29 +1,15 @@
 # India Runs — Intelligent Candidate Discovery
 
-> 🏆 **Track 1: Data & AI Challenge** — India Runs by Redrob AI
+> **Track 1: The Data & AI Challenge** — India Runs by Redrob AI × Hack2Skill
 >
-> Intelligent Candidate Discovery & Ranking System with agentic AI matching, 100+ profiles, explainable rationale, and submission-ready output.
-
-## Key Differentiators
-
-| Feature | What it does |
-|---|---|
-| **Hybrid Semantic Search** | FAISS vector (384-dim) + BM25 Okapi + RRF fusion — finds candidates by meaning AND keywords |
-| **Plackett-Luce Listwise Ranking** | Candidates compete in tournament groups judged by an LLM, aggregated via MM algorithm |
-| **Agentic Workflow (LangGraph)** | Plan → Execute → Listwise Rank → Reflect → Re-plan (up to 3 cycles) with fallback |
-| **Multilingual Indian Queries** | 30+ Indian languages supported. Code-mixed Hinglish queries handled via TinT prompting |
-| **Interactive Scoring Sliders** | 6 recruiter-facing dimensions — adjust weights, results re-rank instantly |
-| **Every Match Explained** | Template-based rationale with skill match table, strengths, gaps, recommendation |
-| **PII Anonymization** | Names, emails redacted before LLM evaluation — prevents bias |
-| **Live Fairness Dashboard** | Real-time bias metrics (university, city, language parity) in Gradio |
-| **Ollama Local LLM** | Runs fully offline with qwen3:4b — no API keys needed |
+> Multi-query candidate ranking pipeline with hybrid semantic search, cross-encoder reranking, and 7-dimensional weighted scoring. Runs fully offline on CPU in under 8 seconds.
 
 ## Quick Start
 
 ### Prerequisites
 - Python 3.11+
-- Ollama (optional — for LLM-powered features; fallback parser works without it)
-- NVIDIA GPU with 6GB+ VRAM (optional — CPU mode works, GPU accelerates embeddings)
+- 16GB RAM (CPU only — no GPU required)
+- No network required after model caching
 
 ### Setup
 
@@ -34,119 +20,111 @@ pip install -e ".[dev]"
 # 2. Build indexes (100 sample profiles)
 python scripts/build_indexes.py
 
-# 3. Launch FastAPI server (port 8000)
-uvicorn src.main:app --host 0.0.0.0 --port 8000
+# 3. Generate submission CSV
+python rank.py --out submission.csv
 
-# 4. Launch Gradio UI (port 7860) — OR use FastAPI
-python src/ui/app.py
-```
-
-### Generate Submission CSV
-
-```bash
-# Generates submission.csv with 100 ranked candidates
-python generate_submission.py
-
-# Validate output
+# 4. Validate output
 python validate_submission.py submission.csv
 ```
 
-## Quick Test
-
+**Reproduction command** (per submission spec):
 ```bash
-# Search via API (simple query — 0.5s response)
-curl -X POST http://localhost:8000/api/v1/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "software engineer python java", "max_results": 5}'
-
-# Full agentic pipeline query (~60s with Ollama)
-curl -X POST http://localhost:8000/api/v1/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "I need a senior backend developer with Python and AWS in Bangalore"}'
-
-# Health check
-curl http://localhost:8000/api/v1/health
+python rank.py --candidates ./candidates.jsonl --out ./submission.csv
 ```
+
+## How It Works
+
+### Pipeline Overview
+
+```
+17 Strategic Queries → Hybrid Search (FAISS + BM25) → Cross-Encoder Reranking → 7-Dimension Scoring → Deduplicated Merge → Ranked CSV
+```
+
+### Multi-Query Strategy
+
+The system runs **17 diverse queries** covering distinct roles and tech stacks:
+
+| Category | Queries |
+|----------|---------|
+| Core Engineering | software engineer (Python/Java/React), backend (Python/Django/AWS/SQL), frontend (React/TypeScript), full stack (React/Node.js/MongoDB) |
+| Data & ML | data scientist (Python/PyTorch/SQL), data engineer (Spark/Airflow/Kafka), ML engineer (deep learning/NLP/CV) |
+| Cloud & DevOps | devops engineer (Docker/K8s/AWS/Terraform), cloud architect (AWS/Azure/GCP) |
+| Mobile & Backend | mobile (Android/Kotlin/Swift/React Native), Java (Spring Boot/Microservices), Python (FastAPI/Flask/Django) |
+| Leadership | engineering manager (distributed systems), product manager (analytics/roadmap) |
+| Domain | cybersecurity, QA automation, solutions architect |
+
+Each query retrieves up to 50 candidates. Results are merged with deduplication, keeping the **best score per candidate** across all queries.
+
+### Scoring (7 Dimensions)
+
+| Dimension | Weight | Source |
+|-----------|--------|--------|
+| Skill Match | 25% | Fuzzy alias matching + semantic overlap |
+| Cross-Encoder Score | 25% | ms-marco-MiniLM-L-6-v2 relevance |
+| Semantic Similarity | 20% | FAISS cosine distance (384-dim) |
+| Keyword Match | 10% | BM25 Okapi score |
+| Experience Match | 10% | Years of experience vs requirement |
+| Location Match | 5% | City-based matching |
+| Education Match | 5% | Degree + institution quality |
+
+Weights are configurable in `configs/scoring_weights.yaml`.
+
+### Key Components
+
+1. **Hybrid Search** — FAISS (Inner Product, 384-dim) + BM25 Okapi with Reciprocal Rank Fusion (k=60)
+2. **Cross-Encoder Reranker** — `cross-encoder/ms-marco-MiniLM-L-6-v2` for fine-grained query-document relevance. Pre-loaded eagerly at startup; runs in offline mode.
+3. **Multi-Dimension Scorer** — Weighted combination of 7 signals (skill overlap, semantic similarity, keyword match, cross-encoder relevance, experience, location, education)
+4. **Honeypot Resistance** — Cross-encoder's deep profile-text comprehension naturally filters out candidates with internally inconsistent profiles (e.g., 8 years experience at a 3-year-old company)
+
+### Performance
+
+- **Full pipeline**: ~7.5 seconds (17 queries × 50 candidates each)
+- **Cross-encoder load time**: ~0.3s (cached locally)
+- **Memory**: Under 4GB RAM
+- **Network**: Zero — all models cached and run offline
+
+## Submission Files
+
+| File | Description |
+|------|-------------|
+| `rank.py` | Main entry point (`python rank.py --candidates ./candidates.jsonl --out ./submission.csv`) |
+| `submission.csv` | 100 ranked candidates (validated) |
+| `validate_submission.py` | Hackathon format validator |
+| `submission_metadata.yaml` | Submission metadata for portal |
+| `src/search/reranker.py` | Cross-encoder reranker (enabled, pre-loaded) |
+| `src/agents/executor.py` | Executor agent with score-sorted ranking |
+| `src/agents/orchestrator.py` | Query parsing with city-skill separation |
 
 ## Architecture
 
 ```
-Profiles (JSON) → Normalizer → Embedder → FAISS + BM25 Indexes
-                                      ↓
-Job Query → Planner → Hybrid Search → Reranker → Scorer → Plackett-Luce Ranker
-                          ↓                                          ↓
-                     Reflector ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← 
-                          ↓
-                     Rationale Generator → Final Ranked Output → submission.csv
+src/
+├── core/                   # Pydantic models, config, constants
+├── ingestion/             # Profile parsing & normalization
+├── language/              # Multilingual embeddings
+├── search/                # FAISS, BM25, hybrid search, cross-encoder reranker
+├── matching/              # Skill alias matching, 7-dimension scorer
+├── agents/                # Planner, Executor, Orchestrator (LangGraph)
+├── ranking/               # Plackett-Luce listwise ranker
+├── rationale/             # Template-based rationale generator
+├── fairness/              # Bias detection & PII anonymization
+├── api/                   # FastAPI REST endpoints
+└── ui/                    # Gradio interactive dashboard
 ```
-
-### Pipeline Stages
-
-1. **Planner** — LLM (Ollama qwen3:4b) or rule-based fallback parses query into structured params
-2. **Executor** — Hybrid search (FAISS + BM25 + RRF) → Optional cross-encoder → 7-dimension scoring
-3. **Plackett-Luce Ranker** — Tournament-based listwise ranking with LLM judges (disabled by default for speed)
-4. **Reflector** — LLM evaluates result quality; triggers re-plan if < threshold good matches
-5. **Rationale Generator** — Template-based explanation for every candidate (always works)
-
-### Scoring Dimensions
-
-| Dimension | Source | Configurable |
-|---|---|---|
-| Skill Match | Fuzzy alias matching + semantic overlap | ✔ via slider |
-| Experience Match | Years of experience vs requirement | ✔ via slider |
-| Education Match | Degree level + institution tier | ✔ via slider |
-| Semantic Similarity | FAISS cosine distance | — |
-| Keyword Match | BM25 Okapi score | — |
-| Cross-Encoder Score | MiniLM-L12 cross-encoder (disabled by default) | — |
-| Assessment Score | Synthetic (for recruiter input) | ✔ via slider |
-| Behavioral Signals | Profile-derived signals | ✔ via slider |
-| Cultural Fit | Industry/domain alignment | ✔ via slider |
-
-### Tech Stack
-- **Search**: FAISS (IVF, 384-dim) + BM25 Okapi + RRF
-- **Ranking**: Plackett-Luce listwise model with MM aggregation
-- **Agents**: LangGraph state machine (Plan → Execute → Reflect → Re-plan)
-- **ML**: sentence-transformers, FAISS, rank_bm25, scikit-learn
-- **LLM**: Ollama (qwen3:4b) — runs locally, no API keys
-- **API**: FastAPI + Uvicorn (port 8000)
-- **UI**: Gradio (port 7860) — search, sliders, rationale, live analytics
 
 ## Running Tests
 
 ```bash
-pytest tests/ -v
-# → 150 tests passing
+python -m pytest tests/ -q --tb=short
+# → 150 passed
 ```
 
-## Project Structure
+## AI Tools Declaration
 
-```
-india-runs/
-├── configs/                    # YAML configuration files
-│   ├── settings.yaml           # Application settings
-│   ├── scoring_weights.yaml    # Scoring dimension weights
-│   └── models.yaml             # ML model configurations
-├── src/
-│   ├── core/                   # Pydantic models, config, constants
-│   │   ├── models.py          # 33 Pydantic models (Profile, MatchResult, etc.)
-│   │   ├── config.py          # Settings, LLM client factory
-│   │   └── constants.py       # 200+ Indian companies, cities, universities
-│   ├── ingestion/             # Profile parsing, normalization
-│   ├── language/              # Code-mixed detection, multilingual embeddings
-│   ├── search/                # FAISS, BM25, hybrid search, reranker
-│   ├── matching/              # Skill alias matching, weighted scorer
-│   ├── agents/                # LangGraph: Planner, Executor, Reflector, Orchestrator
-│   ├── ranking/               # Plackett-Luce listwise tournament ranker
-│   ├── rationale/             # Template-based rationale generator
-│   ├── fairness/              # Bias detector, metrics, PII anonymizer
-│   ├── api/                   # FastAPI routes (search, health, profiles)
-│   └── ui/                    # Gradio app with live analytics dashboard
-├── scripts/                   # Index builder, evaluation harness
-├── tests/                     # 150 unit/integration tests
-├── data/
-│   ├── samples/               # 100 sample profiles for demo
-│   └── indexes/               # FAISS + BM25 indexes
-├── submission.csv             # Generated submission (100 ranked candidates)
-├── generate_submission.py     # Submission generator script
-└── validate_submission.py     # Hackathon output validator
-```
+Used Claude for architectural design, code review, and test-driven development.
+GitHub Copilot for autocomplete during implementation.
+No candidate data was fed to any external LLM after dataset release.
+
+## License
+
+This project is submitted to the India Runs by Redrob AI hackathon (Track 1).
