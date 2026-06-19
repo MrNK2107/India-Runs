@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.evaluate import (
+from src.evaluation.metrics import (
     cross_lingual_mrr,
     latency_stats,
     mean_reciprocal_rank,

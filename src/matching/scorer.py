@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
 
 from src.core.config import get_scoring_config
 from src.core.models import MatchScores
+from src.matching.confidence import compute_confidence
 
 DIM_TO_ACTUAL: dict[str, str] = {
     "skill_match": "skill_match",
@@ -74,7 +74,7 @@ class CandidateScorer:
         overall = weighted_sum / total_weight if total_weight > 0 else 0.0
         overall = max(0.0, min(1.0, overall))
 
-        confidence = self.compute_confidence({k: v for k, v in components.items() if v is not None})
+        confidence = compute_confidence({k: v for k, v in components.items() if v is not None})
 
         return MatchScores(
             overall=overall,
@@ -88,9 +88,4 @@ class CandidateScorer:
             confidence=confidence,
         )
 
-    def compute_confidence(self, scores: dict[str, float | None]) -> float:
-        values = [v for v in scores.values() if v is not None]
-        if len(values) < 2:
-            return 0.5
-        std = float(np.std(values))
-        return max(0.0, min(1.0, 1.0 - std))
+

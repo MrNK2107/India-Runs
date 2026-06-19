@@ -157,8 +157,9 @@ class Orchestrator:
         slider_weights: dict[str, float] | None = None,
     ) -> SearchResponse:
         parsed = _parse_query_text(raw_query)
+        start_time = int(time.time() * 1000)
         results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
-        elapsed = int(time.time() * 1000)
+        elapsed = int(time.time() * 1000) - start_time
         items: list[SearchResultItem] = []
         for i, r in enumerate(results[:100], start=1):
             rationale = self.rationale_gen._template_rationale(r, None)
@@ -188,7 +189,7 @@ class Orchestrator:
             query_id="",
             total_candidates_searched=len(results),
             results=items,
-            processing_time_ms=0,
+            processing_time_ms=elapsed,
             search_metadata=SearchMetadata(
                 methods_used=["turbo"],
                 replan_count=0,

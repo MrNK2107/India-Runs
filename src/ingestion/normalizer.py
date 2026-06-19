@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any
 
 from src.core.models import (
@@ -147,7 +148,7 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
     personal.languages_spoken = languages
 
     return Profile(
-        profile_id=raw.get("candidate_id", ""),
+        profile_id=raw.get("candidate_id") or str(uuid.uuid4()),
         source=ProfileSource.REDROB,
         raw_text=raw_text,
         personal=personal,

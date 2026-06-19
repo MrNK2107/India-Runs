@@ -81,9 +81,8 @@ def test_scorer_overall(sample_profile):
 
 
 def test_scorer_confidence():
-    from src.matching.scorer import CandidateScorer
-    scorer = CandidateScorer()
-    conf = scorer.compute_confidence({"a": 0.8, "b": 0.7, "c": 0.9})
+    from src.matching.confidence import compute_confidence
+    conf = compute_confidence({"a": 0.8, "b": 0.7, "c": 0.9})
     assert 0.0 <= conf <= 1.0
 
 

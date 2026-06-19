@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.api.middleware.validation import InputValidationMiddleware
-from src.api.routes.health import init_health, set_model_loaded
+from src.api.routes.health import init_health, set_model_loaded, set_index_size
 from src.api.routes.health import router as health_router
 from src.api.routes.ingest import router as ingest_router
 from src.api.routes.profiles import init_profiles
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _start_time = time.time()
+    init_health(index_size=0)
     logger.info("Starting India Runs — Intelligent Candidate Discovery")
     indexes_dir = DATA_DIR / "indexes"
     indexes_dir.mkdir(parents=True, exist_ok=True)
@@ -92,10 +95,10 @@ async def lifespan(app: FastAPI):
     orchestrator = Orchestrator(planner, executor, reflector)
 
     init_orchestrator(orchestrator)
-    init_health(index_size=vector_search.size)
+    set_index_size(vector_search.size)
     init_profiles(profiles)
 
-    logger.info("System initialized successfully (%.1fs)", 0.0)
+    logger.info("System initialized successfully (%.1fs)", time.time() - _start_time)
 
     yield
 

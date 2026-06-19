@@ -116,7 +116,7 @@ class ProfileStore:
                 line = f.readline()
             raw = json.loads(line)
             profile = normalize_redrob(raw)
-        except Exception:
+        except (IOError, OSError, ValueError, json.JSONDecodeError):
             return None
 
         if len(self._cache) >= self._max_cache:
