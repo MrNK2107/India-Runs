@@ -244,6 +244,7 @@ def _build_raw_text(
 
 
 def _build_signals(rs: dict[str, Any], certs: list[str]) -> Signals:
+    salary_range = rs.get("expected_salary_range_inr_lpa", {}) or {}
     return Signals(
         is_passive=not rs.get("open_to_work_flag", True),
         last_active_date=rs.get("last_active_date"),
@@ -251,4 +252,25 @@ def _build_signals(rs: dict[str, Any], certs: list[str]) -> Signals:
         github_activity_score=rs.get("github_activity_score"),
         certifications=certs,
         has_portfolio=rs.get("linkedin_connected", False),
+        # Full platform signals
+        profile_completeness_score=rs.get("profile_completeness_score"),
+        recruiter_response_rate=rs.get("recruiter_response_rate"),
+        avg_response_time_hours=rs.get("avg_response_time_hours"),
+        saved_by_recruiters_30d=rs.get("saved_by_recruiters_30d"),
+        profile_views_received_30d=rs.get("profile_views_received_30d"),
+        applications_submitted_30d=rs.get("applications_submitted_30d"),
+        connection_count=rs.get("connection_count"),
+        endorsements_received=rs.get("endorsements_received"),
+        search_appearance_30d=rs.get("search_appearance_30d"),
+        interview_completion_rate=rs.get("interview_completion_rate"),
+        offer_acceptance_rate=rs.get("offer_acceptance_rate"),
+        notice_period_days=rs.get("notice_period_days"),
+        preferred_work_mode=rs.get("preferred_work_mode"),
+        willing_to_relocate=rs.get("willing_to_relocate"),
+        verified_email=rs.get("verified_email"),
+        verified_phone=rs.get("verified_phone"),
+        expected_salary_min=salary_range.get("min"),
+        expected_salary_max=salary_range.get("max"),
+        linkedin_connected=rs.get("linkedin_connected"),
+        skill_assessment_scores=rs.get("skill_assessment_scores", {}),
     )

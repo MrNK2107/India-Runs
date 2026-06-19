@@ -13,6 +13,12 @@ from src.core.models import (
 from src.core.profile_store import ProfileStore
 from src.matching.scorer import CandidateScorer
 from src.matching.skill_matcher import SKILL_ALIASES, SkillMatcher
+from src.matching.behavioral_scorer import (
+    compute_behavioral_score,
+    compute_career_trajectory,
+    compute_skill_proficiency,
+    detect_honeypot,
+)
 from src.search.filters import SearchFilter
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
@@ -131,14 +137,26 @@ class ExecutorAgent:
             )
             exp_match = min(1.0, total_years / 10.0)
 
+            # Honeypot penalty — impossible profiles get heavy penalty but stay in set
+            honeypot_reason = detect_honeypot(profile)
+            honeypot_penalty = 0.15 if honeypot_reason else 1.0
+
+            # Behavioral & career signals
+            behavioral_score = compute_behavioral_score(profile.signals)
+            career_trajectory = compute_career_trajectory(profile)
+            skill_prof = compute_skill_proficiency(profile, all_req)
+
             scores_dict: dict[str, float | None] = {
                 "semantic_similarity": vec_scores.get(pid),
                 "keyword_match": bm25_scores.get(pid),
-                "skill_match": skill_overlap,
-                "experience_match": exp_match,
+                "skill_match": skill_overlap * honeypot_penalty,
+                "experience_match": exp_match * honeypot_penalty,
                 "location_match": None,
                 "education_match": None,
-                "cross_encoder_score": rerank_score,
+                "cross_encoder_score": rerank_score * honeypot_penalty if rerank_score else None,
+                "behavioral_score": behavioral_score * honeypot_penalty,
+                "career_trajectory_score": career_trajectory * honeypot_penalty,
+                "skill_proficiency_score": skill_prof * honeypot_penalty,
             }
 
             match_scores = self.scorer.compute_overall(scores_dict, slider_weights)

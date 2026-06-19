@@ -114,6 +114,7 @@ class Education(BaseModel):
 
 
 class Signals(BaseModel):
+    """Behavioral signals from the Redrob platform — 20+ dimensions."""
     is_passive: bool = False
     last_active_date: str | None = None
     open_to_work: bool | None = None
@@ -122,6 +123,27 @@ class Signals(BaseModel):
     certifications: list[str] = Field(default_factory=list)
     publications: list[str] = Field(default_factory=list)
     speaking_engagements: list[str] = Field(default_factory=list)
+    # Full redrob_signals enrichment
+    profile_completeness_score: float | None = None
+    recruiter_response_rate: float | None = None
+    avg_response_time_hours: float | None = None
+    saved_by_recruiters_30d: int | None = None
+    profile_views_received_30d: int | None = None
+    applications_submitted_30d: int | None = None
+    connection_count: int | None = None
+    endorsements_received: int | None = None
+    search_appearance_30d: int | None = None
+    interview_completion_rate: float | None = None
+    offer_acceptance_rate: float | None = None
+    notice_period_days: int | None = None
+    preferred_work_mode: str | None = None
+    willing_to_relocate: bool | None = None
+    verified_email: bool | None = None
+    verified_phone: bool | None = None
+    expected_salary_min: float | None = None
+    expected_salary_max: float | None = None
+    linkedin_connected: bool | None = None
+    skill_assessment_scores: dict[str, float] = Field(default_factory=dict)
 
 
 class ProfileMetadata(BaseModel):
@@ -218,6 +240,9 @@ class MatchScores(BaseModel):
     location_match: float | None = Field(default=None, ge=0.0, le=1.0)
     education_match: float | None = Field(default=None, ge=0.0, le=1.0)
     cross_encoder_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    behavioral_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    career_trajectory_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    skill_proficiency_score: float | None = Field(default=None, ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0)
 
 
