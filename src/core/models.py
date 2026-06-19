@@ -80,6 +80,7 @@ class ProfessionalInfo(BaseModel):
     total_experience_years: float | None = None
     industry: str | None = None
     employment_type: EmploymentType | None = None
+    seniority_level: int | None = None
 
 
 class Skill(BaseModel):

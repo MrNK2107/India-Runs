@@ -116,6 +116,9 @@ def build_indexes(
     bm25_search.save()
     logger.info(f"BM25 index saved: {bm25_search.size} documents")
 
+    offset_path = index_dir / "offset_index.json"
+    _save_offset_index(profiles_path, profile_ids, offset_path)
+
     elapsed = time.perf_counter() - start
     logger.info(f"All indexes built successfully in {elapsed:.1f}s")
 
@@ -138,6 +141,48 @@ def _build_document_text(profile: Profile) -> str:
     if profile.professional and profile.professional.current_company:
         parts.append(profile.professional.current_company)
     return " ".join(parts)
+
+
+def _save_offset_index(
+    profiles_path: Path, profile_ids: list[str], output_path: Path,
+) -> None:
+    import json
+    if profiles_path.suffix != ".jsonl":
+        logger.info("Skipping offset index (not a JSONL file)")
+        return
+    pid_set = set(profile_ids)
+    offsets: dict[str, int] = {}
+    with open(profiles_path, encoding="utf-8") as f:
+        while True:
+            offset = f.tell()
+            line = f.readline()
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+                cand_id = (
+                    raw.get("profile_id")
+                    or raw.get("candidate_id")
+                    or raw.get("id")
+                )
+                profile_nested = raw.get("profile", {})
+                if isinstance(profile_nested, dict) and not cand_id:
+                    cand_id = (
+                        profile_nested.get("profile_id")
+                        or profile_nested.get("candidate_id")
+                        or profile_nested.get("id")
+                    )
+                if cand_id and str(cand_id) in pid_set:
+                    offsets[str(cand_id)] = offset
+            except json.JSONDecodeError:
+                continue
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(offsets, f)
+    logger.info(f"Offset index saved: {len(offsets)} entries")
 
 
 def main():
