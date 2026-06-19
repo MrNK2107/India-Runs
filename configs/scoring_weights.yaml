@@ -1,23 +1,26 @@
-# Internal scoring model — 7 dimensions, must sum to 1.0
+# Internal scoring model — 10 dimensions, must sum to 1.0
 # Used for backend candidate ranking (FR-7.2)
 scoring_weights:
-  semantic_similarity: 0.20
+  semantic_similarity: 0.15
   keyword_match: 0.10
-  skill_match: 0.25
-  experience_match: 0.10
-  location_match: 0.05
-  education_match: 0.05
+  skill_match: 0.18
+  experience_match: 0.08
+  location_match: 0.00
+  education_match: 0.00
   cross_encoder_score: 0.25
+  behavioral_score: 0.12
+  career_trajectory_score: 0.07
+  skill_proficiency_score: 0.05
 
 # UI-facing slider model — 6 dimensions, must sum to 1.0
 # Used for interactive recruiter demo (FR-7.2a)
 slider_weights:
-  skill_match: 0.30
-  experience_match: 0.25
-  education_match: 0.15
+  skill_match: 0.25
+  experience_match: 0.20
+  education_match: 0.10
   assessment_score: 0.15
-  behavioral_signals: 0.10
-  cultural_fit: 0.05
+  behavioral_signals: 0.20
+  cultural_fit: 0.10
 
 skill_importance_weights:
   required: 1.0
