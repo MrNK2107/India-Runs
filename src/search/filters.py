@@ -25,12 +25,14 @@ class SearchFilter:
         location_filter = self.filters.location.lower()
         city = profile.personal.location.city
         country = profile.personal.location.country
-        if city and location_filter in city.lower():
+        if location_filter in ("remote", "anywhere"):
             return True
-        if country and location_filter in country.lower():
+        if city and city.lower() == location_filter:
+            return True
+        if country and country.lower() == location_filter:
             return True
         for exp in profile.experience:
-            if exp.location and location_filter in exp.location.lower():
+            if exp.location and exp.location.lower().strip() == location_filter:
                 return True
         if self.filters.remote_ok and profile.personal.location.is_remote_ok:
             return True

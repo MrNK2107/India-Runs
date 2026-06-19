@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import math
 import time
 
 from sentence_transformers import CrossEncoder
 
 from src.core.config import get_settings
+
+
+def _sigmoid(x: float) -> float:
+    return 1.0 / (1.0 + math.exp(-x))
 
 
 class CrossEncoderReranker:
@@ -54,11 +59,11 @@ class CrossEncoderReranker:
 
         scored: list[tuple[str, float]] = []
         for pid, score in zip(ids, scores):
-            scored.append((pid, float(score)))
+            scored.append((pid, _sigmoid(float(score))))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:top_k]
 
     def score_pair(self, query: str, document: str) -> float:
         score = self.model.predict([(query, document)], show_progress_bar=False)
-        return float(score[0])
+        return _sigmoid(float(score[0]))
