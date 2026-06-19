@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import TypedDict
 
@@ -11,14 +12,17 @@ from src.agents.planner import PlannerAgent
 from src.agents.reflector import ReflectorAgent
 from src.core.config import get_scoring_config
 from src.core.models import (
-    MatchRecommendation,
+    ExperienceRequirements,
+    LocationRequirements,
     MatchResult,
     ParsedQuery,
+    QueryFilters,
     Rationale,
     SearchMetadata,
     SearchResponse,
     SearchResultItem,
 )
+from src.rationale.generator import RationaleGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,53 @@ class AgentState(TypedDict):
     slider_weights: dict[str, float]
 
 
+_SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\s+", re.IGNORECASE)
+
+
+def _is_simple_query(query: str) -> bool:
+    words = query.strip().split()
+    if len(words) <= 3:
+        return True
+    if _SIMPLE_QUERY_RE.match(query):
+        return len(words) <= 3
+    return False
+
+
+STOP_WORDS = frozenset({
+    "find", "search", "get", "show", "need", "looking", "for", "with",
+    "and", "the", "a", "an", "in", "at", "on", "to", "of", "is", "are",
+    "i", "we", "you", "he", "she", "it", "they", "me", "my", "our",
+    "senior", "junior", "lead", "head", "principal", "staff",
+    "developer", "engineer", "manager", "architect", "analyst",
+    "experience", "role", "position", "job", "opening", "hire",
+    "dev", "sr", "jr", "intern", "fresher",
+})
+
+
+def _parse_query_text(text: str) -> ParsedQuery:
+    from src.core.constants import INDIAN_CITIES
+    from src.core.models import RequiredSkill
+
+    lower = text.strip().lower()
+
+    city = None
+    for c in sorted(INDIAN_CITIES, key=len, reverse=True):
+        if c.lower() in lower:
+            city = c
+            break
+
+    words = lower.split()
+    skill_words = [w for w in words if w not in STOP_WORDS and len(w) > 1]
+    deduped = list(dict.fromkeys(skill_words))
+
+    return ParsedQuery(
+        required_skills=[RequiredSkill(name=s) for s in deduped[:10]],
+        experience=ExperienceRequirements(),
+        location=LocationRequirements(city=city),
+        filters=QueryFilters(),
+    )
+
+
 class Orchestrator:
     def __init__(
         self, planner: PlannerAgent, executor: ExecutorAgent, reflector: ReflectorAgent,
@@ -44,6 +95,7 @@ class Orchestrator:
         self.planner = planner
         self.executor = executor
         self.reflector = reflector
+        self.rationale_gen = RationaleGenerator()
         config = get_scoring_config()
         self.max_replans = config.get("max_replan_cycles", 3)
         self.min_good_matches = config.get("min_good_matches_for_pass", 8)
@@ -76,6 +128,9 @@ class Orchestrator:
         self, raw_query: str,
         slider_weights: dict[str, float] | None = None,
     ) -> SearchResponse:
+        if _is_simple_query(raw_query):
+            return await self._turbo_run(raw_query, slider_weights)
+
         initial_state: AgentState = {
             "raw_query": raw_query,
             "parsed_query": None,
@@ -91,6 +146,50 @@ class Orchestrator:
         }
         final_state = await self.graph.ainvoke(initial_state)
         return self._build_response(final_state)
+
+    async def _turbo_run(
+        self, raw_query: str,
+        slider_weights: dict[str, float] | None = None,
+    ) -> SearchResponse:
+        parsed = _parse_query_text(raw_query)
+        results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
+        elapsed = int(time.time() * 1000)
+        items: list[SearchResultItem] = []
+        for i, r in enumerate(results[:100], start=1):
+            rationale = self.rationale_gen._template_rationale(r, None)
+            items.append(
+                SearchResultItem(
+                    rank=i,
+                    profile_id=r.profile_id,
+                    name=r.name,
+                    current_title=r.current_title,
+                    current_company=r.current_company,
+                    location=r.location,
+                    experience_years=r.experience_years,
+                    scores=r.scores,
+                    matched_skills=r.matched_skills,
+                    missing_skills=r.missing_skills,
+                    rationale=Rationale(
+                        summary=rationale.summary,
+                        strengths=rationale.strengths,
+                        gaps=rationale.gaps,
+                        skill_details=rationale.skill_details,
+                        experience_analysis=rationale.experience_analysis,
+                        recommendation=rationale.recommendation,
+                    ),
+                )
+            )
+        return SearchResponse(
+            query_id="",
+            total_candidates_searched=len(results),
+            results=items,
+            processing_time_ms=0,
+            search_metadata=SearchMetadata(
+                methods_used=["turbo"],
+                replan_count=0,
+                total_time_ms=elapsed,
+            ),
+        )
 
     async def _plan_node(self, state: AgentState) -> dict:
         query = state["raw_query"]
@@ -157,32 +256,44 @@ class Orchestrator:
 
         for i, r in enumerate(results_raw[:100], start=1):
             if isinstance(r, dict):
-                scores = r.get("scores", {})
-                if not isinstance(scores, dict):
-                    scores = {}
+                from src.core.models import MatchScores
+                scores_dict = r.get("scores", {})
+                if not isinstance(scores_dict, dict):
+                    scores_dict = {}
+                match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
+                match_result = MatchResult(
+                    query_id="",
+                    profile_id=r.get("profile_id", ""),
+                    rank=i,
+                    name=r.get("name", ""),
+                    current_title=r.get("current_title"),
+                    current_company=r.get("current_company"),
+                    location=r.get("location"),
+                    experience_years=r.get("experience_years"),
+                    scores=match_scores,
+                    matched_skills=r.get("matched_skills", []),
+                    missing_skills=r.get("missing_skills", []),
+                )
+                rationale = self.rationale_gen._template_rationale(match_result, None)
                 items.append(
                     SearchResultItem(
                         rank=i,
-                        profile_id=r.get("profile_id", ""),
-                        name=r.get("name", ""),
-                        current_title=r.get("current_title"),
-                        current_company=r.get("current_company"),
-                        location=r.get("location"),
-                        experience_years=r.get("experience_years"),
-                        scores=scores,
-                        matched_skills=r.get("matched_skills", []),
-                        missing_skills=r.get("missing_skills", []),
+                        profile_id=match_result.profile_id,
+                        name=match_result.name,
+                        current_title=match_result.current_title,
+                        current_company=match_result.current_company,
+                        location=match_result.location,
+                        experience_years=match_result.experience_years,
+                        scores=match_scores,
+                        matched_skills=match_result.matched_skills,
+                        missing_skills=match_result.missing_skills,
                         rationale=Rationale(
-                            summary="",
-                            strengths=r.get("matched_skills", [])[:3],
-                            gaps=r.get("missing_skills", [])[:3],
-                            recommendation=(
-                                MatchRecommendation.STRONG
-                                if scores.get("overall", 0) >= 0.7
-                                else MatchRecommendation.GOOD
-                                if scores.get("overall", 0) >= 0.5
-                                else MatchRecommendation.POTENTIAL
-                            ),
+                            summary=rationale.summary,
+                            strengths=rationale.strengths,
+                            gaps=rationale.gaps,
+                            skill_details=rationale.skill_details,
+                            experience_analysis=rationale.experience_analysis,
+                            recommendation=rationale.recommendation,
                         ),
                     )
                 )

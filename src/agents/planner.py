@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -40,7 +41,9 @@ class PlannerAgent:
                 SystemMessage(content=PLANNER_SYSTEM_PROMPT),
                 HumanMessage(content=tint_query),
             ]
-            response = await self.client.ainvoke(messages)
+            response = await asyncio.wait_for(
+                self.client.ainvoke(messages), timeout=15.0,
+            )
             content = response.content if hasattr(response, "content") else str(response)
             parsed = json.loads(content)
             return ParsedQuery(**parsed)
@@ -64,7 +67,9 @@ class PlannerAgent:
                 SystemMessage(content=PLANNER_SYSTEM_PROMPT),
                 HumanMessage(content=prompt),
             ]
-            response = await self.client.ainvoke(messages)
+            response = await asyncio.wait_for(
+                self.client.ainvoke(messages), timeout=15.0,
+            )
             content = response.content if hasattr(response, "content") else str(response)
             parsed = json.loads(content)
             return ParsedQuery(**parsed)
