@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from difflib import SequenceMatcher
 
 from src.core.models import (
     MatchMetadata,
@@ -13,72 +12,29 @@ from src.core.models import (
 )
 from src.core.profile_store import ProfileStore
 from src.matching.scorer import CandidateScorer
+from src.matching.skill_matcher import SKILL_ALIASES, SkillMatcher
 from src.search.filters import SearchFilter
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
-
-SKILL_ALIASES: dict[str, list[str]] = {
-    "python": ["python3", "py"],
-    "javascript": ["js", "ecmascript", "es6"],
-    "typescript": ["ts"],
-    "react": ["reactjs", "react.js"],
-    "vue": ["vuejs", "vue.js"],
-    "angular": ["angularjs", "angular.js"],
-    "node.js": ["nodejs", "node"],
-    "kubernetes": ["k8s"],
-    "machine learning": ["ml"],
-    "artificial intelligence": ["ai"],
-    "natural language processing": ["nlp"],
-    "sql": ["mysql", "postgresql", "postgres", "pl/sql"],
-    "git": ["github", "gitlab", "bitbucket"],
-    "rest api": ["rest", "restful", "restful api"],
-    "tensorflow": ["tf"],
-    "pytorch": ["torch"],
-    "fastapi": ["fast api"],
-    "deep learning": ["dl"],
-    "computer vision": ["cv"],
-    "ci/cd": ["ci", "cd", "continuous integration", "continuous deployment"],
-    "statistics": ["statistical analysis", "statistical modeling"],
-}
-
-_ALIAS_TO_CANONICAL: dict[str, str] = {}
-for _canonical, _aliases in SKILL_ALIASES.items():
-    for _a in _aliases:
-        _ALIAS_TO_CANONICAL[_a] = _canonical
-
-
-def _canonical_skill(name: str) -> str:
-    return _ALIAS_TO_CANONICAL.get(name, name)
-
 
 def _skill_match_score(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> float:
     if not required_names:
         return 1.0
+    _matcher = SkillMatcher(similarity_threshold=0.8)
     matched = 0
-    skill_names_lower = {s.name.lower() for s in profile_skills}
-    raw_lower = raw_text.lower() if raw_text else ""
     for rn in required_names:
-        rn_lower = _canonical_skill(rn.lower())
-        if rn_lower in skill_names_lower:
+        result = _matcher.find_best_match(rn, profile_skills)
+        if result is not None:
             matched += 1
             continue
-        aliases = SKILL_ALIASES.get(rn_lower, [])
-        if any(a in skill_names_lower for a in aliases):
-            matched += 1
-            continue
-        fuzzy_match = False
-        for sn in skill_names_lower:
-            if SequenceMatcher(None, rn_lower, sn).ratio() >= 0.8:
-                fuzzy_match = True
-                break
-        if fuzzy_match:
-            matched += 1
-            continue
+        raw_lower = raw_text.lower() if raw_text else ""
+        rn_lower = rn.lower()
         if rn_lower in raw_lower:
             matched += 1
             continue
+        aliases = SKILL_ALIASES.get(rn_lower, [])
         if any(a in raw_lower for a in aliases):
             matched += 1
     return matched / len(required_names)
@@ -89,28 +45,18 @@ def _match_skills_detail(
 ) -> tuple[list[str], list[str]]:
     matched: list[str] = []
     missing: list[str] = []
-    skill_names_lower = {s.name.lower() for s in profile_skills}
-    raw_lower = raw_text.lower() if raw_text else ""
+    _matcher = SkillMatcher(similarity_threshold=0.8)
     for rn in required_names:
-        rn_lower = _canonical_skill(rn.lower())
-        if rn_lower in skill_names_lower:
+        result = _matcher.find_best_match(rn, profile_skills)
+        if result is not None:
             matched.append(rn)
             continue
-        aliases = SKILL_ALIASES.get(rn_lower, [])
-        if any(a in skill_names_lower for a in aliases):
-            matched.append(rn)
-            continue
-        fuzzy_found = False
-        for sn in skill_names_lower:
-            if SequenceMatcher(None, rn_lower, sn).ratio() >= 0.8:
-                fuzzy_found = True
-                break
-        if fuzzy_found:
-            matched.append(rn)
-            continue
+        raw_lower = raw_text.lower() if raw_text else ""
+        rn_lower = rn.lower()
         if rn_lower in raw_lower:
             matched.append(rn)
             continue
+        aliases = SKILL_ALIASES.get(rn_lower, [])
         if any(a in raw_lower for a in aliases):
             matched.append(rn)
             continue

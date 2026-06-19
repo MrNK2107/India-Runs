@@ -129,8 +129,6 @@ class ProfileMetadata(BaseModel):
     original_language: str = "en"
     was_translated: bool = False
     translation_confidence: float | None = None
-    embedding_vector_id: int | None = None
-    bm25_doc_id: int | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     data_quality_score: float = Field(default=0.0, ge=0.0, le=1.0)

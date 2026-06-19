@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import math
-import time
 
 from sentence_transformers import CrossEncoder
 
@@ -40,16 +40,23 @@ class CrossEncoderReranker:
         ids = [c[0] for c in candidates]
 
         if self.timeout_ms > 0:
-            start = time.perf_counter()
+            timeout_s = self.timeout_ms / 1000.0
+            loop = asyncio.get_event_loop()
             try:
-                scores = self.model.predict(pairs, show_progress_bar=False)
-            except Exception:
+                scores = loop.run_until_complete(
+                    asyncio.wait_for(
+                        loop.run_in_executor(
+                            None, self.model.predict, pairs, False,
+                        ),
+                        timeout=timeout_s,
+                    )
+                )
+            except asyncio.TimeoutError:
                 return [
                     (candidates[i][0], candidates[i][2])
                     for i in range(min(top_k, len(candidates)))
                 ]
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            if elapsed_ms > self.timeout_ms:
+            except Exception:
                 return [
                     (candidates[i][0], candidates[i][2])
                     for i in range(min(top_k, len(candidates)))

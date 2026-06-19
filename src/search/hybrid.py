@@ -18,7 +18,7 @@ class SearchCache:
 
     def _make_key(self, query: str, top_k: int) -> str:
         raw = f"{query}::top_k={top_k}"
-        return hashlib.md5(raw.encode()).hexdigest()
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     def get(self, query: str, top_k: int) -> list[tuple[str, float]] | None:
         key = self._make_key(query, top_k)
