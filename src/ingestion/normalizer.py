@@ -16,6 +16,7 @@ from src.core.models import (
     Skill,
     WorkExperience,
 )
+from src.extraction.pipeline import FieldExtractorPipeline
 
 _PROFICIENCY_MAP = {
     "beginner": ProficiencyLevel.BEGINNER,
@@ -59,12 +60,15 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
         native_language=None,
     )
 
+    extracted = FieldExtractorPipeline().extract(raw)
+
     professional = ProfessionalInfo(
-        current_title=prof.get("current_title"),
-        current_company=prof.get("current_company"),
-        total_experience_years=prof.get("years_of_experience"),
-        industry=prof.get("current_industry"),
+        current_title=extracted.current_title.value or prof.get("current_title"),
+        current_company=extracted.current_company.value or prof.get("current_company"),
+        total_experience_years=extracted.total_experience_years.value or prof.get("years_of_experience"),
+        industry=extracted.industry.value or prof.get("current_industry"),
         employment_type=None,
+        seniority_level=extracted.seniority_level.value,
     )
 
     skills = [
@@ -91,7 +95,7 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
             end_date=entry.get("end_date"),
             is_current=entry.get("is_current", False),
             description=entry.get("description", ""),
-            location=entry.get("industry"),
+            location=entry.get("location"),
         )
         for entry in raw.get("career_history", [])
     ]
@@ -122,6 +126,21 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
     signals = _build_signals(raw.get("redrob_signals", {}), certs)
 
     raw_text = _build_raw_text(prof, experience, skills, education, certs, languages)
+
+    from src.matching.skill_matcher import SKILL_ALIASES as _KNOWN_ALIASES
+    existing_skill_names = {s.name.lower() for s in skills}
+    raw_lower = raw_text.lower()
+    for _canon, _aliases in _KNOWN_ALIASES.items():
+        if _canon not in existing_skill_names and _canon in raw_lower:
+            skills.append(
+                Skill(
+                    name=_canon.title(),
+                    category=_infer_skill_category(_canon),
+                    evidence="Extracted from profile text",
+                    confidence=0.6,
+                )
+            )
+            existing_skill_names.add(_canon)
 
     if native_langs:
         personal.native_language = native_langs[0]

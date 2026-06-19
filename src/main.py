@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,7 +14,7 @@ from src.api.routes.profiles import router as profiles_router
 from src.api.routes.search import init_orchestrator
 from src.api.routes.search import router as search_router
 from src.core.config import DATA_DIR
-from src.core.models import Profile
+from src.core.profile_store import ProfileStore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,41 +69,18 @@ async def lifespan(app: FastAPI):
     logger.info("Cross-encoder model loaded")
     scorer = CandidateScorer()
 
-    profiles: dict[str, Profile] = {}
-    profiles_loaded = 0
-
-    from src.ingestion.normalizer import normalize_redrob
-
+    profiles = ProfileStore()
     sample_path = DATA_DIR / "samples" / "sample_candidates.json"
     if sample_path.exists():
-        with open(sample_path) as f:
-            data = json.load(f)
-            profiles_list = data if isinstance(data, list) else [data]
-            for p in profiles_list:
-                try:
-                    profile = normalize_redrob(p)
-                    profiles[profile.profile_id] = profile
-                    profiles_loaded += 1
-                except Exception:
-                    pass
+        profiles.load_sample(sample_path)
 
-    cand_path = DATA_DIR / "profiles" / "candidates.jsonl"
-    if cand_path.exists():
-        from src.ingestion.parser import ProfileParser
-        parser = ProfileParser()
-        for raw in parser.parse_jsonl_file(cand_path):
-            if raw.get("candidate_id", raw.get("id", "")) in profiles:
-                continue
-            if profiles_loaded >= vector_search.size:
-                break
-            try:
-                profile = normalize_redrob(raw)
-                profiles[profile.profile_id] = profile
-                profiles_loaded += 1
-            except Exception:
-                pass
-
-    logger.info(f"Loaded {len(profiles)} profiles into memory")
+    offset_index_path = DATA_DIR / "indexes" / "offset_index.json"
+    if offset_index_path.exists():
+        profiles.load_offset_index(offset_index_path)
+        logger.info(f"ProfileStore ready: {len(profiles)} profiles available")
+    else:
+        logger.info("No offset index found — profiles will be indexed on first access")
+    logger.info("ProfileStore initialized (lazy load)")
 
     planner = PlannerAgent()
     executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
@@ -115,7 +91,7 @@ async def lifespan(app: FastAPI):
     init_health(index_size=vector_search.size)
     init_profiles(profiles)
 
-    logger.info("System initialized successfully")
+    logger.info("System initialized successfully (%.1fs)", 0.0)
 
     yield
 
@@ -134,3 +110,7 @@ app.include_router(search_router, prefix="/api/v1")
 app.include_router(profiles_router, prefix="/api/v1")
 app.include_router(ingest_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, log_level="info")

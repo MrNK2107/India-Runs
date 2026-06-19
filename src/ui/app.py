@@ -6,7 +6,10 @@ import time
 
 import gradio as gr
 
+from src.api.routes.search import init_orchestrator
+from src.core.config import DATA_DIR
 from src.core.models import MatchScores, SearchResultItem
+from src.core.profile_store import ProfileStore
 from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer
 from src.ui.components import (
     create_analytics_dashboard,
@@ -15,6 +18,53 @@ from src.ui.components import (
 )
 
 logger = logging.getLogger(__name__)
+
+indexes_dir = DATA_DIR / "indexes"
+faiss_path = indexes_dir / "faiss_index.bin"
+id_map_path = indexes_dir / "faiss_id_map.json"
+bm25_path = indexes_dir / "bm25_index.pkl"
+
+if faiss_path.exists():
+    from src.agents.executor import ExecutorAgent
+    from src.agents.orchestrator import Orchestrator
+    from src.agents.planner import PlannerAgent
+    from src.agents.reflector import ReflectorAgent
+    from src.language.multilingual import MultilingualEmbedder
+    from src.search.bm25_search import BM25Search
+    from src.search.hybrid import HybridSearch
+    from src.search.reranker import CrossEncoderReranker
+    from src.search.vector_search import VectorSearch
+
+    embedder = MultilingualEmbedder()
+    _ = embedder.model
+
+    vector_search = VectorSearch()
+    vector_search.load(faiss_path, id_map_path)
+
+    bm25_search = BM25Search()
+    bm25_search.load(bm25_path)
+
+    hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
+    reranker = CrossEncoderReranker()
+    _ = reranker.model
+    scorer = CandidateScorer()
+
+    profiles = ProfileStore()
+    offset_index_path = DATA_DIR / "indexes" / "offset_index.json"
+    if offset_index_path.exists():
+        profiles.load_offset_index(offset_index_path)
+    sample_path = DATA_DIR / "samples" / "sample_candidates.json"
+    if sample_path.exists():
+        profiles.load_sample(sample_path)
+
+    planner = PlannerAgent()
+    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
+    reflector = ReflectorAgent()
+    orchestrator = Orchestrator(planner, executor, reflector)
+    init_orchestrator(orchestrator)
+    logger.info("Search system initialized")
+else:
+    logger.warning("No FAISS index found. Run 'python scripts/build_indexes.py' first.")
 
 SLIDER_DIMS = [
     ("Skill Match", "skill_match", DEFAULT_SLIDER_WEIGHTS["skill_match"]),
