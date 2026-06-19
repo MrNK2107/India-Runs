@@ -114,7 +114,7 @@ class ExecutorAgent:
         reranked = self.reranker.rerank(search_text, rerank_candidates, top_k=top_k)
 
         results: list[MatchResult] = []
-        for rank, (pid, rerank_score) in enumerate(reranked, start=1):
+        for _rank, (pid, rerank_score) in enumerate(reranked, start=1):
             profile = self.profile_store.get(pid)
             if profile is None:
                 continue
@@ -154,7 +154,7 @@ class ExecutorAgent:
                 MatchResult(
                     query_id="",
                     profile_id=pid,
-                    rank=rank,
+                    rank=0,  # will reassign after sorting
                     name=profile.personal.name if profile.personal else "",
                     current_title=(
                         profile.professional.current_title if profile.professional else None
@@ -173,6 +173,11 @@ class ExecutorAgent:
                     metadata=MatchMetadata(search_method=SearchMethod.HYBRID, reranked=True),
                 )
             )
+
+        # Sort by overall score descending, tie-break by profile_id
+        results.sort(key=lambda r: (-r.scores.overall, r.profile_id))
+        for rank, r in enumerate(results, start=1):
+            r.rank = rank
 
         return results
 

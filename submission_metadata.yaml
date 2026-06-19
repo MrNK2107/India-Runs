@@ -1,0 +1,58 @@
+# Redrob Hackathon — Submission Metadata
+# India Runs — Track 1: The Data & AI Challenge
+
+team_name: "Atlas"
+
+primary_contact:
+  name: "Nikhil Choudhary"
+  email: "nikhil@example.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "Nikhil Choudhary"
+    email: "nikhil@example.com"
+    role: "ML Engineer"
+
+github_repo: "https://github.com/MrNK2107/India-Runs"
+
+sandbox_link: "https://huggingface.co/spaces/MrNK2107/india-runs-ranker"
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+
+compute:
+  platform: "Local Linux (AMD Ryzen 7)"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.14.0"
+  os: "Ubuntu 24.04 LTS"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+ai_tools_used:
+  - "Claude"
+  - "GitHub Copilot"
+
+ai_usage_summary: |
+  Used Claude for architectural design, code review, and test-driven development.
+  GitHub Copilot for autocomplete during implementation.
+  No candidate data was fed to any external LLM after dataset release.
+
+methodology_summary: |
+  Multi-query candidate discovery pipeline with hybrid search (FAISS + BM25),
+  cross-encoder reranking (ms-marco-MiniLM-L-6-v2), and 7-dimensional
+  weighted scoring (semantic similarity, keyword match, skill match,
+  cross-encoder relevance, experience, location, education).
+  Uses 17 strategic queries across different roles and tech stacks to
+  ensure comprehensive coverage. Results are merged with deduplication,
+  keeping the best score per candidate. Cross-encoder provides fine-grained
+  relevance assessment that naturally filters out honeypot profiles.
+  Full pipeline runs in under 8 seconds on CPU with offline mode.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: false
+  reproduction_tested: true

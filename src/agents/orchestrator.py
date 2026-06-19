@@ -80,6 +80,16 @@ STOP_WORDS = frozenset({
     "developer", "engineer", "manager", "architect", "analyst",
     "experience", "role", "position", "job", "opening", "hire",
     "dev", "sr", "jr", "intern", "fresher",
+    # Generic descriptors — not real skills
+    "engineering", "tech", "technology", "technical",
+    "management", "team", "agile", "leadership",
+    "software", "full", "stack", "backend", "frontend", "back end", "front end",
+    "cloud", "infrastructure", "platform", "system", "systems",
+    "design", "development", "testing", "deployment",
+    "solution", "solutions", "application", "applications",
+    "digital", "transformation", "innovation",
+    "strategy", "strategic", "planning", "operations",
+    "product", "program", "project", "portfolio",
 })
 
 
@@ -97,6 +107,9 @@ def _parse_query_text(text: str) -> ParsedQuery:
 
     words = lower.split()
     skill_words = [w for w in words if w not in STOP_WORDS and len(w) > 1]
+    # Exclude detected city name from skills
+    if city:
+        skill_words = [w for w in skill_words if w != city.lower()]
     deduped = list(dict.fromkeys(skill_words))
 
     return ParsedQuery(
