@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import time
+from pathlib import Path
 
 import gradio as gr
+
+# Ensure project root is on the path for direct execution
+_project_root = str(Path(__file__).resolve().parent.parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from src.api.routes.search import init_orchestrator
 from src.core.config import DATA_DIR
@@ -244,11 +251,9 @@ def re_rank_handler(results_json: str, *slider_values: float) -> str:
 
 def create_app() -> gr.Blocks:
     with gr.Blocks(
-        title="India Runs \u2014 Intelligent Candidate Discovery",
-        theme=gr.themes.Soft(),
-        css="src/ui/styles.css",
+        title="India Runs — Intelligent Candidate Discovery",
     ) as app:
-        gr.Markdown("# India Runs \u2014 Intelligent Candidate Discovery")
+        gr.Markdown("# India Runs — Intelligent Candidate Discovery")
         gr.Markdown("*Beyond keywords. Beyond filters. AI that understands hiring.*")
 
         results_state = gr.State("")
@@ -386,4 +391,9 @@ def create_app() -> gr.Blocks:
 app = create_app()
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        theme=gr.themes.Soft(),
+        css="src/ui/styles.css",
+    )
