@@ -5,15 +5,6 @@ import numpy as np
 from src.core.config import get_scoring_config
 from src.core.models import MatchScores
 
-DEFAULT_SLIDER_WEIGHTS: dict[str, float] = {
-    "skill_match": 0.30,
-    "experience_match": 0.20,
-    "education_match": 0.10,
-    "assessment_score": 0.10,
-    "behavioral_signals": 0.15,
-    "cultural_fit": 0.10,
-}
-
 DIM_TO_ACTUAL: dict[str, str] = {
     "skill_match": "skill_match",
     "experience_match": "experience_match",
@@ -28,6 +19,7 @@ class CandidateScorer:
     def __init__(self) -> None:
         config = get_scoring_config()
         self.weights = config["scoring_weights"]
+        self.slider_defaults = config.get("slider_weights", {})
 
     def compute_overall(
         self,
@@ -55,9 +47,10 @@ class CandidateScorer:
             for slider_dim, actual_dim in DIM_TO_ACTUAL.items():
                 if slider_dim in slider_weights and slider_weights[slider_dim] > 0:
                     effective_weights[actual_dim] = slider_weights[slider_dim] / 100.0
-            for dim, w in self.weights.items():
-                if dim not in effective_weights:
-                    effective_weights[dim] = w
+            for dim, w in self.slider_defaults.items():
+                actual = DIM_TO_ACTUAL.get(dim, dim)
+                if actual not in effective_weights:
+                    effective_weights[actual] = w
         else:
             effective_weights = dict(self.weights)
 
