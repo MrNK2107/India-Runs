@@ -7,6 +7,7 @@ from src.core.models import HealthResponse
 router = APIRouter()
 
 _index_size: int = 0
+_models_loaded: dict[str, bool] = {"embedding": False, "cross_encoder": False}
 
 
 def init_health(index_size: int = 0) -> None:
@@ -14,14 +15,15 @@ def init_health(index_size: int = 0) -> None:
     _index_size = index_size
 
 
+def set_model_loaded(name: str, loaded: bool = True) -> None:
+    _models_loaded[name] = loaded
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     return HealthResponse(
-        status="healthy",
+        status="healthy" if _index_size > 0 else "degraded",
         version="0.1.0",
         index_size=_index_size,
-        models_loaded={
-            "embedding": False,
-            "cross_encoder": False,
-        },
+        models_loaded=dict(_models_loaded),
     )

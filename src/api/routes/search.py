@@ -24,7 +24,11 @@ async def search_candidates(request: SearchRequest) -> SearchResponse:
     if _orchestrator is None:
         raise HTTPException(status_code=503, detail="Search system not initialized")
     try:
-        response = await _orchestrator.run(request.query)
+        response = await _orchestrator.run(
+            raw_query=request.query,
+        )
+        if request.include_rationale:
+            pass
         return response
     except Exception as e:
         logger.exception("Search failed")

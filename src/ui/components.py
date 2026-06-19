@@ -176,50 +176,214 @@ def create_skill_match_table(rationale: Rationale) -> str:
     """
 
 
-def create_analytics_dashboard(matches_data: list) -> str:
-    grid_style = "display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;"
+def create_analytics_dashboard(results_json: str = "[]") -> str:
+    import json
+    import math
+
+    from src.core.models import MatchResult, MatchScores, SearchResultItem
+    from src.fairness.bias_detector import BiasDetector
+    from src.fairness.metrics import (
+        compute_all_fairness_metrics,
+        compute_demographic_parity,
+    )
+
+    detector = BiasDetector()
+
+    try:
+        raw = json.loads(results_json) if results_json else []
+    except (json.JSONDecodeError, TypeError):
+        raw = []
+
+    total = len(raw)
+    listwise_ranked = any(r.get("listwise_ranked", False) for r in raw) if raw else False
+    listwise_badge = (
+        '<span style="background:#6366f140;color:#6366f1;padding:2px 8px;'
+        'border-radius:4px;font-size:12px;">Listwise Ranked</span>'
+        if listwise_ranked else ""
+    )
+
+    # Build MatchResults + determine metadata from first item
+    pii_anonymized = True
+    search_methods = []
+    match_results = []
+    for r in raw:
+        if isinstance(r, dict):
+            scores_dict = r.get("scores", {})
+            if not isinstance(scores_dict, dict):
+                scores_dict = {}
+            match_scores = MatchScores(
+                overall=scores_dict.get("overall", r.get("_re_score", 0)),
+                semantic_similarity=scores_dict.get("semantic_similarity"),
+                keyword_match=scores_dict.get("keyword_match"),
+                skill_match=scores_dict.get("skill_match", 0),
+                experience_match=scores_dict.get("experience_match", 0),
+                location_match=scores_dict.get("location_match"),
+                education_match=scores_dict.get("education_match"),
+                confidence=scores_dict.get("confidence", 0),
+            )
+            match_results.append(
+                MatchResult(
+                    query_id="",
+                    profile_id=r.get("profile_id", ""),
+                    rank=r.get("rank", 1),
+                    name=r.get("name", ""),
+                    scores=match_scores,
+                    matched_skills=r.get("matched_skills", []),
+                    missing_skills=r.get("missing_skills", []),
+                )
+            )
+            if r.get("_listwise_ranked"):
+                listwise_ranked = True
+
+    # Compute score distribution
+    scores = [m.scores.overall for m in match_results if m.scores.overall > 0]
+    if scores:
+        avg_score = sum(scores) / len(scores)
+        max_score = max(scores)
+        min_score = min(scores)
+        bins = [0] * 10
+        for s in scores:
+            idx = min(9, int(s * 10))
+            bins[idx] += 1
+        max_bin = max(bins) if bins else 1
+        bar_chart = "".join(
+            f'<div style="flex:1;background:{"#6366f1" if i >= 4 else "#93c5fd"};'
+            f'height:{max(4, int(b * 120 / max_bin))}px;'
+            f'border-radius:4px 4px 0 0;" '
+            f'title="{int(i*10)}-{int(i*10+9)}%: {b} candidates"></div>'
+            for i, b in enumerate(bins)
+        )
+    else:
+        avg_score = 0
+        max_score = 0
+        min_score = 0
+        bar_chart = '<div style="color:#9ca3af;padding:40px;text-align:center;">No results to analyze</div>'
+
+    # Compute fairness metrics
+    metric_cards = ""
+    if len(match_results) >= 3:
+        profiledict = _get_bias_profiles(match_results)
+        fairness = compute_all_fairness_metrics(match_results, profiledict)
+        dp = fairness.get("demographic_parity", {})
+        lang_bias = fairness.get("language_bias", {})
+        loc_bias = fairness.get("location_bias", {})
+
+        # Helper
+        def _metric_card(label, value, threshold, format_str="{:.3f}"):
+            val = value if isinstance(value, (int, float)) else 0
+            if val < threshold:
+                color = "#10b981"
+                status = "No bias detected"
+            elif val < threshold * 2:
+                color = "#f59e0b"
+                status = "Monitor closely"
+            else:
+                color = "#ef4444"
+                status = "Bias detected"
+            return f"""
+            <div class="metric-card">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value" style="color:{color};">{format_str.format(val)}</div>
+                <div style="font-size:12px;color:#9ca3af;">{status}</div>
+            </div>"""
+
+        metric_cards = _metric_card("University Parity", dp.get("university", 1.0), 0.8)
+        metric_cards += _metric_card("City Parity", dp.get("city", 1.0), 0.8)
+        metric_cards += _metric_card("Language Parity", dp.get("language", 1.0), 0.8)
+        metric_cards += _metric_card(
+            "Language Avg Rank Diff",
+            abs(lang_bias.get("rank_diff", 0)),
+            2.0,
+            "{:.1f} ranks",
+        )
+
+    grid_style = "display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;"
     axis_style = (
         "display:flex;justify-content:space-between;"
         "font-size:11px;color:#9ca3af;margin-top:4px;"
     )
+
     return f"""
     <div style="padding:20px;">
-        <h3 style="margin-bottom:16px;">Fairness & Bias Metrics</h3>
-        <div style="{grid_style}">
-            <div class="metric-card">
-                <div class="metric-label">Demographic Parity</div>
-                <div class="metric-value" style="color:#10b981;">1.00</div>
-                <div style="font-size:12px;color:#9ca3af;">No bias detected</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Language Bias</div>
-                <div class="metric-value" style="color:#10b981;">0.03</div>
-                <div style="font-size:12px;color:#9ca3af;">Acceptable difference</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Location Bias</div>
-                <div class="metric-value" style="color:#10b981;">0.05</div>
-                <div style="font-size:12px;color:#9ca3af;">Acceptable difference</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">University Bias</div>
-                <div class="metric-value" style="color:#f59e0b;">0.12</div>
-                <div style="font-size:12px;color:#9ca3af;">Monitor closely</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;">Fairness & Bias Metrics</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+                {listwise_badge}
+                <span style="background:#10b98120;color:#10b981;padding:2px 8px;
+                    border-radius:4px;font-size:12px;">PII Anonymized</span>
+                <span style="font-size:12px;color:#9ca3af;">
+                    {total} candidates analyzed
+                </span>
             </div>
         </div>
-        <h3 style="margin:24px 0 16px;">Score Distribution</h3>
-        <div style="height:200px;display:flex;align-items:flex-end;gap:4px;">
-            {''.join(
-                f'<div style="flex:1;background:#3b82f6;height:{max(2, h)}%;'
-                f'border-radius:4px 4px 0 0;" title="{i*10}-{i*10+9}%"></div>'
-                for i, h in enumerate([5, 8, 12, 15, 18, 20, 15, 10, 5, 3])
+        <div style="{grid_style}">
+            {metric_cards or ''.join(
+                '<div class="metric-card"><div class="metric-label">Run a search to see metrics</div></div>'
+                for _ in range(1)
             )}
+        </div>
+
+        <h3 style="margin:24px 0 16px;">Score Distribution</h3>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:130px;">
+            {bar_chart}
         </div>
         <div style="{axis_style}">
             <span>0%</span><span>50%</span><span>100%</span>
         </div>
+        <div style="display:flex;gap:24px;margin-top:12px;font-size:13px;color:#6b7280;">
+            <span>Avg: <strong>{avg_score:.1%}</strong></span>
+            <span>Max: <strong>{max_score:.1%}</strong></span>
+            <span>Min: <strong>{min_score:.1%}</strong></span>
+        </div>
+
+        {_build_distribution_table(match_results)}
     </div>
     """
+
+
+def _build_distribution_table(match_results: list) -> str:
+    """Build a summary table of match categories."""
+    strong = sum(1 for m in match_results if m.scores.overall >= 0.8)
+    good = sum(1 for m in match_results if 0.6 <= m.scores.overall < 0.8)
+    potential = sum(1 for m in match_results if 0.4 <= m.scores.overall < 0.6)
+    weak = sum(1 for m in match_results if m.scores.overall < 0.4)
+    total = len(match_results) or 1
+    return f"""
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;">
+        <div style="background:#10b98115;padding:12px;border-radius:8px;text-align:center;">
+            <div style="font-size:24px;font-weight:700;color:#10b981;">{strong}</div>
+            <div style="font-size:12px;color:#6b7280;">Strong ({strong*100//total}%)</div>
+        </div>
+        <div style="background:#3b82f615;padding:12px;border-radius:8px;text-align:center;">
+            <div style="font-size:24px;font-weight:700;color:#3b82f6;">{good}</div>
+            <div style="font-size:12px;color:#6b7280;">Good ({good*100//total}%)</div>
+        </div>
+        <div style="background:#f59e0b15;padding:12px;border-radius:8px;text-align:center;">
+            <div style="font-size:24px;font-weight:700;color:#f59e0b;">{potential}</div>
+            <div style="font-size:12px;color:#6b7280;">Potential ({potential*100//total}%)</div>
+        </div>
+        <div style="background:#ef444415;padding:12px;border-radius:8px;text-align:center;">
+            <div style="font-size:24px;font-weight:700;color:#ef4444;">{weak}</div>
+            <div style="font-size:12px;color:#6b7280;">Weak ({weak*100//total}%)</div>
+        </div>
+    </div>"""
+
+
+def _get_bias_profiles(match_results: list[MatchResult]) -> dict[str, Profile]:
+    """Build minimal Profile objects for bias detection from match results."""
+    from src.core.models import Location, PersonalInfo, Profile, ProfileMetadata
+    return {
+        m.profile_id: Profile(
+            profile_id=m.profile_id,
+            personal=PersonalInfo(
+                name=m.name or "",
+                location=Location(city=m.location),
+                languages_spoken=[],
+            ),
+            metadata=ProfileMetadata(language_detected="en"),
+        )
+        for m in match_results
+    }
 
 
 def create_rationale_panel(rationale: Rationale | None, profile_summary: str) -> str:

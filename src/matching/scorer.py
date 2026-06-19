@@ -15,11 +15,21 @@ DIM_TO_ACTUAL: dict[str, str] = {
 }
 
 
+DEFAULT_SLIDER_WEIGHTS: dict[str, float] = {
+    "skill_match": 0.30,
+    "experience_match": 0.25,
+    "education_match": 0.15,
+    "assessment_score": 0.15,
+    "behavioral_signals": 0.10,
+    "cultural_fit": 0.05,
+}
+
+
 class CandidateScorer:
     def __init__(self) -> None:
         config = get_scoring_config()
         self.weights = config["scoring_weights"]
-        self.slider_defaults = config.get("slider_weights", {})
+        self.slider_defaults = config.get("slider_weights", DEFAULT_SLIDER_WEIGHTS)
 
     def compute_overall(
         self,

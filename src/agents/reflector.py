@@ -12,12 +12,25 @@ logger = logging.getLogger(__name__)
 
 class ReflectorAgent:
     def __init__(self) -> None:
-        self.client = get_llm_client()
+        self._client = None
         settings = get_settings()
         self.model = settings.openai_model
 
+    @property
+    def client(self):
+        if self._client is None:
+            try:
+                self._client = get_llm_client()
+            except Exception:
+                logger.warning("LLM client unavailable for reflector")
+                self._client = None
+        return self._client
+
     async def reflect(self, query: ParsedQuery, results: list[MatchResult]) -> dict:
         try:
+            if self.client is None:
+                raise RuntimeError("LLM client unavailable")
+
             from langchain_core.messages import HumanMessage, SystemMessage
 
             candidates_text = json.dumps(
