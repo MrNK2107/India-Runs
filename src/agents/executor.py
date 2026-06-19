@@ -163,7 +163,7 @@ class ExecutorAgent:
             if profile is not None:
                 rerank_candidates.append((pid, profile.raw_text[:2000], score))
             else:
-                rerank_candidates.append((pid, search_text, score))
+                rerank_candidates.append((pid, "", score))
 
         reranked = self.reranker.rerank(search_text, rerank_candidates, top_k=top_k)
 

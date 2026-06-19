@@ -15,6 +15,15 @@ from src.matching.skill_matcher import SKILL_ALIASES
 logger = logging.getLogger(__name__)
 
 
+def _strip_json_fences(content: str) -> str:
+    """Strip markdown JSON code fences (```json ... ```) from LLM output."""
+    content = content.strip()
+    if content.startswith("```"):
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content)
+    return content.strip()
+
+
 class PlannerAgent:
     def __init__(self) -> None:
         self._client = None
@@ -55,6 +64,7 @@ class PlannerAgent:
                 self.client.ainvoke(messages), timeout=15.0,
             )
             content = response.content if hasattr(response, "content") else str(response)
+            content = _strip_json_fences(content)
             parsed = json.loads(content)
             return ParsedQuery(**parsed)
         except Exception as e:
@@ -81,6 +91,7 @@ class PlannerAgent:
                 self.client.ainvoke(messages), timeout=15.0,
             )
             content = response.content if hasattr(response, "content") else str(response)
+            content = _strip_json_fences(content)
             parsed = json.loads(content)
             return ParsedQuery(**parsed)
         except Exception as e:

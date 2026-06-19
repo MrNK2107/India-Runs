@@ -40,7 +40,7 @@ class BiasDetector:
                 observations.append(f"{prefix}: avg score {avg:.3f} (n={len(scores)})")
 
         return {
-            "detected": False,
+            "detected": any(obs.endswith("(potential bias)") for obs in observations),
             "observations": observations,
             "details": {k: len(v) for k, v in buckets.items()},
         }

@@ -119,20 +119,3 @@ class ReflectorAgent:
         if not results:
             return "No results found. Query may be too restrictive."
         return "Results look reasonable."
-
-    def _relax_params(self, params: dict) -> dict:
-        params = dict(params)
-        exp = dict(params.get("experience", {}))
-        if exp.get("min_years") is not None:
-            exp["min_years"] = max(0, exp["min_years"] - 2)
-        if exp.get("max_years") is not None:
-            exp["max_years"] = (exp["max_years"] or 0) + 3
-        params["experience"] = exp
-
-        loc = dict(params.get("location", {}))
-        loc["city"] = None
-        loc["remote_ok"] = True
-        params["location"] = loc
-
-        params["required_skills"] = []
-        return params
