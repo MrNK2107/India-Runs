@@ -10,7 +10,7 @@ from langgraph.graph import END, StateGraph
 from src.agents.executor import ExecutorAgent
 from src.agents.planner import PlannerAgent
 from src.agents.reflector import ReflectorAgent
-from src.core.config import get_scoring_config
+from src.core.config import get_scoring_config, get_settings
 from src.core.models import (
     ExperienceRequirements,
     LocationRequirements,
@@ -100,7 +100,8 @@ class Orchestrator:
         self.rationale_gen = RationaleGenerator()
         self.listwise_ranker = PlackettLuceRanker()
         config = get_scoring_config()
-        self.max_replans = config.get("max_replan_cycles", 3)
+        settings = get_settings()
+        self.max_replans = settings.max_replan_cycles
         self.min_good_matches = config.get("min_good_matches_for_pass", 8)
         self.graph = self._build_graph()
 
@@ -214,7 +215,7 @@ class Orchestrator:
 
     async def _execute_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
-        parsed = ParsedQuery(**parsed_dict) if parsed_dict else ParsedQuery()
+        parsed = ParsedQuery.model_validate(parsed_dict, strict=False) if parsed_dict else ParsedQuery()
         slider_weights = state.get("slider_weights") or None
         results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
         methods_used = []
@@ -301,7 +302,7 @@ class Orchestrator:
 
     async def _reflect_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
-        parsed = ParsedQuery(**parsed_dict) if parsed_dict else ParsedQuery()
+        parsed = ParsedQuery.model_validate(parsed_dict, strict=False) if parsed_dict else ParsedQuery()
         results = [MatchResult(**r) for r in state.get("results", [])]
         evaluations = await self.reflector.reflect(parsed, results)
         replan_count = state.get("replan_count", 0)
@@ -330,6 +331,11 @@ class Orchestrator:
         rationales = []
         for r in results_raw[:20]:
             if isinstance(r, dict):
+                from src.core.models import MatchScores
+                scores_dict = r.get("scores", {})
+                if not isinstance(scores_dict, dict):
+                    scores_dict = {}
+                match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
                 match_result = MatchResult(
                     query_id="",
                     profile_id=r.get("profile_id", ""),
@@ -339,7 +345,7 @@ class Orchestrator:
                     current_company=r.get("current_company"),
                     location=r.get("location"),
                     experience_years=r.get("experience_years"),
-                    scores=r.get("scores"),
+                    scores=match_scores,
                     matched_skills=r.get("matched_skills", []),
                     missing_skills=r.get("missing_skills", []),
                 )

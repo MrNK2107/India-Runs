@@ -45,7 +45,13 @@ def compute_years_from_dates(
         elif is_current:
             end = today
         else:
-            end = date(start.year + 1, start.month, start.day)
+            try:
+                end = date(start.year + 1, start.month, start.day)
+            except ValueError:
+                try:
+                    end = date(start.year + 1, start.month, 28)
+                except ValueError:
+                    end = date(start.year + 1, 3, 1)
             assumptions += 1
         intervals.append((start, end))
         valid_entries += 1

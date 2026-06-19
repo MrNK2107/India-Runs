@@ -149,6 +149,14 @@ def _replace_llm_verb(verb: str) -> str:
 
 def anonymize_text_for_bias(text: str) -> str:
     """Quick PII redaction for text before LLM evaluation."""
-    text = re.sub(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", "[NAME]", text)
+    text = re.sub(
+        r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,}\b",
+        "[NAME]", text,
+    )
+    # Match names with initials (e.g., "J. K. Rowling", "J.K. Rowling", "P. S. Kumar")
+    text = re.sub(
+        r"\b(?:[A-Z]\.?\s*)[A-Z]\.?\s+[A-Z][a-z]+\b",
+        "[NAME]", text,
+    )
     text = re.sub(r"\b(?:IIT|NIT|IIIT|BITS)\s+\w+\b", "[UNIVERSITY]", text)
     return text

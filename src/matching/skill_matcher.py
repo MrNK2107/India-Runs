@@ -37,6 +37,7 @@ SKILL_ALIASES: dict[str, list[str]] = {
     "deep learning": ["dl"],
     "computer vision": ["cv"],
     "statistics": ["statistical analysis", "statistical modeling"],
+    "react native": ["react-native", "reactnative"],
 }
 
 

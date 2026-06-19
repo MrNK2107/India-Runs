@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
 
 from deep_translator import GoogleTranslator
@@ -26,7 +27,7 @@ class TranslationPipeline:
         return self._translator
 
     def translate_to_english(
-        self, text: str, source_lang: str
+        self, text: str, source_lang: str, is_batch_call: bool = False,
     ) -> dict[str, str | float | bool]:
         if source_lang == "en":
             return {
@@ -36,6 +37,9 @@ class TranslationPipeline:
                 "model_used": "none",
                 "translation_fallback": False,
             }
+
+        if not is_batch_call:
+            time.sleep(random.uniform(0.1, 0.5))
 
         try:
             translator = self._get_translator()
@@ -65,5 +69,5 @@ class TranslationPipeline:
         for i, (text, lang) in enumerate(texts):
             if i > 0 and i % 10 == 0:
                 time.sleep(0.3)
-            results.append(self.translate_to_english(text, lang))
+            results.append(self.translate_to_english(text, lang, is_batch_call=True))
         return results

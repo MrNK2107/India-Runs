@@ -40,10 +40,12 @@ class SearchFilter:
 
     def _check_experience(self, profile: Profile) -> bool:
         total = profile.professional.total_experience_years
-        if total is None:
-            return True
         min_yrs = self.filters.min_experience_years
         max_yrs = self.filters.max_experience_years
+        if total is None:
+            if min_yrs is not None and min_yrs > 0:
+                return False
+            return True
         if min_yrs is not None and total < min_yrs:
             return False
         if max_yrs is not None and total > max_yrs:
