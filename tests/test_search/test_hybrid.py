@@ -62,6 +62,17 @@ def test_bm25_tokenize(bm25_search_instance):
     assert tokens == ["python", "developer", "aws"]
 
 
+def test_bm25_empty_search_non_existent(bm25_search_instance):
+    bm = bm25_search_instance
+    docs = ["python developer django", "java spring boot", "devops aws kubernetes"]
+    ids = ["p1", "p2", "p3"]
+    bm.build_index(docs, ids)
+    results = bm.search("supercalifragilisticexpialidocious", top_k=5)
+    # Non-matching queries return all documents with 0.0 score
+    assert len(results) == 3
+    assert all(score == 0.0 for _, score in results)
+
+
 def test_hybrid_rrf():
     vs = VectorSearch()
     bm = BM25Search()

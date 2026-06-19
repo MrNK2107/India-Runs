@@ -53,7 +53,7 @@ def _score_badge(value: float) -> str:
 
 
 def create_candidate_card(item: SearchResultItem) -> str:
-    s = item.scores
+    s = item.scores if item.scores is not None else MatchScores()
     bars = ""
     bars += _score_bar("Overall", s.overall, "#6366f1")
     bars += _score_bar("Skill", s.skill_match, "#10b981")
@@ -93,7 +93,7 @@ def create_candidate_card(item: SearchResultItem) -> str:
                     {_bullet_years(item.experience_years)}
                 </div>
             </div>
-            {_score_badge(item.scores.overall)}
+            {_score_badge(s.overall)}
         </div>
         <div style="margin-top:12px;">
             <div style="font-size:13px;color:#374151;margin-bottom:4px;">
@@ -186,6 +186,16 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         compute_all_fairness_metrics,
         compute_demographic_parity,
     )
+
+    # Early return for empty results
+    if not results_json or results_json.strip() in ("[]", "", "{}"):
+        return (
+            "<div style='padding:60px;text-align:center;color:#9ca3af;'>"
+            "<p style='font-size:24px;margin-bottom:12px;'>&#128202;</p>"
+            "<p style='font-size:18px;'>No results to analyze</p>"
+            "<p style='font-size:14px;'>Run a search first to see analytics and fairness metrics.</p>"
+            "</div>"
+        )
 
     detector = BiasDetector()
 
@@ -424,7 +434,7 @@ def create_rationale_panel(rationale: Rationale | None, profile_summary: str) ->
 
 
 def create_loading_spinner() -> str:
-    return """
+    return """\
     <div style="display:flex;justify-content:center;padding:40px;">
         <div style="width:40px;height:40px;border:4px solid #e5e7eb;
              border-top-color:#3b82f6;border-radius:50%;
@@ -434,3 +444,16 @@ def create_loading_spinner() -> str:
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     """
+
+
+def create_error_panel(message: str) -> str:
+    """Return a prominent error message panel for display in the UI."""
+    return f"""\
+    <div style="border:2px solid #fecaca;background:#fef2f2;border-radius:10px;
+                padding:20px;margin:12px 0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:24px;">&#9888;&#65039;</span>
+            <strong style="color:#991b1b;font-size:16px;">Error</strong>
+        </div>
+        <p style="color:#b91c1c;margin:0;font-size:14px;line-height:1.5;">{message}</p>
+    </div>"""

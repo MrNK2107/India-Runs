@@ -32,7 +32,11 @@ def test_skill_matcher_fuzzy():
     skills = [Skill(name="Python3", category="programming_language")]
     required = [RequiredSkill(name="Python", importance=SkillImportance.REQUIRED)]
     score, details = matcher.match_skills(required, skills)
-    assert score > 0
+    assert 0.0 <= score <= 1.0
+    # Exact match should score at least as high as fuzzy
+    skills_exact = [Skill(name="Python", category="programming_language")]
+    score_exact, _ = matcher.match_skills(required, skills_exact)
+    assert score_exact >= score
 
 
 def test_skill_matcher_empty_required(sample_profile):

@@ -36,7 +36,12 @@ def test_translator_english_passthrough():
     assert result["translation_fallback"] is False
 
 
-def test_translator_french_success():
+def test_translator_french_success(monkeypatch):
+    class FakeGoogleTranslator:
+        def translate(self, text: str) -> str:
+            return "Hello world"
+
+    monkeypatch.setattr("deep_translator.GoogleTranslator", lambda *a, **kw: FakeGoogleTranslator())
     from src.language.translator import TranslationPipeline
     pipeline = TranslationPipeline()
     result = pipeline.translate_to_english("Bonjour le monde", "fr")
@@ -44,7 +49,12 @@ def test_translator_french_success():
     assert "Hello" in str(result["translated"]) or "world" in str(result["translated"])
 
 
-def test_translator_batch():
+def test_translator_batch(monkeypatch):
+    class FakeGoogleTranslator:
+        def translate(self, text: str) -> str:
+            return "Hello"
+
+    monkeypatch.setattr("deep_translator.GoogleTranslator", lambda *a, **kw: FakeGoogleTranslator())
     from src.language.translator import TranslationPipeline
     pipeline = TranslationPipeline()
     results = pipeline.translate_batch([("Hello", "en"), ("Hola", "es")])
