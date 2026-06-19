@@ -14,6 +14,31 @@ IIT_NIT_BITS = {"iit", "nit", "bits", "iiit"}
 
 
 class BiasDetector:
+    def detect_bias(
+        self, matches: list[MatchResult], profiles: dict[str, Profile],
+        bias_type: str = "name",
+    ) -> dict[str, Any]:
+        """Detect bias of specified type.
+
+        Args:
+            matches: List of match results.
+            profiles: Dict of profile_id -> Profile.
+            bias_type: One of 'name', 'language', 'location', 'university'.
+
+        Returns:
+            dict with 'detected', 'observations', 'details' keys.
+        """
+        if bias_type == "name":
+            return self.check_name_bias(matches, profiles)
+        elif bias_type == "language":
+            return self.check_language_bias(matches, profiles)
+        elif bias_type == "location":
+            return self.check_location_bias(matches, profiles)
+        elif bias_type == "university":
+            return self.check_university_bias(matches, profiles)
+        else:
+            return {"detected": False, "observations": [f"Unknown bias type: {bias_type}"], "details": {}}
+
     def check_name_bias(
         self, matches: list[MatchResult], profiles: dict[str, Profile],
     ) -> dict[str, Any]:

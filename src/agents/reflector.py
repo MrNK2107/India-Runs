@@ -57,13 +57,20 @@ class ReflectorAgent:
             ]
             response = await asyncio.wait_for(
                 self.client.ainvoke(messages),
-                timeout=15.0,
+                timeout=30.0,
             )
             content = response.content if hasattr(response, "content") else str(response)
-            evaluations = json.loads(content)
+            if not content or not content.strip():
+                logger.warning("Reflector LLM returned empty content, using fallback")
+                evaluations = self._fallback_evaluate(results)
+            else:
+                evaluations = json.loads(content)
 
+        except asyncio.TimeoutError:
+            logger.warning("Reflector LLM timed out, using fallback")
+            evaluations = self._fallback_evaluate(results)
         except Exception as e:
-            logger.warning(f"Reflector LLM failed, using fallback: {e}")
+            logger.warning(f"Reflector LLM failed: {type(e).__name__}: {e}, using fallback")
             evaluations = self._fallback_evaluate(results)
 
         should_replan = self._should_replan(evaluations)

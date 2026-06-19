@@ -61,18 +61,24 @@ class PlannerAgent:
                 HumanMessage(content=tint_query),
             ]
             response = await asyncio.wait_for(
-                self.client.ainvoke(messages), timeout=15.0,
+                self.client.ainvoke(messages), timeout=30.0,
             )
             content = response.content if hasattr(response, "content") else str(response)
+            if not content or not content.strip():
+                logger.warning("Planner LLM returned empty content, using fallback")
+                return self._fallback_parse(raw_query)
             content = _strip_json_fences(content)
             try:
                 parsed = json.loads(content)
                 return ParsedQuery(**parsed)
             except (json.JSONDecodeError, Exception) as e:
-                logger.warning(f"Planner LLM parse failed: {e}. Raw: {content[:150]}")
+                logger.warning(f"Planner LLM parse failed: {e}. Raw: {content[:200]}")
                 return self._fallback_parse(raw_query)
+        except asyncio.TimeoutError:
+            logger.warning("Planner LLM timed out after 30s, using fallback")
+            return self._fallback_parse(raw_query)
         except Exception as e:
-            logger.warning(f"Planner LLM failed, using fallback: {e}")
+            logger.warning(f"Planner LLM failed: {type(e).__name__}: {e}, using fallback")
             return self._fallback_parse(raw_query)
 
     async def replan(
@@ -92,12 +98,20 @@ class PlannerAgent:
                 HumanMessage(content=prompt),
             ]
             response = await asyncio.wait_for(
-                self.client.ainvoke(messages), timeout=15.0,
+                self.client.ainvoke(messages), timeout=30.0,
             )
             content = response.content if hasattr(response, "content") else str(response)
             content = _strip_json_fences(content)
+            if not content or not content.strip():
+                logger.warning("Replan LLM returned empty content, using fallback")
+                relaxed = self._relax_params(previous_params)
+                return ParsedQuery(**relaxed)
             parsed = json.loads(content)
             return ParsedQuery(**parsed)
+        except asyncio.TimeoutError:
+            logger.warning("Replan LLM timed out after 30s, using fallback")
+            relaxed = self._relax_params(previous_params)
+            return ParsedQuery(**relaxed)
         except Exception as e:
             logger.warning(f"Replan LLM failed, using fallback: {e}")
             relaxed = self._relax_params(previous_params)
