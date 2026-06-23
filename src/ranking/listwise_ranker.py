@@ -10,9 +10,7 @@ Reference: https://en.wikipedia.org/wiki/Plackett%E2%80%93Luce_model
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import math
 import random
 from typing import Any
 

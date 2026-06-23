@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-
 from src.core.config import get_scoring_config
 from src.core.models import MatchScores
 from src.matching.confidence import compute_confidence
-from src.matching.behavioral_scorer import (
-    compute_behavioral_score,
-    compute_career_trajectory,
-    compute_skill_proficiency,
-)
 
 DIM_TO_ACTUAL: dict[str, str] = {
     "skill_match": "skill_match",

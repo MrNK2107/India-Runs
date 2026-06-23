@@ -15,7 +15,7 @@ def test_detect_code_mixed_pure_english(processor):
 
 
 def test_detect_code_mixed_pure_hindi(processor):
-    text = "\u092e\u0948\u0902 \u090f\u0915 \u0938\u0949\u092b\u094d\u091f\u0935\u0947\u092f\u0930 \u0907\u0902\u091c\u0940\u0928\u093f\u092f\u0930 \u0939\u0942\u0901"
+    text = "\u092e\u0948\u0902 \u090f\u0915 \u0938\u0949\u092b\u094d\u091f\u0935\u0947\u092f\u0930 \u0907\u0902\u091c\u0940\u0928\u093f\u092f\u0930 \u0939\u0942\u0901"  # noqa: E501
     assert processor.detect_code_mixed(text) is True
 
 

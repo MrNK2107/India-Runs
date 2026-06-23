@@ -74,7 +74,7 @@ class PlannerAgent:
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Planner LLM parse failed: {e}. Raw: {content[:200]}")
                 return self._fallback_parse(raw_query)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Planner LLM timed out after 30s, using fallback")
             return self._fallback_parse(raw_query)
         except Exception as e:
@@ -108,7 +108,7 @@ class PlannerAgent:
                 return ParsedQuery(**relaxed)
             parsed = json.loads(content)
             return ParsedQuery(**parsed)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Replan LLM timed out after 30s, using fallback")
             relaxed = self._relax_params(previous_params)
             return ParsedQuery(**relaxed)

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 import statistics
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from src.core.models import Profile, Signals, WorkExperience
+from src.core.models import Profile, Signals
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,9 @@ def detect_honeypot(profile: Profile) -> str | None:
                 company_lower = job.company.strip().lower()
                 founding = company_founded.get(company_lower)
                 if founding and start_year < founding:
-                    reasons.append(f"Start year {start_year} before {job.company} founded ({founding})")
+                    reasons.append(
+                        f"Start year {start_year} before {job.company} founded ({founding})"
+                    )
             except (ValueError, IndexError):
                 pass
 
@@ -73,7 +75,8 @@ def detect_honeypot(profile: Profile) -> str | None:
     if profile.skills and profile.professional and profile.professional.total_experience_years:
         exp_years = profile.professional.total_experience_years
         if exp_years > 0 and len(profile.skills) / exp_years > 5:
-            reasons.append(f"{len(profile.skills)} skills in {exp_years:.0f}y ({len(profile.skills)/exp_years:.1f}/year)")
+            rate = len(profile.skills) / exp_years
+            reasons.append(f"{len(profile.skills)} skills in {exp_years:.0f}y ({rate:.1f}/year)")
 
     # 3. Expert in 5+ skills with 0 years used
     expert_zero_years = 0
@@ -194,8 +197,10 @@ def compute_career_trajectory(profile: Profile) -> float:
             curr = titles[i].lower()
             prev = titles[i + 1].lower()
             # Current role is more senior
-            if any(kw in curr for kw in ["senior", "lead", "head", "principal", "staff", "architect", "manager", "director", "vp", "chief"]):
-                if not any(kw in prev for kw in ["senior", "lead", "head", "principal", "staff", "architect", "manager", "director", "vp", "chief"]):
+            senior_kw = ["senior", "lead", "head", "principal", "staff",
+                         "architect", "manager", "director", "vp", "chief"]
+            if any(kw in curr for kw in senior_kw):
+                if not any(kw in prev for kw in senior_kw):
                     progression_signals += 1
         progression_rate = progression_signals / max(1, len(titles) - 1)
         scores.append(0.3 + 0.6 * progression_rate)
@@ -210,7 +215,7 @@ def compute_career_trajectory(profile: Profile) -> float:
 
 def compute_behavioral_score(signals: Signals) -> float:
     """Score platform behavioral signals (0-1).
-    
+
     Uses: response rate, saved count, completeness, verification,
           engagement, github activity.
     """
@@ -287,7 +292,7 @@ def compute_behavioral_score(signals: Signals) -> float:
     if signals.last_active_date:
         try:
             last_active = datetime.strptime(signals.last_active_date, "%Y-%m-%d")
-            days_since = (datetime.now(timezone.utc) - last_active.replace(tzinfo=timezone.utc)).days
+            days_since = (datetime.now(UTC) - last_active.replace(tzinfo=UTC)).days
             recency = max(0, min(1.0, 1.0 - days_since / 365.0))
             components.append(recency)
         except ValueError:

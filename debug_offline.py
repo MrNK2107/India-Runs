@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Test if HF_HUB_OFFLINE is respected with uvicorn import chain."""
 import os

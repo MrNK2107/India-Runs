@@ -38,7 +38,7 @@ def test_models_exist():
 
 
 def test_evaluation_metrics():
-    from src.evaluation.metrics import precision_at_k, recall_at_k, mean_reciprocal_rank
+    from src.evaluation.metrics import mean_reciprocal_rank, precision_at_k, recall_at_k
 
     retrieved = ["a", "b", "c", "d", "e"]
     relevant = {"a", "c", "f"}

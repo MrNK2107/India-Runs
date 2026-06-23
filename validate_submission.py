@@ -25,7 +25,7 @@ def validate_submission(csv_path):
         errors.append("Filename must be your registered participant ID (e.g. team_xxx.csv).")
 
     try:
-        with open(path, "r", encoding="utf-8", newline="") as f:
+        with open(path, encoding="utf-8", newline="") as f:
             reader = csv.reader(f)
 
             try:

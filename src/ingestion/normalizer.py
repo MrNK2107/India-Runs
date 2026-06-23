@@ -66,7 +66,9 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
     professional = ProfessionalInfo(
         current_title=extracted.current_title.value or prof.get("current_title"),
         current_company=extracted.current_company.value or prof.get("current_company"),
-        total_experience_years=extracted.total_experience_years.value or prof.get("years_of_experience"),
+        total_experience_years=(
+            extracted.total_experience_years.value or prof.get("years_of_experience")
+        ),
         industry=extracted.industry.value or prof.get("current_industry"),
         employment_type=None,
         seniority_level=extracted.seniority_level.value,

@@ -37,7 +37,11 @@ class BiasDetector:
         elif bias_type == "university":
             return self.check_university_bias(matches, profiles)
         else:
-            return {"detected": False, "observations": [f"Unknown bias type: {bias_type}"], "details": {}}
+            return {
+                "detected": False,
+                "observations": [f"Unknown bias type: {bias_type}"],
+                "details": {},
+            }
 
     def check_name_bias(
         self, matches: list[MatchResult], profiles: dict[str, Profile],

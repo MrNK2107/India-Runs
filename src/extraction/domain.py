@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 _INDUSTRY_KEYWORDS: dict[str, list[str]] = {

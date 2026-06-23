@@ -98,8 +98,8 @@ def test_parse_empty_file(tmp_path, parser):
 
 
 def test_parse_docx(tmp_path, parser):
-    from zipfile import ZipFile
     from xml.etree.ElementTree import Element, SubElement, tostring
+    from zipfile import ZipFile
 
     docx_path = tmp_path / "test.docx"
     with ZipFile(docx_path, "w") as z:
@@ -120,8 +120,8 @@ def test_parse_docx(tmp_path, parser):
 
 
 def test_parse_docx_unicode(tmp_path, parser):
-    from zipfile import ZipFile
     from xml.etree.ElementTree import Element, SubElement, tostring
+    from zipfile import ZipFile
 
     docx_path = tmp_path / "résumé.docx"
     with ZipFile(docx_path, "w") as z:
@@ -180,7 +180,10 @@ def test_normalizer_redrob():
             {"name": "AWS", "proficiency": "beginner", "endorsements": 5},
         ],
         "certifications": [{"name": "AWS Certified Solutions Architect"}],
-        "languages": [{"language": "English", "proficiency": "native"}, {"language": "Hindi", "proficiency": "fluent"}],
+        "languages": [  # noqa: E501
+            {"language": "English", "proficiency": "native"},
+            {"language": "Hindi", "proficiency": "fluent"},
+        ],
     }
     profile = normalize_redrob(raw)
     assert profile.profile_id == "redrob-1"

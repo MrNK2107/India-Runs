@@ -11,23 +11,24 @@ from src.core.models import (
     Skill,
 )
 from src.core.profile_store import ProfileStore
-from src.matching.scorer import CandidateScorer
-from src.matching.skill_matcher import SkillMatcher
 from src.matching.behavioral_scorer import (
     compute_behavioral_score,
     compute_career_trajectory,
     compute_skill_proficiency,
     detect_honeypot,
 )
+from src.matching.scorer import CandidateScorer
+from src.matching.skill_matcher import SkillMatcher
 from src.search.filters import SearchFilter
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
+
 
 def _skill_match_score(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> float:
     """Score skill match using ONLY structured skills (no raw text — that's semantic/keyword's job).
-    
+
     This prevents false positives like 'java' matching a career description
     or 'js' matching node.js in raw text. The SkillMatcher uses fuzzy matching
     with aliases against the structured skills array only.
@@ -47,7 +48,7 @@ def _match_skills_detail(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Match skills using ONLY structured skills array.
-    
+
     Returns (matched_names, missing_names) based on explicit skill entries.
     """
     matched: list[str] = []

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from src.ingestion.normalizer import normalize_redrob as new_normalizer
 
 _PROFESSIONAL_FIELDS = [

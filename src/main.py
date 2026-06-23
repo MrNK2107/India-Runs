@@ -14,7 +14,7 @@ from fastapi import FastAPI
 
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.api.middleware.validation import InputValidationMiddleware
-from src.api.routes.health import init_health, set_model_loaded, set_index_size
+from src.api.routes.health import init_health, set_index_size, set_model_loaded
 from src.api.routes.health import router as health_router
 from src.api.routes.ingest import router as ingest_router
 from src.api.routes.profiles import init_profiles
@@ -81,7 +81,8 @@ async def lifespan(app: FastAPI):
     # Cross-encoder loading is lazy and disabled by default (CROSS_ENCODER_ENABLED=false)
     # The model will NOT be loaded at startup to avoid HuggingFace hub loops
     set_model_loaded("cross_encoder", reranker.model is not None)
-    logger.info(f"Cross-encoder status: {'loaded' if reranker.model is not None else 'disabled / unavailable'}")
+    ce_status = 'loaded' if reranker.model is not None else 'disabled / unavailable'
+    logger.info(f"Cross-encoder status: {ce_status}")
     scorer = CandidateScorer()
 
     profiles = ProfileStore()

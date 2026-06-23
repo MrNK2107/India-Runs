@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from statistics import mean
-from typing import Any
 
 
 def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:

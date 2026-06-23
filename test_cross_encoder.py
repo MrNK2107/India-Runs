@@ -1,13 +1,16 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Test cross-encoder directly on various profile/text pairs."""
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, '/home/nanda/India-Runs')
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-from src.search.reranker import CrossEncoderReranker
-from src.core.profile_store import ProfileStore
 from src.core.config import DATA_DIR
+from src.core.profile_store import ProfileStore
+from src.search.reranker import CrossEncoderReranker
 
 reranker = CrossEncoderReranker(timeout_ms=0)
 
@@ -34,10 +37,10 @@ for query, pid, description in test_cases:
     if not p:
         print(f"{pid}: NOT FOUND")
         continue
-    
+
     # Use score_pair directly
     score = reranker.score_pair(query, p.raw_text)
-    
+
     print(f"\nQuery: {query}")
     print(f"PID:   {pid} — {description}")
     print(f"Text:  {p.raw_text[:150]}...")

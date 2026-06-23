@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """
 Redrob India Runs — Main ranking entry point.
@@ -28,17 +29,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.agents.executor import ExecutorAgent
 from src.agents.orchestrator import _parse_query_text
-from src.core.config import DATA_DIR, get_settings
+from src.core.config import DATA_DIR
 from src.core.models import Profile
 from src.core.profile_store import ProfileStore
 from src.language.multilingual import MultilingualEmbedder
-from src.matching.scorer import CandidateScorer
 from src.matching.behavioral_scorer import (
-    compute_behavioral_score,
-    compute_career_trajectory,
-    compute_skill_proficiency,
     detect_honeypot,
 )
+from src.matching.scorer import CandidateScorer
 from src.search.bm25_search import BM25Search
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
@@ -164,7 +162,6 @@ def _build_reasoning(
     if profile is None:
         return f"Candidate {candidate_id} not found."
 
-    title = profile.professional.current_title if profile.professional else "N/A"
     company = profile.professional.current_company if profile.professional else "N/A"
     exp = profile.professional.total_experience_years if profile.professional else 0
     city = location_map.get(candidate_id, "N/A")
@@ -222,13 +219,13 @@ def _build_reasoning(
         if expert_count >= 3:
             narratives.append(f"{expert_count} expert-level skills — deep specialist")
         elif advanced_count >= 3 or expert_count > 0:
-            narratives.append(f"Multiple advanced skills — strong technical depth")
+            narratives.append("Multiple advanced skills — strong technical depth")
 
     # Behavioral signals
     if signals.saved_by_recruiters_30d and signals.saved_by_recruiters_30d > 10:
         narratives.append(f"High demand ({signals.saved_by_recruiters_30d} saves by recruiters in 30d)")
     if signals.github_activity_score and signals.github_activity_score > 20:
-        narratives.append(f"Active open-source contributor")
+        narratives.append("Active open-source contributor")
     if signals.recruiter_response_rate and signals.recruiter_response_rate > 0.7:
         narratives.append(f"Highly responsive to recruiters ({signals.recruiter_response_rate:.0%})")
     if signals.verified_email and signals.verified_phone:

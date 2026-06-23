@@ -24,7 +24,7 @@ print(f"Looking up offsets for {len(pid_set)} profile IDs...")
 
 start = time.perf_counter()
 offsets: dict[str, int] = {}
-with open(profiles_path, "r", encoding="utf-8") as f:
+with open(profiles_path, encoding="utf-8") as f:
     while True:
         offset = f.tell()
         line = f.readline()

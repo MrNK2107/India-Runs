@@ -66,7 +66,7 @@ class ReflectorAgent:
             else:
                 evaluations = json.loads(content)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Reflector LLM timed out, using fallback")
             evaluations = self._fallback_evaluate(results)
         except Exception as e:

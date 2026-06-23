@@ -13,12 +13,12 @@ _project_root = str(Path(__file__).resolve().parent.parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src.api.routes.search import init_orchestrator
-from src.core.config import DATA_DIR
-from src.core.models import MatchScores, SearchResultItem
-from src.core.profile_store import ProfileStore
-from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer
-from src.ui.components import (
+from src.api.routes.search import init_orchestrator  # noqa: E402
+from src.core.config import DATA_DIR  # noqa: E402
+from src.core.models import MatchScores, SearchResultItem  # noqa: E402
+from src.core.profile_store import ProfileStore  # noqa: E402
+from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer  # noqa: E402
+from src.ui.components import (  # noqa: E402
     create_analytics_dashboard,
     create_candidate_card,
     create_rationale_panel,
@@ -109,7 +109,7 @@ async def search_handler(
         return (
             "<div style='padding:40px;text-align:center;color:#9ca3af;'>"
             "<p style='font-size:18px;margin-bottom:8px;'>&#128269; Enter a query to search</p>"
-            "<p style='font-size:14px;'>Describe the ideal candidate — skills, experience, location.</p>"
+            "<p style='font-size:14px;'>Describe the ideal candidate — skills, experience, location.</p>"  # noqa: E501
             "</div>",
             "",
             "[]",

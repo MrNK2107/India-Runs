@@ -1,8 +1,7 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Test ranking quality across multiple queries and analyze results."""
 import asyncio
-import csv
-import json
 import os
 import sys
 from pathlib import Path
@@ -17,18 +16,16 @@ from src.core.config import DATA_DIR
 from src.core.models import Profile
 from src.core.profile_store import ProfileStore
 from src.language.multilingual import MultilingualEmbedder
-from src.matching.scorer import CandidateScorer
 from src.matching.behavioral_scorer import (
     compute_behavioral_score,
     compute_career_trajectory,
-    compute_skill_proficiency,
     detect_honeypot,
 )
+from src.matching.scorer import CandidateScorer
 from src.search.bm25_search import BM25Search
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
 from src.search.vector_search import VectorSearch
-
 
 TEST_QUERIES = [
     "senior software engineer python java javascript aws postgresql",
@@ -96,12 +93,18 @@ def profile_summary(candidate: Profile, pid: str):
     jh_str = f"{jh:.0f}m" if jh else "N/A"
 
     signals_str = []
-    if sig.saved_by_recruiters_30d: signals_str.append(f"saved={sig.saved_by_recruiters_30d}")
-    if sig.recruiter_response_rate: signals_str.append(f"resp={sig.recruiter_response_rate:.0%}")
-    if sig.profile_completeness_score: signals_str.append(f"complete={sig.profile_completeness_score:.0f}%")
-    if sig.open_to_work: signals_str.append("open2work")
-    if sig.notice_period_days and sig.notice_period_days <= 30: signals_str.append("immediate")
-    if sig.verified_email and sig.verified_phone: signals_str.append("verified")
+    if sig.saved_by_recruiters_30d:
+        signals_str.append(f"saved={sig.saved_by_recruiters_30d}")
+    if sig.recruiter_response_rate:
+        signals_str.append(f"resp={sig.recruiter_response_rate:.0%}")
+    if sig.profile_completeness_score:
+        signals_str.append(f"complete={sig.profile_completeness_score:.0f}%")
+    if sig.open_to_work:
+        signals_str.append("open2work")
+    if sig.notice_period_days and sig.notice_period_days <= 30:
+        signals_str.append("immediate")
+    if sig.verified_email and sig.verified_phone:
+        signals_str.append("verified")
 
     return {
         "name": candidate.personal.name if candidate.personal else "?",
@@ -134,7 +137,7 @@ async def analyze_query(query: str, executor: ExecutorAgent, profiles: ProfileSt
     results = await executor.execute(parsed, top_k=50)
 
     print(f"Total results: {len(results)}")
-    print(f"\n--- TOP 10 ---")
+    print("\n--- TOP 10 ---")
     for r in results[:10]:
         p = profiles.get(r.profile_id)
         if not p:
@@ -155,7 +158,7 @@ async def analyze_query(query: str, executor: ExecutorAgent, profiles: ProfileSt
               f"beh={r.scores.behavioral_score or 0:.3f} car={r.scores.career_trajectory_score or 0:.3f} "
               f"prof={r.scores.skill_proficiency_score or 0:.3f}")
 
-    print(f"\n--- BOTTOM 5 ---")
+    print("\n--- BOTTOM 5 ---")
     for r in results[-5:]:
         p = profiles.get(r.profile_id)
         if not p:
@@ -167,7 +170,7 @@ async def analyze_query(query: str, executor: ExecutorAgent, profiles: ProfileSt
         print(f"    Exp: {info['exp_years']}y | Career: {info['car_traj']} | Beh: {info['beh_score']} | Honeypot: {info['honeypot']}")
 
     # Quality analysis
-    print(f"\n--- QUALITY ANALYSIS ---")
+    print("\n--- QUALITY ANALYSIS ---")
     issues = []
 
     # Check top 3 — do they LOOK like good candidates for this query?
@@ -232,14 +235,13 @@ async def main():
 
     # Also test the full submission pipeline
     print(f"\n{'='*80}")
-    print(f"RUNNING FULL SUBMISSION PIPELINE")
+    print("RUNNING FULL SUBMISSION PIPELINE")
     print(f"{'='*80}")
 
     # Now do a comprehensive analysis of top-10 and bottom-10 in submission.csv
-    print(f"\n\nFINAL SUBMISSION ANALYSIS")
+    print("\n\nFINAL SUBMISSION ANALYSIS")
     print(f"{'='*80}")
 
-    all_profiles_map = profiles.get_all_sample()
     final_candidates = []
 
     for query in [
@@ -278,7 +280,7 @@ async def main():
 
     final_candidates.sort(key=lambda x: (-x["score"], x["pid"]))
 
-    print(f"\n--- TOP 10 in FINAL SUBMISSION ---")
+    print("\n--- TOP 10 in FINAL SUBMISSION ---")
     for i, c in enumerate(final_candidates[:10], 1):
         p = profiles.get(c["pid"])
         if not p:
@@ -300,7 +302,7 @@ async def main():
               f"beh={r.scores.behavioral_score or 0:.3f} car={r.scores.career_trajectory_score or 0:.3f} "
               f"prof={r.scores.skill_proficiency_score or 0:.3f}")
 
-    print(f"\n--- BOTTOM 10 in FINAL SUBMISSION ---")
+    print("\n--- BOTTOM 10 in FINAL SUBMISSION ---")
     for i, c in enumerate(final_candidates[-10:], len(final_candidates) - 9):
         p = profiles.get(c["pid"])
         if not p:
@@ -332,7 +334,7 @@ async def main():
         print(f"  Bottom-10 avg: {sum(scores[-10:])/10:.4f}")
 
         # Honeypot positions
-        print(f"\n--- HONEYPOT PROFILES (penalized to bottom) ---")
+        print("\n--- HONEYPOT PROFILES (penalized to bottom) ---")
         for i, c in enumerate(final_candidates, 1):
             p = profiles.get(c["pid"])
             if p and detect_honeypot(p):

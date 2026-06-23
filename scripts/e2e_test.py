@@ -1,12 +1,11 @@
+# ruff: noqa: E501
 """Full pipeline end-to-end test with real Ollama LLM.
 Tests every agent node in the LangGraph search pipeline."""
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sys
-import time
 from pathlib import Path
 
 # Ensure project root is on path
@@ -26,7 +25,7 @@ def check(step: str, ok: bool, detail: str = ""):
         errors.append(step)
         logger.error(f"  FAIL [{step}] {detail}")
 
-import traceback
+import traceback  # noqa: E402
 
 
 async def run_tests():
@@ -61,7 +60,7 @@ async def run_tests():
     logger.info("STEP 1: Config & LLM Connectivity")
     logger.info("=" * 60)
 
-    from src.core.config import get_settings, get_llm_client
+    from src.core.config import get_llm_client, get_settings
 
     settings = get_settings()
     check("config-loads", settings.llm_provider == "ollama", f"provider={settings.llm_provider}")
@@ -81,11 +80,9 @@ async def run_tests():
     logger.info("STEP 2: Profile Store & Index Loading")
     logger.info("=" * 60)
 
-    from src.core.profile_store import ProfileStore
     from src.core.config import DATA_DIR
-    from src.core.constants import SAMPLE_PATH
-    from src.matching.scorer import CandidateScorer, DEFAULT_SLIDER_WEIGHTS
-    from src.matching.skill_matcher import SkillMatcher
+    from src.core.profile_store import ProfileStore
+    from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer
 
     store = ProfileStore()
     check("profile-store-loaded", len(store) > 0, f"profiles={len(store)}")
@@ -97,11 +94,11 @@ async def run_tests():
     check("profile-fetch", sample is not None, f"first profile id={sample.profile_id if sample else 'N/A'}")
 
     # Load indexes
-    from src.search.vector_search import VectorSearch
+    from src.language.multilingual import MultilingualEmbedder
     from src.search.bm25_search import BM25Search
     from src.search.hybrid import HybridSearch
     from src.search.reranker import CrossEncoderReranker
-    from src.language.multilingual import MultilingualEmbedder
+    from src.search.vector_search import VectorSearch
 
     index_dir = DATA_DIR / "indexes"
     faiss_path = index_dir / "faiss_index.bin"
@@ -246,7 +243,6 @@ async def run_tests():
     logger.info("=" * 60)
 
     # Build a MatchResult list for the reflector
-    from src.core.models import MatchResult, MatchScores
     match_results = []
     if exec_results and isinstance(exec_results, list):
         for mr in exec_results:
@@ -330,7 +326,7 @@ async def run_tests():
     logger.info("STEP 10: Fairness Components")
     logger.info("=" * 60)
 
-    from src.fairness.anonymizer import anonymize_text_for_bias, anonymize_profile, style_anonymize
+    from src.fairness.anonymizer import anonymize_text_for_bias, style_anonymize
     from src.fairness.bias_detector import BiasDetector
 
     try:
@@ -372,7 +368,6 @@ async def run_tests():
     logger.info("=" * 60)
 
     from src.ranking.listwise_ranker import PlackettLuceRanker
-    from src.core.models import MatchResult, MatchScores
 
     ranker = PlackettLuceRanker()
     try:
@@ -401,7 +396,7 @@ async def run_tests():
     logger.info("STEP 12: Evaluation Metrics")
     logger.info("=" * 60)
 
-    from src.evaluation.metrics import precision_at_k, recall_at_k, mean_reciprocal_rank, ndcg_at_k
+    from src.evaluation.metrics import mean_reciprocal_rank, ndcg_at_k, precision_at_k, recall_at_k
 
     try:
         retrieved = ["a", "b", "c", "d", "e"]

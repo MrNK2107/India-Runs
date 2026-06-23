@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.extraction.career_history_utils import compute_years_from_dates, latest_role, _parse_date
+from src.extraction.career_history_utils import _parse_date, compute_years_from_dates, latest_role
 
 
 class TestLatestRole:

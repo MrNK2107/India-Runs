@@ -1,17 +1,15 @@
+# ruff: noqa: E501
 #!/usr/bin/env python3
 """Check data quality issues in the candidate dataset."""
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, '/home/nanda/India-Runs')
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-from src.core.profile_store import ProfileStore
 from src.core.config import DATA_DIR
-from src.matching.behavioral_scorer import (
-    compute_behavioral_score,
-    compute_career_trajectory,
-)
-from src.core.models import Signals
+from src.core.profile_store import ProfileStore
 
 profiles = ProfileStore()
 profiles.load_sample(DATA_DIR / "samples" / "sample_candidates.json")
@@ -28,7 +26,7 @@ for pid, p in all_p.items():
         zero_roles.append(pid)
         if p.professional and p.professional.total_experience_years:
             has_exp_but_no_roles.append(pid)
-    
+
     sig = p.signals
     has_any_signal = bool(
         (sig.saved_by_recruiters_30d or 0) > 0 or
@@ -47,7 +45,7 @@ print(f"  Which also have total_experience_years: {len(has_exp_but_no_roles)}")
 print(f"Profiles with NO behavioral signals: {len(no_signals)}/{len(all_p)}")
 
 # Show first few of each
-print(f"\n--- Zero roles but have exp years ---")
+print("\n--- Zero roles but have exp years ---")
 for pid in has_exp_but_no_roles[:10]:
     p = all_p[pid]
     na = p.personal.name if p.personal else "?"
@@ -57,7 +55,7 @@ for pid in has_exp_but_no_roles[:10]:
     print(f"  {pid}: {na} — {title} @ {company} ({exp_y}y)")
 
 # Check raw text for presence of experience info
-print(f"\n--- Checking raw_text for exp info in CAND_0000100 ---")
+print("\n--- Checking raw_text for exp info in CAND_0000100 ---")
 p100 = all_p["CAND_0000100"]
 print(f"Total exp years: {p100.professional.total_experience_years}")
 print(f"Experience list length: {len(p100.experience)}")
@@ -65,8 +63,9 @@ if len(p100.raw_text) > 200:
     print(f"Raw text (first 600 chars):\n{p100.raw_text[:600]}")
 
 # Check if role info exists in raw text but wasn't parsed into experience
-print(f"\n--- Checking raw data structure ---")
-import json
+print("\n--- Checking raw data structure ---")
+import json  # noqa: E402
+
 samples = DATA_DIR / "samples" / "sample_candidates.json"
 with open(samples) as f:
     data = json.load(f)
@@ -86,7 +85,7 @@ for pid in has_exp_but_no_roles[:3]:
                     print(f"{pid}.{key}: dict with relevant keys: {list(val.keys())[:10]}")
 
 # Also check if there's a 'career' or 'roles' field
-print(f"\n--- Checking raw data keys across samples ---")
+print("\n--- Checking raw data keys across samples ---")
 all_keys = set()
 for pid in has_exp_but_no_roles[:10]:
     if pid in data:

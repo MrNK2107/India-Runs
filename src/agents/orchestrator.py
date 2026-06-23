@@ -246,7 +246,10 @@ class Orchestrator:
 
     async def _execute_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
-        parsed = ParsedQuery.model_validate(parsed_dict, strict=False) if parsed_dict else ParsedQuery()
+        parsed = (
+            ParsedQuery.model_validate(parsed_dict, strict=False)
+            if parsed_dict else ParsedQuery()
+        )
         slider_weights = state.get("slider_weights") or None
         results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
         methods_used = []
@@ -309,7 +312,9 @@ class Orchestrator:
         take_top = min(20, len(match_results))
         top_candidates = match_results[:take_top]
 
-        ranked = await self.listwise_ranker.arank(top_candidates, anonymized_profiles=anonymized_profiles)
+        ranked = await self.listwise_ranker.arank(
+            top_candidates, anonymized_profiles=anonymized_profiles
+        )
         rank_map = {pid: merit for pid, merit in ranked}
 
         ordered_results = sorted(
@@ -333,7 +338,10 @@ class Orchestrator:
 
     async def _reflect_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
-        parsed = ParsedQuery.model_validate(parsed_dict, strict=False) if parsed_dict else ParsedQuery()
+        parsed = (
+            ParsedQuery.model_validate(parsed_dict, strict=False)
+            if parsed_dict else ParsedQuery()
+        )
         results = [MatchResult(**r) for r in state.get("results", [])]
         evaluations = await self.reflector.reflect(parsed, results)
         replan_count = state.get("replan_count", 0)
@@ -355,7 +363,6 @@ class Orchestrator:
 
     async def _rationale_node(self, state: AgentState) -> dict:
         results_raw = state.get("results", [])
-        parsed_dict = state.get("parsed_query") or {}
         if not results_raw:
             return {"should_continue": False}
 

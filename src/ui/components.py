@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from src.core.models import Rationale, SearchResultItem
+from src.core.models import MatchResult, MatchScores, Profile, Rationale, SearchResultItem
 
 
 def _bullet_years(years: float | None) -> str:
@@ -178,13 +178,10 @@ def create_skill_match_table(rationale: Rationale) -> str:
 
 def create_analytics_dashboard(results_json: str = "[]") -> str:
     import json
-    import math
 
-    from src.core.models import MatchResult, MatchScores, SearchResultItem
-    from src.fairness.bias_detector import BiasDetector
+    from src.core.models import MatchResult, MatchScores
     from src.fairness.metrics import (
         compute_all_fairness_metrics,
-        compute_demographic_parity,
     )
 
     # Early return for empty results
@@ -193,11 +190,9 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
             "<div style='padding:60px;text-align:center;color:#9ca3af;'>"
             "<p style='font-size:24px;margin-bottom:12px;'>&#128202;</p>"
             "<p style='font-size:18px;'>No results to analyze</p>"
-            "<p style='font-size:14px;'>Run a search first to see analytics and fairness metrics.</p>"
+            "<p style='font-size:14px;'>Run a search first to see analytics and fairness metrics.</p>"  # noqa: E501
             "</div>"
         )
-
-    detector = BiasDetector()
 
     try:
         raw = json.loads(results_json) if results_json else []
@@ -213,8 +208,6 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
     )
 
     # Build MatchResults + determine metadata from first item
-    pii_anonymized = True
-    search_methods = []
     match_results = []
     for r in raw:
         if isinstance(r, dict):
@@ -267,7 +260,7 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         avg_score = 0
         max_score = 0
         min_score = 0
-        bar_chart = '<div style="color:#9ca3af;padding:40px;text-align:center;">No results to analyze</div>'
+        bar_chart = '<div style="color:#9ca3af;padding:40px;text-align:center;">No results to analyze</div>'  # noqa: E501
 
     # Compute fairness metrics
     metric_cards = ""
@@ -276,7 +269,6 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         fairness = compute_all_fairness_metrics(match_results, profiledict)
         dp = fairness.get("demographic_parity", {})
         lang_bias = fairness.get("language_bias", {})
-        loc_bias = fairness.get("location_bias", {})
 
         # Helper
         def _metric_card(label, value, threshold, format_str="{:.3f}"):
@@ -313,9 +305,13 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         "font-size:11px;color:#9ca3af;margin-top:4px;"
     )
 
+    header_style = (
+        "display:flex;justify-content:space-between;"
+        "align-items:center;margin-bottom:16px;"
+    )
     return f"""
     <div style="padding:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="{header_style}">
             <h3 style="margin:0;">Fairness & Bias Metrics</h3>
             <div style="display:flex;gap:8px;align-items:center;">
                 {listwise_badge}
@@ -327,10 +323,7 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
             </div>
         </div>
         <div style="{grid_style}">
-            {metric_cards or ''.join(
-                '<div class="metric-card"><div class="metric-label">Run a search to see metrics</div></div>'
-                for _ in range(1)
-            )}
+            {metric_cards or _empty_metric_card()}
         </div>
 
         <h3 style="margin:24px 0 16px;">Score Distribution</h3>
@@ -377,6 +370,14 @@ def _build_distribution_table(match_results: list) -> str:
             <div style="font-size:12px;color:#6b7280;">Weak ({weak*100//total}%)</div>
         </div>
     </div>"""
+
+
+def _empty_metric_card() -> str:
+    return (
+        '<div class="metric-card">'
+        '<div class="metric-label">Run a search to see metrics</div>'
+        '</div>'
+    )
 
 
 def _get_bias_profiles(match_results: list[MatchResult]) -> dict[str, Profile]:

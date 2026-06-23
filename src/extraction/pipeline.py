@@ -19,11 +19,21 @@ class ExtractionResult:
 
 @dataclass
 class ExtractionBundle:
-    current_title: ExtractionResult = field(default_factory=lambda: ExtractionResult(None, "not_found"))
-    current_company: ExtractionResult = field(default_factory=lambda: ExtractionResult(None, "not_found"))
-    total_experience_years: ExtractionResult = field(default_factory=lambda: ExtractionResult(None, "not_found"))
-    industry: ExtractionResult = field(default_factory=lambda: ExtractionResult(None, "not_found"))
-    seniority_level: ExtractionResult = field(default_factory=lambda: ExtractionResult(None, "not_found"))
+    current_title: ExtractionResult = field(
+        default_factory=lambda: ExtractionResult(None, "not_found")
+    )
+    current_company: ExtractionResult = field(
+        default_factory=lambda: ExtractionResult(None, "not_found")
+    )
+    total_experience_years: ExtractionResult = field(
+        default_factory=lambda: ExtractionResult(None, "not_found")
+    )
+    industry: ExtractionResult = field(
+        default_factory=lambda: ExtractionResult(None, "not_found")
+    )
+    seniority_level: ExtractionResult = field(
+        default_factory=lambda: ExtractionResult(None, "not_found")
+    )
 
 
 class FieldExtractorPipeline:
