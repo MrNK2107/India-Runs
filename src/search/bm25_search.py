@@ -28,7 +28,7 @@ class BM25Search:
         top_indices = np.argsort(scores)[::-1][:top_k]
         results: list[tuple[str, float]] = []
         for idx in top_indices:
-            if scores[idx] <= 0:
+            if scores[idx] < 0:
                 continue
             results.append((self.id_map[int(idx)], float(scores[idx])))
         return results

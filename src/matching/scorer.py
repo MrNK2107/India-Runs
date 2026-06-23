@@ -1,27 +1,32 @@
 from __future__ import annotations
 
-import numpy as np
 
 from src.core.config import get_scoring_config
 from src.core.models import MatchScores
+from src.matching.confidence import compute_confidence
+from src.matching.behavioral_scorer import (
+    compute_behavioral_score,
+    compute_career_trajectory,
+    compute_skill_proficiency,
+)
 
 DIM_TO_ACTUAL: dict[str, str] = {
     "skill_match": "skill_match",
     "experience_match": "experience_match",
     "education_match": "education_match",
     "assessment_score": "cross_encoder_score",
-    "behavioral_signals": "behavioral_signals",
+    "behavioral_signals": "behavioral_score",
     "cultural_fit": "cultural_fit",
 }
 
 
 DEFAULT_SLIDER_WEIGHTS: dict[str, float] = {
-    "skill_match": 0.30,
-    "experience_match": 0.25,
-    "education_match": 0.15,
+    "skill_match": 0.25,
+    "experience_match": 0.20,
+    "education_match": 0.10,
     "assessment_score": 0.15,
-    "behavioral_signals": 0.10,
-    "cultural_fit": 0.05,
+    "behavioral_signals": 0.20,
+    "cultural_fit": 0.10,
 }
 
 
@@ -48,6 +53,9 @@ class CandidateScorer:
             "location_match": scores.get("location_match"),
             "education_match": scores.get("education_match"),
             "cross_encoder_score": scores.get("cross_encoder_score"),
+            "behavioral_score": scores.get("behavioral_score"),
+            "career_trajectory_score": scores.get("career_trajectory_score"),
+            "skill_proficiency_score": scores.get("skill_proficiency_score"),
             "behavioral_signals": scores.get("behavioral_signals"),
             "cultural_fit": scores.get("cultural_fit"),
         }
@@ -74,7 +82,7 @@ class CandidateScorer:
         overall = weighted_sum / total_weight if total_weight > 0 else 0.0
         overall = max(0.0, min(1.0, overall))
 
-        confidence = self.compute_confidence({k: v for k, v in components.items() if v is not None})
+        confidence = compute_confidence({k: v for k, v in components.items() if v is not None})
 
         return MatchScores(
             overall=overall,
@@ -85,12 +93,10 @@ class CandidateScorer:
             location_match=components.get("location_match"),
             education_match=components.get("education_match"),
             cross_encoder_score=components.get("cross_encoder_score"),
+            behavioral_score=components.get("behavioral_score"),
+            career_trajectory_score=components.get("career_trajectory_score"),
+            skill_proficiency_score=components.get("skill_proficiency_score"),
             confidence=confidence,
         )
 
-    def compute_confidence(self, scores: dict[str, float | None]) -> float:
-        values = [v for v in scores.values() if v is not None]
-        if len(values) < 2:
-            return 0.5
-        std = float(np.std(values))
-        return max(0.0, min(1.0, 1.0 - std))
+

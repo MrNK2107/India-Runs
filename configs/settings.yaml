@@ -38,7 +38,7 @@ search:
   top_k_hybrid: 50
   top_k_final: 10
   rrf_k: 60
-  cross_encoder_timeout_ms: 500
+  cross_encoder_timeout_ms: 0
 
 scoring:
   weights_file: "configs/scoring_weights.yaml"

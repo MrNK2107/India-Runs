@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 DEVANAGARI_RANGE = range(0x0900, 0x0980)
 LATIN_RANGE = range(0x0041, 0x007B)
+LATIN_ACCENTED_RANGE = range(0x00C0, 0x0250)
 
 HINGLISH_KEYWORDS: set[str] = {
     "hai", "ho", "hain", "hoon", "hu", "ka", "ki", "ke", "ko", "se", "mein", "me",
@@ -143,6 +144,9 @@ def _count_latin_words(text: str) -> int:
     count = 0
     for word in text.split():
         cleaned = word.strip(".,!?;:\"'()[]{}")
-        if cleaned and all(ord(c) in LATIN_RANGE or c == "-" for c in cleaned):
+        if cleaned and all(
+            ord(c) in LATIN_RANGE or ord(c) in LATIN_ACCENTED_RANGE or c == "-"
+            for c in cleaned
+        ):
             count += 1
     return count

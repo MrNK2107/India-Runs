@@ -6,6 +6,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 from src.core.config import DATA_DIR
+from src.core.constants import SAMPLE_PATH
 from src.core.models import Profile
 from src.ingestion.normalizer import normalize_redrob
 
@@ -20,6 +21,17 @@ class ProfileStore:
         self._cache: OrderedDict[str, Profile] = OrderedDict()
         self._index_built = False
         self._sample_profiles: dict[str, Profile] = {}
+        self._auto_init_samples()
+
+    def _auto_init_samples(self) -> None:
+        """Automatically load sample profiles if main profile file is missing."""
+        if self.path.exists():
+            return
+        sample_path = SAMPLE_PATH
+        if not sample_path.exists():
+            logger.warning(f"No profile data found at {self.path} or {sample_path}")
+            return
+        self.load_sample(sample_path)
 
     def load_sample(self, sample_path: Path) -> None:
         if not sample_path.exists():
@@ -116,7 +128,7 @@ class ProfileStore:
                 line = f.readline()
             raw = json.loads(line)
             profile = normalize_redrob(raw)
-        except Exception:
+        except (IOError, OSError, ValueError, json.JSONDecodeError):
             return None
 
         if len(self._cache) >= self._max_cache:
@@ -135,4 +147,4 @@ class ProfileStore:
 
     def __len__(self) -> int:
         self._build_offset_index()
-        return len(self._offset_index)
+        return len(self._offset_index) + len(self._sample_profiles)

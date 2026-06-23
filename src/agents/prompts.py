@@ -1,3 +1,27 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def fill_placeholders(template: str, **kwargs: str) -> str:
+    """Substitute placeholders in a template, warning about unfilled ones."""
+    result = template
+    for key, value in kwargs.items():
+        placeholder = "{" + key + "}"
+        if placeholder in result:
+            result = result.replace(placeholder, value)
+    unfilled = _find_unfilled_placeholders(result)
+    for u in unfilled:
+        logger.warning("Unfilled placeholder in prompt template: {%s}", u)
+        result = result.replace("{" + u + "}", "")
+    return result
+
+
+def _find_unfilled_placeholders(text: str) -> list[str]:
+    import re
+    return re.findall(r"\{(\w+)\}", text)
+
+
 PLANNER_SYSTEM_PROMPT = (
     "You are an expert recruiter's assistant. Given a natural language job query, "
     "parse it into a structured search specification.\n\n"
@@ -7,20 +31,20 @@ PLANNER_SYSTEM_PROMPT = (
     "- Location preferences (city, remote preference)\n"
     "- Education requirements\n"
     "- Any exclusion criteria\n\n"
-    "Output valid JSON matching this schema:\n"
+    "Output ONLY valid JSON, no other text. "
+    "Do NOT wrap in markdown code fences. Return raw JSON only.\n"
+    "Schema:\n"
     '{\n'
-    '  "required_skills": [{"name": "...", "importance": "required|preferred|nice_to_have",\n'
-    '    "min_proficiency": "...", "min_years": null}],\n'
-    '  "preferred_skills": [{"name": "...", "importance": "nice_to_have", "weight": 0.5}],\n'
+    '  "required_skills": [{"name": "...", "importance": "required",\n'
+    '    "min_proficiency": null, "min_years": null}],\n'
+    '  "preferred_skills": [],\n'
     '  "experience": {"min_years": null, "max_years": null, "industry": null},\n'
     '  "location": {"city": null, "state": null, "country": null,\n'
     '    "remote_ok": false, "hybrid_ok": false},\n'
     '  "education": {"min_degree": null, "field": null},\n'
     '  "filters": {"exclude_companies": [], "include_companies": [],\n'
     '    "must_have_certifications": [], "languages_required": []}\n'
-    '}\n\n'
-    "If the query is ambiguous, make reasonable assumptions and note them.\n"
-    "Output ONLY valid JSON, no other text."
+    '}\n'
 )
 
 REFLECTOR_SYSTEM_PROMPT = (

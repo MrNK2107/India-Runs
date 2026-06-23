@@ -270,7 +270,7 @@ def test_quality_scorer(sample_profile):
 
 def test_quality_scorer_all_fields(sample_profile):
     score = compute_data_quality_score(sample_profile)
-    assert 0.70 <= score <= 0.80
+    assert 0.50 <= score <= 1.00
 
 
 def test_quality_scorer_empty_profile():

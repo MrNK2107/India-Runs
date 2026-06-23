@@ -1,20 +1,27 @@
 from __future__ import annotations
 
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
+
+# Force offline mode globally to prevent HuggingFace hub HEAD loops
+# Must be set before any sentence-transformers imports
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from fastapi import FastAPI
 
 from src.api.middleware.logging import RequestLoggingMiddleware
 from src.api.middleware.validation import InputValidationMiddleware
-from src.api.routes.health import init_health, set_model_loaded
+from src.api.routes.health import init_health, set_model_loaded, set_index_size
 from src.api.routes.health import router as health_router
 from src.api.routes.ingest import router as ingest_router
 from src.api.routes.profiles import init_profiles
 from src.api.routes.profiles import router as profiles_router
 from src.api.routes.search import init_orchestrator
 from src.api.routes.search import router as search_router
-from src.core.config import DATA_DIR
+from src.core.config import DATA_DIR, get_settings
 from src.core.profile_store import ProfileStore
 
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _start_time = time.time()
+    init_health(index_size=0)
     logger.info("Starting India Runs — Intelligent Candidate Discovery")
     indexes_dir = DATA_DIR / "indexes"
     indexes_dir.mkdir(parents=True, exist_ok=True)
@@ -53,8 +62,10 @@ async def lifespan(app: FastAPI):
     embedder = MultilingualEmbedder()
     logger.info("Pre-loading embedding model...")
     _ = embedder.model
+    # Force tokenizer initialization with a dummy embed call
+    _ = embedder.embed("warmup")
     set_model_loaded("embedding", True)
-    logger.info("Embedding model loaded")
+    logger.info("Embedding model loaded and ready")
 
     vector_search = VectorSearch()
     vector_search.load(faiss_path, id_map_path)
@@ -67,10 +78,10 @@ async def lifespan(app: FastAPI):
     hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
     timeout_ms = get_settings().cross_encoder_timeout_ms
     reranker = CrossEncoderReranker(timeout_ms=timeout_ms)
-    logger.info(f"Pre-loading cross-encoder model (timeout={timeout_ms}ms)...")
-    _ = reranker.model
-    set_model_loaded("cross_encoder", True)
-    logger.info("Cross-encoder model loaded")
+    # Cross-encoder loading is lazy and disabled by default (CROSS_ENCODER_ENABLED=false)
+    # The model will NOT be loaded at startup to avoid HuggingFace hub loops
+    set_model_loaded("cross_encoder", reranker.model is not None)
+    logger.info(f"Cross-encoder status: {'loaded' if reranker.model is not None else 'disabled / unavailable'}")
     scorer = CandidateScorer()
 
     profiles = ProfileStore()
@@ -92,10 +103,10 @@ async def lifespan(app: FastAPI):
     orchestrator = Orchestrator(planner, executor, reflector)
 
     init_orchestrator(orchestrator)
-    init_health(index_size=vector_search.size)
+    set_index_size(vector_search.size)
     init_profiles(profiles)
 
-    logger.info("System initialized successfully (%.1fs)", 0.0)
+    logger.info("System initialized successfully (%.1fs)", time.time() - _start_time)
 
     yield
 

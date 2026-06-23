@@ -10,7 +10,7 @@ from langgraph.graph import END, StateGraph
 from src.agents.executor import ExecutorAgent
 from src.agents.planner import PlannerAgent
 from src.agents.reflector import ReflectorAgent
-from src.core.config import get_scoring_config
+from src.core.config import get_scoring_config, get_settings
 from src.core.models import (
     ExperienceRequirements,
     LocationRequirements,
@@ -47,11 +47,28 @@ _SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\
 
 
 def _is_simple_query(query: str) -> bool:
+    """Detect queries that can skip LLM parsing and use rule-based extraction."""
     words = query.strip().split()
     if len(words) <= 3:
         return True
+    # Queries matching skill/location patterns known by the rule-based parser
     if _SIMPLE_QUERY_RE.match(query):
-        return len(words) <= 3
+        return len(words) <= 4
+    # Queries with 4-6 words that look like skill+role+location combos
+    # e.g. "Python developer AWS Bangalore", "Java spring boot Mumbai"
+    if len(words) <= 6:
+        from src.core.constants import INDIAN_CITIES
+        lower = query.strip().lower()
+        # Check if it contains a known Indian city
+        has_city = any(c.lower() in lower for c in INDIAN_CITIES)
+        # Check if it looks like a tech skills query (common tech terms)
+        tech_keywords = {"python", "java", "aws", "react", "node", "javascript", "typescript",
+                         "golang", "rust", "sql", "docker", "kubernetes", "devops", "ml",
+                         "machine learning", "data", "full stack", "backend", "frontend",
+                         "sde", "software", "engineering", "developer", "engineer", "analyst",
+                         "manager", "architect", "lead", "intern", "fresher"}
+        has_tech = any(kw in lower for kw in tech_keywords)
+        return has_city or has_tech
     return False
 
 
@@ -63,6 +80,16 @@ STOP_WORDS = frozenset({
     "developer", "engineer", "manager", "architect", "analyst",
     "experience", "role", "position", "job", "opening", "hire",
     "dev", "sr", "jr", "intern", "fresher",
+    # Generic descriptors — not real skills
+    "engineering", "tech", "technology", "technical",
+    "management", "team", "agile", "leadership",
+    "software", "full", "stack", "backend", "frontend", "back end", "front end",
+    "cloud", "infrastructure", "platform", "system", "systems",
+    "design", "development", "testing", "deployment",
+    "solution", "solutions", "application", "applications",
+    "digital", "transformation", "innovation",
+    "strategy", "strategic", "planning", "operations",
+    "product", "program", "project", "portfolio",
 })
 
 
@@ -80,6 +107,9 @@ def _parse_query_text(text: str) -> ParsedQuery:
 
     words = lower.split()
     skill_words = [w for w in words if w not in STOP_WORDS and len(w) > 1]
+    # Exclude detected city name from skills
+    if city:
+        skill_words = [w for w in skill_words if w != city.lower()]
     deduped = list(dict.fromkeys(skill_words))
 
     return ParsedQuery(
@@ -87,6 +117,7 @@ def _parse_query_text(text: str) -> ParsedQuery:
         experience=ExperienceRequirements(),
         location=LocationRequirements(city=city),
         filters=QueryFilters(),
+        original_query=text.strip(),
     )
 
 
@@ -100,7 +131,8 @@ class Orchestrator:
         self.rationale_gen = RationaleGenerator()
         self.listwise_ranker = PlackettLuceRanker()
         config = get_scoring_config()
-        self.max_replans = config.get("max_replan_cycles", 3)
+        settings = get_settings()
+        self.max_replans = settings.max_replan_cycles
         self.min_good_matches = config.get("min_good_matches_for_pass", 8)
         self.graph = self._build_graph()
 
@@ -157,8 +189,9 @@ class Orchestrator:
         slider_weights: dict[str, float] | None = None,
     ) -> SearchResponse:
         parsed = _parse_query_text(raw_query)
+        start_time = int(time.time() * 1000)
         results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
-        elapsed = int(time.time() * 1000)
+        elapsed = int(time.time() * 1000) - start_time
         items: list[SearchResultItem] = []
         for i, r in enumerate(results[:100], start=1):
             rationale = self.rationale_gen._template_rationale(r, None)
@@ -188,7 +221,7 @@ class Orchestrator:
             query_id="",
             total_candidates_searched=len(results),
             results=items,
-            processing_time_ms=0,
+            processing_time_ms=elapsed,
             search_metadata=SearchMetadata(
                 methods_used=["turbo"],
                 replan_count=0,
@@ -213,7 +246,7 @@ class Orchestrator:
 
     async def _execute_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
-        parsed = ParsedQuery(**parsed_dict) if parsed_dict else ParsedQuery()
+        parsed = ParsedQuery.model_validate(parsed_dict, strict=False) if parsed_dict else ParsedQuery()
         slider_weights = state.get("slider_weights") or None
         results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
         methods_used = []
@@ -300,7 +333,7 @@ class Orchestrator:
 
     async def _reflect_node(self, state: AgentState) -> dict:
         parsed_dict = state.get("parsed_query") or {}
-        parsed = ParsedQuery(**parsed_dict) if parsed_dict else ParsedQuery()
+        parsed = ParsedQuery.model_validate(parsed_dict, strict=False) if parsed_dict else ParsedQuery()
         results = [MatchResult(**r) for r in state.get("results", [])]
         evaluations = await self.reflector.reflect(parsed, results)
         replan_count = state.get("replan_count", 0)
@@ -329,6 +362,11 @@ class Orchestrator:
         rationales = []
         for r in results_raw[:20]:
             if isinstance(r, dict):
+                from src.core.models import MatchScores
+                scores_dict = r.get("scores", {})
+                if not isinstance(scores_dict, dict):
+                    scores_dict = {}
+                match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
                 match_result = MatchResult(
                     query_id="",
                     profile_id=r.get("profile_id", ""),
@@ -338,7 +376,7 @@ class Orchestrator:
                     current_company=r.get("current_company"),
                     location=r.get("location"),
                     experience_years=r.get("experience_years"),
-                    scores=r.get("scores"),
+                    scores=match_scores,
                     matched_skills=r.get("matched_skills", []),
                     missing_skills=r.get("missing_skills", []),
                 )

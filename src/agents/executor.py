@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from difflib import SequenceMatcher
 
 from src.core.models import (
     MatchMetadata,
@@ -13,73 +12,33 @@ from src.core.models import (
 )
 from src.core.profile_store import ProfileStore
 from src.matching.scorer import CandidateScorer
+from src.matching.skill_matcher import SkillMatcher
+from src.matching.behavioral_scorer import (
+    compute_behavioral_score,
+    compute_career_trajectory,
+    compute_skill_proficiency,
+    detect_honeypot,
+)
 from src.search.filters import SearchFilter
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
 
-SKILL_ALIASES: dict[str, list[str]] = {
-    "python": ["python3", "py"],
-    "javascript": ["js", "ecmascript", "es6"],
-    "typescript": ["ts"],
-    "react": ["reactjs", "react.js"],
-    "vue": ["vuejs", "vue.js"],
-    "angular": ["angularjs", "angular.js"],
-    "node.js": ["nodejs", "node"],
-    "kubernetes": ["k8s"],
-    "machine learning": ["ml"],
-    "artificial intelligence": ["ai"],
-    "natural language processing": ["nlp"],
-    "sql": ["mysql", "postgresql", "postgres", "pl/sql"],
-    "git": ["github", "gitlab", "bitbucket"],
-    "rest api": ["rest", "restful", "restful api"],
-    "tensorflow": ["tf"],
-    "pytorch": ["torch"],
-    "fastapi": ["fast api"],
-    "deep learning": ["dl"],
-    "computer vision": ["cv"],
-    "ci/cd": ["ci", "cd", "continuous integration", "continuous deployment"],
-    "statistics": ["statistical analysis", "statistical modeling"],
-}
-
-_ALIAS_TO_CANONICAL: dict[str, str] = {}
-for _canonical, _aliases in SKILL_ALIASES.items():
-    for _a in _aliases:
-        _ALIAS_TO_CANONICAL[_a] = _canonical
-
-
-def _canonical_skill(name: str) -> str:
-    return _ALIAS_TO_CANONICAL.get(name, name)
-
-
 def _skill_match_score(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> float:
+    """Score skill match using ONLY structured skills (no raw text — that's semantic/keyword's job).
+    
+    This prevents false positives like 'java' matching a career description
+    or 'js' matching node.js in raw text. The SkillMatcher uses fuzzy matching
+    with aliases against the structured skills array only.
+    """
     if not required_names:
         return 1.0
+    _matcher = SkillMatcher(similarity_threshold=0.85)
     matched = 0
-    skill_names_lower = {s.name.lower() for s in profile_skills}
-    raw_lower = raw_text.lower() if raw_text else ""
     for rn in required_names:
-        rn_lower = _canonical_skill(rn.lower())
-        if rn_lower in skill_names_lower:
-            matched += 1
-            continue
-        aliases = SKILL_ALIASES.get(rn_lower, [])
-        if any(a in skill_names_lower for a in aliases):
-            matched += 1
-            continue
-        fuzzy_match = False
-        for sn in skill_names_lower:
-            if SequenceMatcher(None, rn_lower, sn).ratio() >= 0.8:
-                fuzzy_match = True
-                break
-        if fuzzy_match:
-            matched += 1
-            continue
-        if rn_lower in raw_lower:
-            matched += 1
-            continue
-        if any(a in raw_lower for a in aliases):
+        result = _matcher.find_best_match(rn, profile_skills)
+        if result is not None:
             matched += 1
     return matched / len(required_names)
 
@@ -87,34 +46,19 @@ def _skill_match_score(
 def _match_skills_detail(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> tuple[list[str], list[str]]:
+    """Match skills using ONLY structured skills array.
+    
+    Returns (matched_names, missing_names) based on explicit skill entries.
+    """
     matched: list[str] = []
     missing: list[str] = []
-    skill_names_lower = {s.name.lower() for s in profile_skills}
-    raw_lower = raw_text.lower() if raw_text else ""
+    _matcher = SkillMatcher(similarity_threshold=0.85)
     for rn in required_names:
-        rn_lower = _canonical_skill(rn.lower())
-        if rn_lower in skill_names_lower:
+        result = _matcher.find_best_match(rn, profile_skills)
+        if result is not None:
             matched.append(rn)
-            continue
-        aliases = SKILL_ALIASES.get(rn_lower, [])
-        if any(a in skill_names_lower for a in aliases):
-            matched.append(rn)
-            continue
-        fuzzy_found = False
-        for sn in skill_names_lower:
-            if SequenceMatcher(None, rn_lower, sn).ratio() >= 0.8:
-                fuzzy_found = True
-                break
-        if fuzzy_found:
-            matched.append(rn)
-            continue
-        if rn_lower in raw_lower:
-            matched.append(rn)
-            continue
-        if any(a in raw_lower for a in aliases):
-            matched.append(rn)
-            continue
-        missing.append(rn)
+        else:
+            missing.append(rn)
     return matched, missing
 
 logger = logging.getLogger(__name__)
@@ -132,7 +76,7 @@ class ExecutorAgent:
         self.reranker = reranker
         self.scorer = scorer
         self.profile_store = profiles
-        self._rerank_top_k = 20
+        self._rerank_top_k = 100
 
     async def execute(
         self,
@@ -163,12 +107,14 @@ class ExecutorAgent:
             if profile is not None:
                 rerank_candidates.append((pid, profile.raw_text[:2000], score))
             else:
-                rerank_candidates.append((pid, search_text, score))
+                rerank_candidates.append((pid, "", score))
 
-        reranked = self.reranker.rerank(search_text, rerank_candidates, top_k=top_k)
+        reranked = self.reranker.rerank(
+            parsed.original_query or search_text, rerank_candidates, top_k=top_k
+        )
 
         results: list[MatchResult] = []
-        for rank, (pid, rerank_score) in enumerate(reranked, start=1):
+        for _rank, (pid, rerank_score) in enumerate(reranked, start=1):
             profile = self.profile_store.get(pid)
             if profile is None:
                 continue
@@ -185,14 +131,26 @@ class ExecutorAgent:
             )
             exp_match = min(1.0, total_years / 10.0)
 
+            # Honeypot penalty — impossible profiles get heavy penalty but stay in set
+            honeypot_reason = detect_honeypot(profile)
+            honeypot_penalty = 0.15 if honeypot_reason else 1.0
+
+            # Behavioral & career signals
+            behavioral_score = compute_behavioral_score(profile.signals)
+            career_trajectory = compute_career_trajectory(profile)
+            skill_prof = compute_skill_proficiency(profile, all_req)
+
             scores_dict: dict[str, float | None] = {
                 "semantic_similarity": vec_scores.get(pid),
                 "keyword_match": bm25_scores.get(pid),
-                "skill_match": skill_overlap,
-                "experience_match": exp_match,
+                "skill_match": skill_overlap * honeypot_penalty,
+                "experience_match": exp_match * honeypot_penalty,
                 "location_match": None,
                 "education_match": None,
-                "cross_encoder_score": rerank_score,
+                "cross_encoder_score": rerank_score * honeypot_penalty if rerank_score else None,
+                "behavioral_score": behavioral_score * honeypot_penalty,
+                "career_trajectory_score": career_trajectory * honeypot_penalty,
+                "skill_proficiency_score": skill_prof * honeypot_penalty,
             }
 
             match_scores = self.scorer.compute_overall(scores_dict, slider_weights)
@@ -208,7 +166,7 @@ class ExecutorAgent:
                 MatchResult(
                     query_id="",
                     profile_id=pid,
-                    rank=rank,
+                    rank=0,  # will reassign after sorting
                     name=profile.personal.name if profile.personal else "",
                     current_title=(
                         profile.professional.current_title if profile.professional else None
@@ -227,6 +185,11 @@ class ExecutorAgent:
                     metadata=MatchMetadata(search_method=SearchMethod.HYBRID, reranked=True),
                 )
             )
+
+        # Sort by overall score descending, tie-break by profile_id
+        results.sort(key=lambda r: (-r.scores.overall, r.profile_id))
+        for rank, r in enumerate(results, start=1):
+            r.rank = rank
 
         return results
 

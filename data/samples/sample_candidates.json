@@ -8238,5 +8238,3259 @@
       "verified_phone": true,
       "linkedin_connected": false
     }
+  },
+  {
+    "candidate_id": "CAND_0000051",
+    "profile": {
+      "anonymized_name": "Deepak",
+      "headline": "SDE I",
+      "summary": "Deepak is a Senior Software Engineer with 14.8 years of experience.",
+      "location": "Bangalore",
+      "current_title": "Engineering Manager",
+      "current_company": "Swiggy",
+      "years_of_experience": 14.8
+    },
+    "skills": [
+      {
+        "name": "CI/CD",
+        "proficiency": "beginner",
+        "endorsements": 36,
+        "duration_months": 22
+      },
+      {
+        "name": "Java",
+        "proficiency": "intermediate",
+        "endorsements": 20,
+        "duration_months": 54
+      },
+      {
+        "name": "TensorFlow",
+        "proficiency": "advanced",
+        "endorsements": 14,
+        "duration_months": 36
+      },
+      {
+        "name": "Terraform",
+        "proficiency": "intermediate",
+        "endorsements": 38,
+        "duration_months": 7
+      },
+      {
+        "name": "Django",
+        "proficiency": "beginner",
+        "endorsements": 29,
+        "duration_months": 10
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "intermediate",
+        "endorsements": 16,
+        "duration_months": 49
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 10,
+        "duration_months": 18
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000052",
+    "profile": {
+      "anonymized_name": "Saanvi",
+      "headline": "Backend Engineer",
+      "summary": "Saanvi is a Senior Software Engineer with 1.9 years of experience.",
+      "location": "Lucknow",
+      "current_title": "Product Manager",
+      "current_company": "Zomato",
+      "years_of_experience": 1.9
+    },
+    "skills": [
+      {
+        "name": "Scikit-learn",
+        "proficiency": "intermediate",
+        "endorsements": 45,
+        "duration_months": 26
+      },
+      {
+        "name": "Java",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 59
+      },
+      {
+        "name": "Terraform",
+        "proficiency": "intermediate",
+        "endorsements": 20,
+        "duration_months": 21
+      },
+      {
+        "name": "PHP",
+        "proficiency": "beginner",
+        "endorsements": 6,
+        "duration_months": 15
+      },
+      {
+        "name": "GCP",
+        "proficiency": "expert",
+        "endorsements": 14,
+        "duration_months": 9
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "advanced",
+        "endorsements": 4,
+        "duration_months": 59
+      },
+      {
+        "name": "SQL",
+        "proficiency": "advanced",
+        "endorsements": 6,
+        "duration_months": 27
+      },
+      {
+        "name": "AWS",
+        "proficiency": "advanced",
+        "endorsements": 47,
+        "duration_months": 18
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000053",
+    "profile": {
+      "anonymized_name": "Pranav",
+      "headline": "DevOps Engineer",
+      "summary": "Pranav is a Senior Software Engineer with 3.3 years of experience.",
+      "location": "Bhopal",
+      "current_title": "Cloud Architect",
+      "current_company": "Chargebee",
+      "years_of_experience": 3.3
+    },
+    "skills": [
+      {
+        "name": "TypeScript",
+        "proficiency": "expert",
+        "endorsements": 20,
+        "duration_months": 51
+      },
+      {
+        "name": "Django",
+        "proficiency": "beginner",
+        "endorsements": 22,
+        "duration_months": 8
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "intermediate",
+        "endorsements": 22,
+        "duration_months": 27
+      },
+      {
+        "name": "Docker",
+        "proficiency": "beginner",
+        "endorsements": 23,
+        "duration_months": 40
+      },
+      {
+        "name": "Azure",
+        "proficiency": "intermediate",
+        "endorsements": 10,
+        "duration_months": 13
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "advanced",
+        "endorsements": 36,
+        "duration_months": 6
+      },
+      {
+        "name": "Spark",
+        "proficiency": "beginner",
+        "endorsements": 15,
+        "duration_months": 56
+      },
+      {
+        "name": "REST API",
+        "proficiency": "advanced",
+        "endorsements": 31,
+        "duration_months": 26
+      },
+      {
+        "name": "Python",
+        "proficiency": "beginner",
+        "endorsements": 47,
+        "duration_months": 51
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "intermediate",
+        "endorsements": 35,
+        "duration_months": 24
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "advanced",
+        "endorsements": 22,
+        "duration_months": 59
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000054",
+    "profile": {
+      "anonymized_name": "Dev",
+      "headline": "Engineering Manager",
+      "summary": "Dev is a DevOps Engineer with 4.7 years of experience.",
+      "location": "Nagpur",
+      "current_title": "Technical Lead",
+      "current_company": "Paytm",
+      "years_of_experience": 4.7
+    },
+    "skills": [
+      {
+        "name": "Spring Boot",
+        "proficiency": "advanced",
+        "endorsements": 32,
+        "duration_months": 49
+      },
+      {
+        "name": "Go",
+        "proficiency": "beginner",
+        "endorsements": 37,
+        "duration_months": 55
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "advanced",
+        "endorsements": 26,
+        "duration_months": 60
+      },
+      {
+        "name": "Django",
+        "proficiency": "expert",
+        "endorsements": 1,
+        "duration_months": 16
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000055",
+    "profile": {
+      "anonymized_name": "Shaurya",
+      "headline": "Full Stack Developer",
+      "summary": "Shaurya is a Engineering Manager with 6.8 years of experience.",
+      "location": "Gurgaon",
+      "current_title": "Software Engineer",
+      "current_company": "MakeMyTrip",
+      "years_of_experience": 6.8
+    },
+    "skills": [
+      {
+        "name": "Swift",
+        "proficiency": "advanced",
+        "endorsements": 31,
+        "duration_months": 30
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "expert",
+        "endorsements": 37,
+        "duration_months": 30
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "intermediate",
+        "endorsements": 41,
+        "duration_months": 39
+      },
+      {
+        "name": "Spark",
+        "proficiency": "beginner",
+        "endorsements": 20,
+        "duration_months": 16
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "beginner",
+        "endorsements": 41,
+        "duration_months": 48
+      },
+      {
+        "name": "Terraform",
+        "proficiency": "intermediate",
+        "endorsements": 32,
+        "duration_months": 7
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "beginner",
+        "endorsements": 11,
+        "duration_months": 34
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "expert",
+        "endorsements": 36,
+        "duration_months": 38
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000056",
+    "profile": {
+      "anonymized_name": "Yash",
+      "headline": "SDE III",
+      "summary": "Yash is a Full Stack Developer with 7.3 years of experience.",
+      "location": "Visakhapatnam",
+      "current_title": "Frontend Developer",
+      "current_company": "TCS",
+      "years_of_experience": 7.3
+    },
+    "skills": [
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 13,
+        "duration_months": 10
+      },
+      {
+        "name": "SQL",
+        "proficiency": "expert",
+        "endorsements": 40,
+        "duration_months": 44
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "expert",
+        "endorsements": 26,
+        "duration_months": 6
+      },
+      {
+        "name": "Spark",
+        "proficiency": "intermediate",
+        "endorsements": 4,
+        "duration_months": 20
+      },
+      {
+        "name": "Ruby",
+        "proficiency": "expert",
+        "endorsements": 22,
+        "duration_months": 22
+      },
+      {
+        "name": "Git",
+        "proficiency": "beginner",
+        "endorsements": 42,
+        "duration_months": 19
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000057",
+    "profile": {
+      "anonymized_name": "Rahul",
+      "headline": "Technical Lead",
+      "summary": "Rahul is a ML Engineer with 7.4 years of experience.",
+      "location": "Kochi",
+      "current_title": "Solutions Architect",
+      "current_company": "CRED",
+      "years_of_experience": 7.4
+    },
+    "skills": [
+      {
+        "name": "Rust",
+        "proficiency": "intermediate",
+        "endorsements": 41,
+        "duration_months": 22
+      },
+      {
+        "name": "PyTorch",
+        "proficiency": "expert",
+        "endorsements": 26,
+        "duration_months": 46
+      },
+      {
+        "name": "Kubernetes",
+        "proficiency": "expert",
+        "endorsements": 20,
+        "duration_months": 36
+      },
+      {
+        "name": "SQL",
+        "proficiency": "expert",
+        "endorsements": 45,
+        "duration_months": 32
+      },
+      {
+        "name": "Python",
+        "proficiency": "intermediate",
+        "endorsements": 18,
+        "duration_months": 7
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 18,
+        "duration_months": 53
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "intermediate",
+        "endorsements": 48,
+        "duration_months": 49
+      },
+      {
+        "name": "Java",
+        "proficiency": "advanced",
+        "endorsements": 19,
+        "duration_months": 9
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "intermediate",
+        "endorsements": 28,
+        "duration_months": 16
+      },
+      {
+        "name": "Angular",
+        "proficiency": "intermediate",
+        "endorsements": 36,
+        "duration_months": 21
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "advanced",
+        "endorsements": 39,
+        "duration_months": 23
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000058",
+    "profile": {
+      "anonymized_name": "Aanya",
+      "headline": "SDE I",
+      "summary": "Aanya is a QA Engineer with 9.1 years of experience.",
+      "location": "Coimbatore",
+      "current_title": "Technical Lead",
+      "current_company": "Zomato",
+      "years_of_experience": 9.1
+    },
+    "skills": [
+      {
+        "name": "Kubernetes",
+        "proficiency": "advanced",
+        "endorsements": 4,
+        "duration_months": 22
+      },
+      {
+        "name": "Azure",
+        "proficiency": "advanced",
+        "endorsements": 44,
+        "duration_months": 28
+      },
+      {
+        "name": "PHP",
+        "proficiency": "expert",
+        "endorsements": 15,
+        "duration_months": 22
+      },
+      {
+        "name": "Angular",
+        "proficiency": "advanced",
+        "endorsements": 31,
+        "duration_months": 39
+      },
+      {
+        "name": "AWS",
+        "proficiency": "advanced",
+        "endorsements": 15,
+        "duration_months": 47
+      },
+      {
+        "name": "Swift",
+        "proficiency": "beginner",
+        "endorsements": 5,
+        "duration_months": 45
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "expert",
+        "endorsements": 21,
+        "duration_months": 18
+      },
+      {
+        "name": "Docker",
+        "proficiency": "expert",
+        "endorsements": 13,
+        "duration_months": 44
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000059",
+    "profile": {
+      "anonymized_name": "Aisha",
+      "headline": "SDE II",
+      "summary": "Aisha is a Product Manager with 12.9 years of experience.",
+      "location": "Delhi",
+      "current_title": "ML Engineer",
+      "current_company": "Swiggy",
+      "years_of_experience": 12.9
+    },
+    "skills": [
+      {
+        "name": "CI/CD",
+        "proficiency": "expert",
+        "endorsements": 26,
+        "duration_months": 13
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "expert",
+        "endorsements": 40,
+        "duration_months": 10
+      },
+      {
+        "name": "Git",
+        "proficiency": "intermediate",
+        "endorsements": 7,
+        "duration_months": 17
+      },
+      {
+        "name": "Kubernetes",
+        "proficiency": "beginner",
+        "endorsements": 43,
+        "duration_months": 48
+      },
+      {
+        "name": "Ruby",
+        "proficiency": "intermediate",
+        "endorsements": 34,
+        "duration_months": 44
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "beginner",
+        "endorsements": 6,
+        "duration_months": 36
+      },
+      {
+        "name": "Java",
+        "proficiency": "intermediate",
+        "endorsements": 11,
+        "duration_months": 19
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "advanced",
+        "endorsements": 47,
+        "duration_months": 9
+      },
+      {
+        "name": "Go",
+        "proficiency": "expert",
+        "endorsements": 34,
+        "duration_months": 9
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "intermediate",
+        "endorsements": 18,
+        "duration_months": 42
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000060",
+    "profile": {
+      "anonymized_name": "Ananya",
+      "headline": "Senior Software Engineer",
+      "summary": "Ananya is a QA Engineer with 11.0 years of experience.",
+      "location": "Nagpur",
+      "current_title": "Cloud Architect",
+      "current_company": "HCL",
+      "years_of_experience": 11.0
+    },
+    "skills": [
+      {
+        "name": "Java",
+        "proficiency": "advanced",
+        "endorsements": 50,
+        "duration_months": 22
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 17,
+        "duration_months": 15
+      },
+      {
+        "name": "C#",
+        "proficiency": "expert",
+        "endorsements": 22,
+        "duration_months": 38
+      },
+      {
+        "name": "Redis",
+        "proficiency": "beginner",
+        "endorsements": 42,
+        "duration_months": 12
+      },
+      {
+        "name": "React",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 46
+      },
+      {
+        "name": "Scala",
+        "proficiency": "beginner",
+        "endorsements": 21,
+        "duration_months": 20
+      },
+      {
+        "name": "Python",
+        "proficiency": "beginner",
+        "endorsements": 16,
+        "duration_months": 35
+      },
+      {
+        "name": "Kubernetes",
+        "proficiency": "advanced",
+        "endorsements": 4,
+        "duration_months": 47
+      },
+      {
+        "name": "Microservices",
+        "proficiency": "expert",
+        "endorsements": 30,
+        "duration_months": 44
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000061",
+    "profile": {
+      "anonymized_name": "Neha",
+      "headline": "SDE II",
+      "summary": "Neha is a Engineering Manager with 14.1 years of experience.",
+      "location": "Hyderabad",
+      "current_title": "Software Engineer",
+      "current_company": "BrowserStack",
+      "years_of_experience": 14.1
+    },
+    "skills": [
+      {
+        "name": "Docker",
+        "proficiency": "intermediate",
+        "endorsements": 36,
+        "duration_months": 52
+      },
+      {
+        "name": "PHP",
+        "proficiency": "beginner",
+        "endorsements": 41,
+        "duration_months": 12
+      },
+      {
+        "name": "AWS",
+        "proficiency": "expert",
+        "endorsements": 11,
+        "duration_months": 45
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "expert",
+        "endorsements": 0,
+        "duration_months": 19
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000062",
+    "profile": {
+      "anonymized_name": "Vikram",
+      "headline": "Engineering Manager",
+      "summary": "Vikram is a Frontend Developer with 3.4 years of experience.",
+      "location": "Chandigarh",
+      "current_title": "SDE II",
+      "current_company": "CRED",
+      "years_of_experience": 3.4
+    },
+    "skills": [
+      {
+        "name": "Kotlin",
+        "proficiency": "beginner",
+        "endorsements": 15,
+        "duration_months": 16
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "expert",
+        "endorsements": 46,
+        "duration_months": 37
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "expert",
+        "endorsements": 50,
+        "duration_months": 18
+      },
+      {
+        "name": "Swift",
+        "proficiency": "advanced",
+        "endorsements": 37,
+        "duration_months": 22
+      },
+      {
+        "name": "Java",
+        "proficiency": "advanced",
+        "endorsements": 37,
+        "duration_months": 21
+      },
+      {
+        "name": "Django",
+        "proficiency": "beginner",
+        "endorsements": 26,
+        "duration_months": 47
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "advanced",
+        "endorsements": 32,
+        "duration_months": 12
+      },
+      {
+        "name": "Azure",
+        "proficiency": "advanced",
+        "endorsements": 3,
+        "duration_months": 19
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000063",
+    "profile": {
+      "anonymized_name": "Riya",
+      "headline": "Frontend Developer",
+      "summary": "Riya is a Cloud Architect with 12.9 years of experience.",
+      "location": "Nagpur",
+      "current_title": "SDE I",
+      "current_company": "Chargebee",
+      "years_of_experience": 12.9
+    },
+    "skills": [
+      {
+        "name": "PHP",
+        "proficiency": "intermediate",
+        "endorsements": 36,
+        "duration_months": 12
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 17
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "expert",
+        "endorsements": 48,
+        "duration_months": 59
+      },
+      {
+        "name": "Python",
+        "proficiency": "intermediate",
+        "endorsements": 19,
+        "duration_months": 44
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000064",
+    "profile": {
+      "anonymized_name": "Sai",
+      "headline": "Solutions Architect",
+      "summary": "Sai is a Technical Lead with 7.7 years of experience.",
+      "location": "Bhopal",
+      "current_title": "Cloud Architect",
+      "current_company": "Tech Mahindra",
+      "years_of_experience": 7.7
+    },
+    "skills": [
+      {
+        "name": "Django",
+        "proficiency": "advanced",
+        "endorsements": 10,
+        "duration_months": 32
+      },
+      {
+        "name": "Scala",
+        "proficiency": "advanced",
+        "endorsements": 22,
+        "duration_months": 30
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "advanced",
+        "endorsements": 5,
+        "duration_months": 40
+      },
+      {
+        "name": "React",
+        "proficiency": "intermediate",
+        "endorsements": 18,
+        "duration_months": 39
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 40,
+        "duration_months": 21
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "intermediate",
+        "endorsements": 43,
+        "duration_months": 12
+      },
+      {
+        "name": "Go",
+        "proficiency": "intermediate",
+        "endorsements": 25,
+        "duration_months": 48
+      },
+      {
+        "name": "Flask",
+        "proficiency": "advanced",
+        "endorsements": 28,
+        "duration_months": 16
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000065",
+    "profile": {
+      "anonymized_name": "Rajesh",
+      "headline": "Technical Lead",
+      "summary": "Rajesh is a Solutions Architect with 11.6 years of experience.",
+      "location": "Visakhapatnam",
+      "current_title": "Data Scientist",
+      "current_company": "Google",
+      "years_of_experience": 11.6
+    },
+    "skills": [
+      {
+        "name": "React",
+        "proficiency": "intermediate",
+        "endorsements": 8,
+        "duration_months": 12
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "expert",
+        "endorsements": 45,
+        "duration_months": 40
+      },
+      {
+        "name": "Spark",
+        "proficiency": "expert",
+        "endorsements": 15,
+        "duration_months": 49
+      },
+      {
+        "name": "Django",
+        "proficiency": "advanced",
+        "endorsements": 18,
+        "duration_months": 30
+      },
+      {
+        "name": "Java",
+        "proficiency": "advanced",
+        "endorsements": 23,
+        "duration_months": 26
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "advanced",
+        "endorsements": 3,
+        "duration_months": 37
+      },
+      {
+        "name": "Python",
+        "proficiency": "intermediate",
+        "endorsements": 38,
+        "duration_months": 58
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "beginner",
+        "endorsements": 33,
+        "duration_months": 54
+      },
+      {
+        "name": "Docker",
+        "proficiency": "advanced",
+        "endorsements": 5,
+        "duration_months": 42
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000066",
+    "profile": {
+      "anonymized_name": "Yash",
+      "headline": "Solutions Architect",
+      "summary": "Yash is a SDE I with 8.2 years of experience.",
+      "location": "Noida",
+      "current_title": "Solutions Architect",
+      "current_company": "Druva",
+      "years_of_experience": 8.2
+    },
+    "skills": [
+      {
+        "name": "Redis",
+        "proficiency": "beginner",
+        "endorsements": 35,
+        "duration_months": 26
+      },
+      {
+        "name": "Go",
+        "proficiency": "beginner",
+        "endorsements": 20,
+        "duration_months": 22
+      },
+      {
+        "name": "Swift",
+        "proficiency": "beginner",
+        "endorsements": 20,
+        "duration_months": 9
+      },
+      {
+        "name": "Python",
+        "proficiency": "intermediate",
+        "endorsements": 28,
+        "duration_months": 60
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "beginner",
+        "endorsements": 36,
+        "duration_months": 33
+      },
+      {
+        "name": "PyTorch",
+        "proficiency": "advanced",
+        "endorsements": 21,
+        "duration_months": 8
+      },
+      {
+        "name": "Kubernetes",
+        "proficiency": "beginner",
+        "endorsements": 39,
+        "duration_months": 50
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000067",
+    "profile": {
+      "anonymized_name": "Vivaan",
+      "headline": "Frontend Developer",
+      "summary": "Vivaan is a DevOps Engineer with 11.3 years of experience.",
+      "location": "Bangalore",
+      "current_title": "Technical Lead",
+      "current_company": "Microsoft",
+      "years_of_experience": 11.3
+    },
+    "skills": [
+      {
+        "name": "Spark",
+        "proficiency": "beginner",
+        "endorsements": 23,
+        "duration_months": 52
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "expert",
+        "endorsements": 17,
+        "duration_months": 53
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "intermediate",
+        "endorsements": 21,
+        "duration_months": 9
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "beginner",
+        "endorsements": 25,
+        "duration_months": 38
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 42
+      },
+      {
+        "name": "Docker",
+        "proficiency": "intermediate",
+        "endorsements": 32,
+        "duration_months": 44
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000068",
+    "profile": {
+      "anonymized_name": "Neha",
+      "headline": "SDE II",
+      "summary": "Neha is a Backend Engineer with 10.1 years of experience.",
+      "location": "Bangalore",
+      "current_title": "SDE II",
+      "current_company": "Druva",
+      "years_of_experience": 10.1
+    },
+    "skills": [
+      {
+        "name": "Kotlin",
+        "proficiency": "intermediate",
+        "endorsements": 41,
+        "duration_months": 39
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "advanced",
+        "endorsements": 48,
+        "duration_months": 15
+      },
+      {
+        "name": "Git",
+        "proficiency": "expert",
+        "endorsements": 32,
+        "duration_months": 39
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "advanced",
+        "endorsements": 43,
+        "duration_months": 52
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000069",
+    "profile": {
+      "anonymized_name": "Kavya",
+      "headline": "Cloud Architect",
+      "summary": "Kavya is a SDE I with 14.2 years of experience.",
+      "location": "Coimbatore",
+      "current_title": "SDE III",
+      "current_company": "HCL",
+      "years_of_experience": 14.2
+    },
+    "skills": [
+      {
+        "name": "PyTorch",
+        "proficiency": "advanced",
+        "endorsements": 24,
+        "duration_months": 7
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 6,
+        "duration_months": 47
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "expert",
+        "endorsements": 8,
+        "duration_months": 9
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "expert",
+        "endorsements": 27,
+        "duration_months": 17
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "expert",
+        "endorsements": 35,
+        "duration_months": 48
+      },
+      {
+        "name": "Angular",
+        "proficiency": "beginner",
+        "endorsements": 26,
+        "duration_months": 39
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "advanced",
+        "endorsements": 11,
+        "duration_months": 37
+      },
+      {
+        "name": "Microservices",
+        "proficiency": "intermediate",
+        "endorsements": 45,
+        "duration_months": 53
+      },
+      {
+        "name": "Docker",
+        "proficiency": "advanced",
+        "endorsements": 43,
+        "duration_months": 21
+      },
+      {
+        "name": "Django",
+        "proficiency": "advanced",
+        "endorsements": 6,
+        "duration_months": 54
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000070",
+    "profile": {
+      "anonymized_name": "Kavya",
+      "headline": "Solutions Architect",
+      "summary": "Kavya is a Technical Lead with 6.0 years of experience.",
+      "location": "Nagpur",
+      "current_title": "Technical Lead",
+      "current_company": "CRED",
+      "years_of_experience": 6.0
+    },
+    "skills": [
+      {
+        "name": "GCP",
+        "proficiency": "beginner",
+        "endorsements": 14,
+        "duration_months": 50
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "beginner",
+        "endorsements": 33,
+        "duration_months": 7
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "advanced",
+        "endorsements": 17,
+        "duration_months": 46
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "expert",
+        "endorsements": 0,
+        "duration_months": 27
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 21,
+        "duration_months": 42
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000071",
+    "profile": {
+      "anonymized_name": "Aisha",
+      "headline": "Cloud Architect",
+      "summary": "Aisha is a Senior Software Engineer with 4.4 years of experience.",
+      "location": "Pune",
+      "current_title": "Senior Software Engineer",
+      "current_company": "OYO",
+      "years_of_experience": 4.4
+    },
+    "skills": [
+      {
+        "name": "MongoDB",
+        "proficiency": "advanced",
+        "endorsements": 15,
+        "duration_months": 54
+      },
+      {
+        "name": "Microservices",
+        "proficiency": "intermediate",
+        "endorsements": 41,
+        "duration_months": 11
+      },
+      {
+        "name": "Docker",
+        "proficiency": "advanced",
+        "endorsements": 19,
+        "duration_months": 15
+      },
+      {
+        "name": "Git",
+        "proficiency": "beginner",
+        "endorsements": 23,
+        "duration_months": 23
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "expert",
+        "endorsements": 49,
+        "duration_months": 30
+      },
+      {
+        "name": "REST API",
+        "proficiency": "advanced",
+        "endorsements": 2,
+        "duration_months": 7
+      },
+      {
+        "name": "React",
+        "proficiency": "expert",
+        "endorsements": 7,
+        "duration_months": 32
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000072",
+    "profile": {
+      "anonymized_name": "Myra",
+      "headline": "Solutions Architect",
+      "summary": "Myra is a Data Scientist with 9.5 years of experience.",
+      "location": "Ahmedabad",
+      "current_title": "ML Engineer",
+      "current_company": "BrowserStack",
+      "years_of_experience": 9.5
+    },
+    "skills": [
+      {
+        "name": "TensorFlow",
+        "proficiency": "intermediate",
+        "endorsements": 3,
+        "duration_months": 13
+      },
+      {
+        "name": "PHP",
+        "proficiency": "expert",
+        "endorsements": 7,
+        "duration_months": 48
+      },
+      {
+        "name": "Django",
+        "proficiency": "intermediate",
+        "endorsements": 18,
+        "duration_months": 10
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 30,
+        "duration_months": 60
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000073",
+    "profile": {
+      "anonymized_name": "Aisha",
+      "headline": "Technical Lead",
+      "summary": "Aisha is a SDE I with 12.6 years of experience.",
+      "location": "Chennai",
+      "current_title": "SDE II",
+      "current_company": "TCS",
+      "years_of_experience": 12.6
+    },
+    "skills": [
+      {
+        "name": "Redis",
+        "proficiency": "advanced",
+        "endorsements": 26,
+        "duration_months": 37
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "intermediate",
+        "endorsements": 5,
+        "duration_months": 17
+      },
+      {
+        "name": "AWS",
+        "proficiency": "intermediate",
+        "endorsements": 21,
+        "duration_months": 24
+      },
+      {
+        "name": "Java",
+        "proficiency": "intermediate",
+        "endorsements": 18,
+        "duration_months": 45
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "beginner",
+        "endorsements": 3,
+        "duration_months": 17
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000074",
+    "profile": {
+      "anonymized_name": "Tanya",
+      "headline": "Technical Lead",
+      "summary": "Tanya is a SDE I with 13.8 years of experience.",
+      "location": "Jaipur",
+      "current_title": "Data Scientist",
+      "current_company": "OYO",
+      "years_of_experience": 13.8
+    },
+    "skills": [
+      {
+        "name": "Rust",
+        "proficiency": "advanced",
+        "endorsements": 29,
+        "duration_months": 59
+      },
+      {
+        "name": "Java",
+        "proficiency": "expert",
+        "endorsements": 45,
+        "duration_months": 24
+      },
+      {
+        "name": "Azure",
+        "proficiency": "advanced",
+        "endorsements": 49,
+        "duration_months": 33
+      },
+      {
+        "name": "PHP",
+        "proficiency": "beginner",
+        "endorsements": 24,
+        "duration_months": 44
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "advanced",
+        "endorsements": 46,
+        "duration_months": 17
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000075",
+    "profile": {
+      "anonymized_name": "Amit",
+      "headline": "SDE II",
+      "summary": "Amit is a Product Manager with 11.9 years of experience.",
+      "location": "Bangalore",
+      "current_title": "Cloud Architect",
+      "current_company": "Chargebee",
+      "years_of_experience": 11.9
+    },
+    "skills": [
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 35,
+        "duration_months": 13
+      },
+      {
+        "name": "Flask",
+        "proficiency": "beginner",
+        "endorsements": 23,
+        "duration_months": 31
+      },
+      {
+        "name": "Terraform",
+        "proficiency": "beginner",
+        "endorsements": 50,
+        "duration_months": 22
+      },
+      {
+        "name": "C#",
+        "proficiency": "advanced",
+        "endorsements": 37,
+        "duration_months": 8
+      },
+      {
+        "name": "PHP",
+        "proficiency": "expert",
+        "endorsements": 28,
+        "duration_months": 44
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "beginner",
+        "endorsements": 37,
+        "duration_months": 26
+      },
+      {
+        "name": "Git",
+        "proficiency": "expert",
+        "endorsements": 33,
+        "duration_months": 45
+      },
+      {
+        "name": "Go",
+        "proficiency": "advanced",
+        "endorsements": 35,
+        "duration_months": 24
+      },
+      {
+        "name": "Scala",
+        "proficiency": "expert",
+        "endorsements": 26,
+        "duration_months": 26
+      },
+      {
+        "name": "Rust",
+        "proficiency": "advanced",
+        "endorsements": 39,
+        "duration_months": 43
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000076",
+    "profile": {
+      "anonymized_name": "Kavya",
+      "headline": "Data Engineer",
+      "summary": "Kavya is a Solutions Architect with 14.9 years of experience.",
+      "location": "Nagpur",
+      "current_title": "Frontend Developer",
+      "current_company": "Freshworks",
+      "years_of_experience": 14.9
+    },
+    "skills": [
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 45,
+        "duration_months": 21
+      },
+      {
+        "name": "Swift",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 45
+      },
+      {
+        "name": "Spark",
+        "proficiency": "intermediate",
+        "endorsements": 31,
+        "duration_months": 26
+      },
+      {
+        "name": "REST API",
+        "proficiency": "advanced",
+        "endorsements": 37,
+        "duration_months": 44
+      },
+      {
+        "name": "Redis",
+        "proficiency": "beginner",
+        "endorsements": 8,
+        "duration_months": 7
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "advanced",
+        "endorsements": 23,
+        "duration_months": 55
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000077",
+    "profile": {
+      "anonymized_name": "Atharv",
+      "headline": "Senior Software Engineer",
+      "summary": "Atharv is a ML Engineer with 6.7 years of experience.",
+      "location": "Kolkata",
+      "current_title": "Data Engineer",
+      "current_company": "Wipro",
+      "years_of_experience": 6.7
+    },
+    "skills": [
+      {
+        "name": "C#",
+        "proficiency": "intermediate",
+        "endorsements": 7,
+        "duration_months": 50
+      },
+      {
+        "name": "Angular",
+        "proficiency": "intermediate",
+        "endorsements": 36,
+        "duration_months": 15
+      },
+      {
+        "name": "SQL",
+        "proficiency": "beginner",
+        "endorsements": 23,
+        "duration_months": 39
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "expert",
+        "endorsements": 28,
+        "duration_months": 58
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 8,
+        "duration_months": 26
+      },
+      {
+        "name": "Rust",
+        "proficiency": "advanced",
+        "endorsements": 17,
+        "duration_months": 55
+      },
+      {
+        "name": "Redis",
+        "proficiency": "intermediate",
+        "endorsements": 25,
+        "duration_months": 57
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000078",
+    "profile": {
+      "anonymized_name": "Aisha",
+      "headline": "Backend Engineer",
+      "summary": "Aisha is a ML Engineer with 9.9 years of experience.",
+      "location": "Chandigarh",
+      "current_title": "SDE II",
+      "current_company": "MakeMyTrip",
+      "years_of_experience": 9.9
+    },
+    "skills": [
+      {
+        "name": "Git",
+        "proficiency": "beginner",
+        "endorsements": 7,
+        "duration_months": 8
+      },
+      {
+        "name": "PHP",
+        "proficiency": "beginner",
+        "endorsements": 35,
+        "duration_months": 27
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "advanced",
+        "endorsements": 37,
+        "duration_months": 20
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "advanced",
+        "endorsements": 16,
+        "duration_months": 30
+      },
+      {
+        "name": "Rust",
+        "proficiency": "advanced",
+        "endorsements": 40,
+        "duration_months": 44
+      },
+      {
+        "name": "Django",
+        "proficiency": "expert",
+        "endorsements": 32,
+        "duration_months": 14
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "advanced",
+        "endorsements": 34,
+        "duration_months": 21
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000079",
+    "profile": {
+      "anonymized_name": "Shreya",
+      "headline": "Solutions Architect",
+      "summary": "Shreya is a DevOps Engineer with 5.9 years of experience.",
+      "location": "Kolkata",
+      "current_title": "Senior Software Engineer",
+      "current_company": "Paytm",
+      "years_of_experience": 5.9
+    },
+    "skills": [
+      {
+        "name": "Kotlin",
+        "proficiency": "expert",
+        "endorsements": 8,
+        "duration_months": 35
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "expert",
+        "endorsements": 27,
+        "duration_months": 39
+      },
+      {
+        "name": "AWS",
+        "proficiency": "intermediate",
+        "endorsements": 2,
+        "duration_months": 46
+      },
+      {
+        "name": "Angular",
+        "proficiency": "advanced",
+        "endorsements": 29,
+        "duration_months": 42
+      },
+      {
+        "name": "Docker",
+        "proficiency": "intermediate",
+        "endorsements": 24,
+        "duration_months": 51
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "beginner",
+        "endorsements": 32,
+        "duration_months": 43
+      },
+      {
+        "name": "Django",
+        "proficiency": "advanced",
+        "endorsements": 22,
+        "duration_months": 15
+      },
+      {
+        "name": "Flask",
+        "proficiency": "beginner",
+        "endorsements": 17,
+        "duration_months": 59
+      },
+      {
+        "name": "GCP",
+        "proficiency": "beginner",
+        "endorsements": 5,
+        "duration_months": 9
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000080",
+    "profile": {
+      "anonymized_name": "Riya",
+      "headline": "Engineering Manager",
+      "summary": "Riya is a SDE II with 12.7 years of experience.",
+      "location": "Visakhapatnam",
+      "current_title": "SDE II",
+      "current_company": "Swiggy",
+      "years_of_experience": 12.7
+    },
+    "skills": [
+      {
+        "name": "GCP",
+        "proficiency": "beginner",
+        "endorsements": 44,
+        "duration_months": 18
+      },
+      {
+        "name": "Ruby",
+        "proficiency": "beginner",
+        "endorsements": 49,
+        "duration_months": 60
+      },
+      {
+        "name": "C#",
+        "proficiency": "beginner",
+        "endorsements": 28,
+        "duration_months": 49
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "beginner",
+        "endorsements": 50,
+        "duration_months": 34
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "expert",
+        "endorsements": 1,
+        "duration_months": 51
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000081",
+    "profile": {
+      "anonymized_name": "Vihaan",
+      "headline": "Data Scientist",
+      "summary": "Vihaan is a ML Engineer with 5.6 years of experience.",
+      "location": "Trivandrum",
+      "current_title": "Data Scientist",
+      "current_company": "Paytm",
+      "years_of_experience": 5.6
+    },
+    "skills": [
+      {
+        "name": "PostgreSQL",
+        "proficiency": "advanced",
+        "endorsements": 9,
+        "duration_months": 29
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "beginner",
+        "endorsements": 0,
+        "duration_months": 10
+      },
+      {
+        "name": "Git",
+        "proficiency": "advanced",
+        "endorsements": 13,
+        "duration_months": 37
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "beginner",
+        "endorsements": 40,
+        "duration_months": 39
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "beginner",
+        "endorsements": 12,
+        "duration_months": 35
+      },
+      {
+        "name": "Flask",
+        "proficiency": "advanced",
+        "endorsements": 35,
+        "duration_months": 11
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "intermediate",
+        "endorsements": 30,
+        "duration_months": 56
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "beginner",
+        "endorsements": 3,
+        "duration_months": 60
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000082",
+    "profile": {
+      "anonymized_name": "Kavya",
+      "headline": "ML Engineer",
+      "summary": "Kavya is a SDE II with 7.1 years of experience.",
+      "location": "Chandigarh",
+      "current_title": "Data Engineer",
+      "current_company": "Chargebee",
+      "years_of_experience": 7.1
+    },
+    "skills": [
+      {
+        "name": "Kafka",
+        "proficiency": "beginner",
+        "endorsements": 18,
+        "duration_months": 8
+      },
+      {
+        "name": "Git",
+        "proficiency": "advanced",
+        "endorsements": 36,
+        "duration_months": 36
+      },
+      {
+        "name": "Spark",
+        "proficiency": "advanced",
+        "endorsements": 0,
+        "duration_months": 40
+      },
+      {
+        "name": "Docker",
+        "proficiency": "expert",
+        "endorsements": 0,
+        "duration_months": 26
+      },
+      {
+        "name": "Terraform",
+        "proficiency": "advanced",
+        "endorsements": 28,
+        "duration_months": 12
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "beginner",
+        "endorsements": 39,
+        "duration_months": 48
+      },
+      {
+        "name": "REST API",
+        "proficiency": "intermediate",
+        "endorsements": 38,
+        "duration_months": 24
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "intermediate",
+        "endorsements": 37,
+        "duration_months": 29
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 36,
+        "duration_months": 46
+      },
+      {
+        "name": "GCP",
+        "proficiency": "advanced",
+        "endorsements": 0,
+        "duration_months": 55
+      },
+      {
+        "name": "SQL",
+        "proficiency": "expert",
+        "endorsements": 22,
+        "duration_months": 10
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "expert",
+        "endorsements": 19,
+        "duration_months": 60
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000083",
+    "profile": {
+      "anonymized_name": "Riya",
+      "headline": "QA Engineer",
+      "summary": "Riya is a Senior Software Engineer with 14.7 years of experience.",
+      "location": "Bangalore",
+      "current_title": "Cloud Architect",
+      "current_company": "Swiggy",
+      "years_of_experience": 14.7
+    },
+    "skills": [
+      {
+        "name": "GraphQL",
+        "proficiency": "beginner",
+        "endorsements": 42,
+        "duration_months": 6
+      },
+      {
+        "name": "Java",
+        "proficiency": "expert",
+        "endorsements": 4,
+        "duration_months": 53
+      },
+      {
+        "name": "Swift",
+        "proficiency": "beginner",
+        "endorsements": 44,
+        "duration_months": 57
+      },
+      {
+        "name": "PyTorch",
+        "proficiency": "advanced",
+        "endorsements": 0,
+        "duration_months": 29
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "intermediate",
+        "endorsements": 34,
+        "duration_months": 30
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000084",
+    "profile": {
+      "anonymized_name": "Amit",
+      "headline": "Backend Engineer",
+      "summary": "Amit is a Backend Engineer with 6.4 years of experience.",
+      "location": "Nagpur",
+      "current_title": "Technical Lead",
+      "current_company": "OYO",
+      "years_of_experience": 6.4
+    },
+    "skills": [
+      {
+        "name": "PHP",
+        "proficiency": "advanced",
+        "endorsements": 2,
+        "duration_months": 15
+      },
+      {
+        "name": "Node.js",
+        "proficiency": "expert",
+        "endorsements": 32,
+        "duration_months": 24
+      },
+      {
+        "name": "TensorFlow",
+        "proficiency": "beginner",
+        "endorsements": 16,
+        "duration_months": 18
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "advanced",
+        "endorsements": 0,
+        "duration_months": 49
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000085",
+    "profile": {
+      "anonymized_name": "Vihaan",
+      "headline": "SDE I",
+      "summary": "Vihaan is a Data Engineer with 13.5 years of experience.",
+      "location": "Lucknow",
+      "current_title": "Backend Engineer",
+      "current_company": "MakeMyTrip",
+      "years_of_experience": 13.5
+    },
+    "skills": [
+      {
+        "name": "Microservices",
+        "proficiency": "expert",
+        "endorsements": 50,
+        "duration_months": 26
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "intermediate",
+        "endorsements": 5,
+        "duration_months": 39
+      },
+      {
+        "name": "Java",
+        "proficiency": "intermediate",
+        "endorsements": 42,
+        "duration_months": 60
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "advanced",
+        "endorsements": 38,
+        "duration_months": 27
+      },
+      {
+        "name": "Terraform",
+        "proficiency": "intermediate",
+        "endorsements": 28,
+        "duration_months": 35
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "beginner",
+        "endorsements": 13,
+        "duration_months": 12
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000086",
+    "profile": {
+      "anonymized_name": "Avni",
+      "headline": "DevOps Engineer",
+      "summary": "Avni is a DevOps Engineer with 1.6 years of experience.",
+      "location": "Trivandrum",
+      "current_title": "SDE III",
+      "current_company": "Wipro",
+      "years_of_experience": 1.6
+    },
+    "skills": [
+      {
+        "name": "Django",
+        "proficiency": "expert",
+        "endorsements": 0,
+        "duration_months": 32
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "advanced",
+        "endorsements": 2,
+        "duration_months": 48
+      },
+      {
+        "name": "AWS",
+        "proficiency": "beginner",
+        "endorsements": 9,
+        "duration_months": 32
+      },
+      {
+        "name": "Java",
+        "proficiency": "expert",
+        "endorsements": 36,
+        "duration_months": 32
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000087",
+    "profile": {
+      "anonymized_name": "Ritu",
+      "headline": "Frontend Developer",
+      "summary": "Ritu is a Cloud Architect with 14.4 years of experience.",
+      "location": "Delhi",
+      "current_title": "Data Scientist",
+      "current_company": "Razorpay",
+      "years_of_experience": 14.4
+    },
+    "skills": [
+      {
+        "name": "Ruby",
+        "proficiency": "advanced",
+        "endorsements": 49,
+        "duration_months": 52
+      },
+      {
+        "name": "GCP",
+        "proficiency": "intermediate",
+        "endorsements": 1,
+        "duration_months": 25
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "beginner",
+        "endorsements": 1,
+        "duration_months": 6
+      },
+      {
+        "name": "Spark",
+        "proficiency": "intermediate",
+        "endorsements": 20,
+        "duration_months": 8
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "advanced",
+        "endorsements": 50,
+        "duration_months": 38
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "intermediate",
+        "endorsements": 1,
+        "duration_months": 51
+      },
+      {
+        "name": "TensorFlow",
+        "proficiency": "beginner",
+        "endorsements": 19,
+        "duration_months": 47
+      },
+      {
+        "name": "JavaScript",
+        "proficiency": "advanced",
+        "endorsements": 18,
+        "duration_months": 17
+      },
+      {
+        "name": "Scala",
+        "proficiency": "advanced",
+        "endorsements": 25,
+        "duration_months": 54
+      },
+      {
+        "name": "Flask",
+        "proficiency": "intermediate",
+        "endorsements": 43,
+        "duration_months": 49
+      },
+      {
+        "name": "C#",
+        "proficiency": "intermediate",
+        "endorsements": 27,
+        "duration_months": 54
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 1,
+        "duration_months": 52
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000088",
+    "profile": {
+      "anonymized_name": "Riya",
+      "headline": "Technical Lead",
+      "summary": "Riya is a Frontend Developer with 6.2 years of experience.",
+      "location": "Visakhapatnam",
+      "current_title": "Software Engineer",
+      "current_company": "TCS",
+      "years_of_experience": 6.2
+    },
+    "skills": [
+      {
+        "name": "JavaScript",
+        "proficiency": "beginner",
+        "endorsements": 30,
+        "duration_months": 54
+      },
+      {
+        "name": "Java",
+        "proficiency": "expert",
+        "endorsements": 22,
+        "duration_months": 26
+      },
+      {
+        "name": "Azure",
+        "proficiency": "intermediate",
+        "endorsements": 3,
+        "duration_months": 43
+      },
+      {
+        "name": "AWS",
+        "proficiency": "advanced",
+        "endorsements": 46,
+        "duration_months": 23
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000089",
+    "profile": {
+      "anonymized_name": "Shaurya",
+      "headline": "Senior Software Engineer",
+      "summary": "Shaurya is a SDE II with 2.6 years of experience.",
+      "location": "Bhopal",
+      "current_title": "DevOps Engineer",
+      "current_company": "Infosys",
+      "years_of_experience": 2.6
+    },
+    "skills": [
+      {
+        "name": "Azure",
+        "proficiency": "advanced",
+        "endorsements": 7,
+        "duration_months": 27
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "intermediate",
+        "endorsements": 21,
+        "duration_months": 38
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "beginner",
+        "endorsements": 13,
+        "duration_months": 34
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "beginner",
+        "endorsements": 48,
+        "duration_months": 22
+      },
+      {
+        "name": "TensorFlow",
+        "proficiency": "advanced",
+        "endorsements": 31,
+        "duration_months": 50
+      },
+      {
+        "name": "Angular",
+        "proficiency": "advanced",
+        "endorsements": 7,
+        "duration_months": 8
+      },
+      {
+        "name": "Go",
+        "proficiency": "expert",
+        "endorsements": 50,
+        "duration_months": 50
+      },
+      {
+        "name": "AWS",
+        "proficiency": "advanced",
+        "endorsements": 7,
+        "duration_months": 58
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "expert",
+        "endorsements": 1,
+        "duration_months": 40
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000090",
+    "profile": {
+      "anonymized_name": "Sai",
+      "headline": "Data Scientist",
+      "summary": "Sai is a Software Engineer with 4.5 years of experience.",
+      "location": "Ahmedabad",
+      "current_title": "Cloud Architect",
+      "current_company": "BrowserStack",
+      "years_of_experience": 4.5
+    },
+    "skills": [
+      {
+        "name": "AWS",
+        "proficiency": "beginner",
+        "endorsements": 46,
+        "duration_months": 30
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "beginner",
+        "endorsements": 31,
+        "duration_months": 26
+      },
+      {
+        "name": "PHP",
+        "proficiency": "advanced",
+        "endorsements": 31,
+        "duration_months": 46
+      },
+      {
+        "name": "Scala",
+        "proficiency": "beginner",
+        "endorsements": 40,
+        "duration_months": 49
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 14
+      },
+      {
+        "name": "Go",
+        "proficiency": "intermediate",
+        "endorsements": 15,
+        "duration_months": 17
+      },
+      {
+        "name": "REST API",
+        "proficiency": "beginner",
+        "endorsements": 31,
+        "duration_months": 31
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "advanced",
+        "endorsements": 46,
+        "duration_months": 12
+      },
+      {
+        "name": "React",
+        "proficiency": "intermediate",
+        "endorsements": 11,
+        "duration_months": 34
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "advanced",
+        "endorsements": 28,
+        "duration_months": 49
+      },
+      {
+        "name": "Git",
+        "proficiency": "advanced",
+        "endorsements": 5,
+        "duration_months": 46
+      },
+      {
+        "name": "Django",
+        "proficiency": "beginner",
+        "endorsements": 47,
+        "duration_months": 39
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000091",
+    "profile": {
+      "anonymized_name": "Atharv",
+      "headline": "ML Engineer",
+      "summary": "Atharv is a Solutions Architect with 11.2 years of experience.",
+      "location": "Kolkata",
+      "current_title": "Frontend Developer",
+      "current_company": "Freshworks",
+      "years_of_experience": 11.2
+    },
+    "skills": [
+      {
+        "name": "MongoDB",
+        "proficiency": "expert",
+        "endorsements": 48,
+        "duration_months": 11
+      },
+      {
+        "name": "React",
+        "proficiency": "beginner",
+        "endorsements": 39,
+        "duration_months": 38
+      },
+      {
+        "name": "Microservices",
+        "proficiency": "beginner",
+        "endorsements": 20,
+        "duration_months": 51
+      },
+      {
+        "name": "Spark",
+        "proficiency": "advanced",
+        "endorsements": 18,
+        "duration_months": 9
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "beginner",
+        "endorsements": 26,
+        "duration_months": 43
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "advanced",
+        "endorsements": 46,
+        "duration_months": 49
+      },
+      {
+        "name": "Redis",
+        "proficiency": "beginner",
+        "endorsements": 35,
+        "duration_months": 52
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "beginner",
+        "endorsements": 16,
+        "duration_months": 25
+      },
+      {
+        "name": "Swift",
+        "proficiency": "advanced",
+        "endorsements": 49,
+        "duration_months": 16
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000092",
+    "profile": {
+      "anonymized_name": "Kavya",
+      "headline": "Data Engineer",
+      "summary": "Kavya is a Software Engineer with 5.2 years of experience.",
+      "location": "Bangalore",
+      "current_title": "Backend Engineer",
+      "current_company": "Infosys",
+      "years_of_experience": 5.2
+    },
+    "skills": [
+      {
+        "name": "C#",
+        "proficiency": "intermediate",
+        "endorsements": 30,
+        "duration_months": 27
+      },
+      {
+        "name": "Git",
+        "proficiency": "intermediate",
+        "endorsements": 25,
+        "duration_months": 9
+      },
+      {
+        "name": "Airflow",
+        "proficiency": "expert",
+        "endorsements": 13,
+        "duration_months": 14
+      },
+      {
+        "name": "Azure",
+        "proficiency": "advanced",
+        "endorsements": 24,
+        "duration_months": 39
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 24,
+        "duration_months": 34
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "expert",
+        "endorsements": 42,
+        "duration_months": 16
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "beginner",
+        "endorsements": 10,
+        "duration_months": 54
+      },
+      {
+        "name": "Docker",
+        "proficiency": "expert",
+        "endorsements": 12,
+        "duration_months": 41
+      },
+      {
+        "name": "Scala",
+        "proficiency": "advanced",
+        "endorsements": 40,
+        "duration_months": 39
+      },
+      {
+        "name": "Rust",
+        "proficiency": "advanced",
+        "endorsements": 8,
+        "duration_months": 46
+      },
+      {
+        "name": "Java",
+        "proficiency": "beginner",
+        "endorsements": 11,
+        "duration_months": 58
+      },
+      {
+        "name": "Microservices",
+        "proficiency": "expert",
+        "endorsements": 2,
+        "duration_months": 54
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000093",
+    "profile": {
+      "anonymized_name": "Aanya",
+      "headline": "Senior Software Engineer",
+      "summary": "Aanya is a SDE I with 6.1 years of experience.",
+      "location": "Gurgaon",
+      "current_title": "Software Engineer",
+      "current_company": "HCL",
+      "years_of_experience": 6.1
+    },
+    "skills": [
+      {
+        "name": "Spring Boot",
+        "proficiency": "beginner",
+        "endorsements": 44,
+        "duration_months": 49
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "intermediate",
+        "endorsements": 10,
+        "duration_months": 42
+      },
+      {
+        "name": "REST API",
+        "proficiency": "beginner",
+        "endorsements": 48,
+        "duration_months": 33
+      },
+      {
+        "name": "Swift",
+        "proficiency": "beginner",
+        "endorsements": 12,
+        "duration_months": 6
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "beginner",
+        "endorsements": 15,
+        "duration_months": 36
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000094",
+    "profile": {
+      "anonymized_name": "Dev",
+      "headline": "Data Scientist",
+      "summary": "Dev is a Senior Software Engineer with 14.4 years of experience.",
+      "location": "Indore",
+      "current_title": "Solutions Architect",
+      "current_company": "BrowserStack",
+      "years_of_experience": 14.4
+    },
+    "skills": [
+      {
+        "name": "Terraform",
+        "proficiency": "intermediate",
+        "endorsements": 31,
+        "duration_months": 34
+      },
+      {
+        "name": "Git",
+        "proficiency": "advanced",
+        "endorsements": 17,
+        "duration_months": 23
+      },
+      {
+        "name": "Flask",
+        "proficiency": "advanced",
+        "endorsements": 9,
+        "duration_months": 10
+      },
+      {
+        "name": "REST API",
+        "proficiency": "beginner",
+        "endorsements": 15,
+        "duration_months": 43
+      },
+      {
+        "name": "Ruby",
+        "proficiency": "beginner",
+        "endorsements": 6,
+        "duration_months": 42
+      },
+      {
+        "name": "Vue.js",
+        "proficiency": "advanced",
+        "endorsements": 38,
+        "duration_months": 22
+      },
+      {
+        "name": "AWS",
+        "proficiency": "beginner",
+        "endorsements": 36,
+        "duration_months": 14
+      },
+      {
+        "name": "PyTorch",
+        "proficiency": "beginner",
+        "endorsements": 44,
+        "duration_months": 44
+      },
+      {
+        "name": "Angular",
+        "proficiency": "intermediate",
+        "endorsements": 13,
+        "duration_months": 26
+      },
+      {
+        "name": "Redis",
+        "proficiency": "expert",
+        "endorsements": 50,
+        "duration_months": 52
+      },
+      {
+        "name": "Django",
+        "proficiency": "beginner",
+        "endorsements": 42,
+        "duration_months": 9
+      },
+      {
+        "name": "Java",
+        "proficiency": "beginner",
+        "endorsements": 42,
+        "duration_months": 52
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000095",
+    "profile": {
+      "anonymized_name": "Aditya",
+      "headline": "Data Scientist",
+      "summary": "Aditya is a Full Stack Developer with 3.0 years of experience.",
+      "location": "Chandigarh",
+      "current_title": "Technical Lead",
+      "current_company": "Freshworks",
+      "years_of_experience": 3.0
+    },
+    "skills": [
+      {
+        "name": "Scikit-learn",
+        "proficiency": "advanced",
+        "endorsements": 49,
+        "duration_months": 18
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "beginner",
+        "endorsements": 13,
+        "duration_months": 51
+      },
+      {
+        "name": "Flask",
+        "proficiency": "expert",
+        "endorsements": 33,
+        "duration_months": 26
+      },
+      {
+        "name": "Scala",
+        "proficiency": "beginner",
+        "endorsements": 19,
+        "duration_months": 51
+      },
+      {
+        "name": "AWS",
+        "proficiency": "expert",
+        "endorsements": 42,
+        "duration_months": 47
+      },
+      {
+        "name": "C#",
+        "proficiency": "beginner",
+        "endorsements": 16,
+        "duration_months": 14
+      },
+      {
+        "name": "Swift",
+        "proficiency": "intermediate",
+        "endorsements": 41,
+        "duration_months": 40
+      },
+      {
+        "name": "Angular",
+        "proficiency": "intermediate",
+        "endorsements": 34,
+        "duration_months": 6
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000096",
+    "profile": {
+      "anonymized_name": "Vikram",
+      "headline": "SDE I",
+      "summary": "Vikram is a QA Engineer with 14.7 years of experience.",
+      "location": "Jaipur",
+      "current_title": "Backend Engineer",
+      "current_company": "MakeMyTrip",
+      "years_of_experience": 14.7
+    },
+    "skills": [
+      {
+        "name": "Microservices",
+        "proficiency": "advanced",
+        "endorsements": 9,
+        "duration_months": 22
+      },
+      {
+        "name": "TypeScript",
+        "proficiency": "intermediate",
+        "endorsements": 16,
+        "duration_months": 17
+      },
+      {
+        "name": "Git",
+        "proficiency": "expert",
+        "endorsements": 29,
+        "duration_months": 8
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "beginner",
+        "endorsements": 43,
+        "duration_months": 46
+      },
+      {
+        "name": "PyTorch",
+        "proficiency": "intermediate",
+        "endorsements": 48,
+        "duration_months": 37
+      },
+      {
+        "name": "Go",
+        "proficiency": "expert",
+        "endorsements": 22,
+        "duration_months": 20
+      },
+      {
+        "name": "MongoDB",
+        "proficiency": "intermediate",
+        "endorsements": 0,
+        "duration_months": 37
+      },
+      {
+        "name": "SQL",
+        "proficiency": "advanced",
+        "endorsements": 47,
+        "duration_months": 9
+      },
+      {
+        "name": "Scala",
+        "proficiency": "beginner",
+        "endorsements": 38,
+        "duration_months": 43
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000097",
+    "profile": {
+      "anonymized_name": "Saanvi",
+      "headline": "Full Stack Developer",
+      "summary": "Saanvi is a Software Engineer with 14.1 years of experience.",
+      "location": "Kochi",
+      "current_title": "QA Engineer",
+      "current_company": "OYO",
+      "years_of_experience": 14.1
+    },
+    "skills": [
+      {
+        "name": "JavaScript",
+        "proficiency": "beginner",
+        "endorsements": 43,
+        "duration_months": 45
+      },
+      {
+        "name": "C#",
+        "proficiency": "intermediate",
+        "endorsements": 29,
+        "duration_months": 23
+      },
+      {
+        "name": "Scala",
+        "proficiency": "advanced",
+        "endorsements": 9,
+        "duration_months": 59
+      },
+      {
+        "name": "PHP",
+        "proficiency": "expert",
+        "endorsements": 39,
+        "duration_months": 14
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "advanced",
+        "endorsements": 5,
+        "duration_months": 8
+      },
+      {
+        "name": "React",
+        "proficiency": "expert",
+        "endorsements": 31,
+        "duration_months": 42
+      },
+      {
+        "name": "PyTorch",
+        "proficiency": "advanced",
+        "endorsements": 27,
+        "duration_months": 32
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000098",
+    "profile": {
+      "anonymized_name": "Aisha",
+      "headline": "Engineering Manager",
+      "summary": "Aisha is a Data Scientist with 1.2 years of experience.",
+      "location": "Kolkata",
+      "current_title": "Data Scientist",
+      "current_company": "Swiggy",
+      "years_of_experience": 1.2
+    },
+    "skills": [
+      {
+        "name": "Kafka",
+        "proficiency": "advanced",
+        "endorsements": 8,
+        "duration_months": 20
+      },
+      {
+        "name": "Scala",
+        "proficiency": "beginner",
+        "endorsements": 47,
+        "duration_months": 18
+      },
+      {
+        "name": "Python",
+        "proficiency": "intermediate",
+        "endorsements": 16,
+        "duration_months": 39
+      },
+      {
+        "name": "Scikit-learn",
+        "proficiency": "intermediate",
+        "endorsements": 19,
+        "duration_months": 10
+      },
+      {
+        "name": "Flask",
+        "proficiency": "intermediate",
+        "endorsements": 35,
+        "duration_months": 48
+      },
+      {
+        "name": "Angular",
+        "proficiency": "advanced",
+        "endorsements": 44,
+        "duration_months": 31
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "advanced",
+        "endorsements": 29,
+        "duration_months": 25
+      },
+      {
+        "name": "Rust",
+        "proficiency": "advanced",
+        "endorsements": 47,
+        "duration_months": 30
+      },
+      {
+        "name": "Git",
+        "proficiency": "beginner",
+        "endorsements": 42,
+        "duration_months": 43
+      },
+      {
+        "name": "Ruby",
+        "proficiency": "intermediate",
+        "endorsements": 7,
+        "duration_months": 49
+      },
+      {
+        "name": "CI/CD",
+        "proficiency": "beginner",
+        "endorsements": 50,
+        "duration_months": 52
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000099",
+    "profile": {
+      "anonymized_name": "Aditya",
+      "headline": "Technical Lead",
+      "summary": "Aditya is a Senior Software Engineer with 8.9 years of experience.",
+      "location": "Nagpur",
+      "current_title": "Product Manager",
+      "current_company": "Tech Mahindra",
+      "years_of_experience": 8.9
+    },
+    "skills": [
+      {
+        "name": "Angular",
+        "proficiency": "intermediate",
+        "endorsements": 28,
+        "duration_months": 41
+      },
+      {
+        "name": "TensorFlow",
+        "proficiency": "expert",
+        "endorsements": 37,
+        "duration_months": 53
+      },
+      {
+        "name": "Docker",
+        "proficiency": "expert",
+        "endorsements": 37,
+        "duration_months": 26
+      },
+      {
+        "name": "Spring Boot",
+        "proficiency": "advanced",
+        "endorsements": 33,
+        "duration_months": 14
+      },
+      {
+        "name": "GCP",
+        "proficiency": "advanced",
+        "endorsements": 1,
+        "duration_months": 43
+      },
+      {
+        "name": "Swift",
+        "proficiency": "intermediate",
+        "endorsements": 38,
+        "duration_months": 33
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "expert",
+        "endorsements": 48,
+        "duration_months": 39
+      },
+      {
+        "name": "Go",
+        "proficiency": "expert",
+        "endorsements": 4,
+        "duration_months": 42
+      },
+      {
+        "name": "AWS",
+        "proficiency": "expert",
+        "endorsements": 24,
+        "duration_months": 22
+      },
+      {
+        "name": "Azure",
+        "proficiency": "intermediate",
+        "endorsements": 43,
+        "duration_months": 26
+      },
+      {
+        "name": "Django",
+        "proficiency": "advanced",
+        "endorsements": 29,
+        "duration_months": 42
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
+  },
+  {
+    "candidate_id": "CAND_0000100",
+    "profile": {
+      "anonymized_name": "Amit",
+      "headline": "Engineering Manager",
+      "summary": "Amit is a Backend Engineer with 10.5 years of experience.",
+      "location": "Ahmedabad",
+      "current_title": "Data Scientist",
+      "current_company": "Microsoft",
+      "years_of_experience": 10.5
+    },
+    "skills": [
+      {
+        "name": "Python",
+        "proficiency": "advanced",
+        "endorsements": 15,
+        "duration_months": 6
+      },
+      {
+        "name": "PostgreSQL",
+        "proficiency": "expert",
+        "endorsements": 7,
+        "duration_months": 37
+      },
+      {
+        "name": "Kotlin",
+        "proficiency": "intermediate",
+        "endorsements": 37,
+        "duration_months": 54
+      },
+      {
+        "name": "Kafka",
+        "proficiency": "intermediate",
+        "endorsements": 0,
+        "duration_months": 51
+      },
+      {
+        "name": "AWS",
+        "proficiency": "advanced",
+        "endorsements": 45,
+        "duration_months": 11
+      },
+      {
+        "name": "GCP",
+        "proficiency": "expert",
+        "endorsements": 30,
+        "duration_months": 6
+      },
+      {
+        "name": "GraphQL",
+        "proficiency": "beginner",
+        "endorsements": 38,
+        "duration_months": 49
+      },
+      {
+        "name": "Azure",
+        "proficiency": "beginner",
+        "endorsements": 27,
+        "duration_months": 11
+      },
+      {
+        "name": "Git",
+        "proficiency": "beginner",
+        "endorsements": 50,
+        "duration_months": 25
+      },
+      {
+        "name": "Spark",
+        "proficiency": "intermediate",
+        "endorsements": 3,
+        "duration_months": 40
+      },
+      {
+        "name": "TensorFlow",
+        "proficiency": "expert",
+        "endorsements": 25,
+        "duration_months": 46
+      },
+      {
+        "name": "REST API",
+        "proficiency": "expert",
+        "endorsements": 30,
+        "duration_months": 47
+      }
+    ],
+    "career_history": [],
+    "education": [],
+    "certifications": [],
+    "languages": [],
+    "redrob_signals": {}
   }
 ]

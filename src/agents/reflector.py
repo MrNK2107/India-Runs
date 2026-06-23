@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -54,12 +55,22 @@ class ReflectorAgent:
                 SystemMessage(content=REFLECTOR_SYSTEM_PROMPT),
                 HumanMessage(content=f"Candidates:\n{candidates_text}"),
             ]
-            response = await self.client.ainvoke(messages)
+            response = await asyncio.wait_for(
+                self.client.ainvoke(messages),
+                timeout=30.0,
+            )
             content = response.content if hasattr(response, "content") else str(response)
-            evaluations = json.loads(content)
+            if not content or not content.strip():
+                logger.warning("Reflector LLM returned empty content, using fallback")
+                evaluations = self._fallback_evaluate(results)
+            else:
+                evaluations = json.loads(content)
 
+        except asyncio.TimeoutError:
+            logger.warning("Reflector LLM timed out, using fallback")
+            evaluations = self._fallback_evaluate(results)
         except Exception as e:
-            logger.warning(f"Reflector LLM failed, using fallback: {e}")
+            logger.warning(f"Reflector LLM failed: {type(e).__name__}: {e}, using fallback")
             evaluations = self._fallback_evaluate(results)
 
         should_replan = self._should_replan(evaluations)
@@ -119,20 +130,3 @@ class ReflectorAgent:
         if not results:
             return "No results found. Query may be too restrictive."
         return "Results look reasonable."
-
-    def _relax_params(self, params: dict) -> dict:
-        params = dict(params)
-        exp = dict(params.get("experience", {}))
-        if exp.get("min_years") is not None:
-            exp["min_years"] = max(0, exp["min_years"] - 2)
-        if exp.get("max_years") is not None:
-            exp["max_years"] = (exp["max_years"] or 0) + 3
-        params["experience"] = exp
-
-        loc = dict(params.get("location", {}))
-        loc["city"] = None
-        loc["remote_ok"] = True
-        params["location"] = loc
-
-        params["required_skills"] = []
-        return params

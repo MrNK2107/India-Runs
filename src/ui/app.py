@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import time
+from pathlib import Path
 
 import gradio as gr
+
+# Ensure project root is on the path for direct execution
+_project_root = str(Path(__file__).resolve().parent.parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from src.api.routes.search import init_orchestrator
 from src.core.config import DATA_DIR
@@ -24,7 +31,19 @@ faiss_path = indexes_dir / "faiss_index.bin"
 id_map_path = indexes_dir / "faiss_id_map.json"
 bm25_path = indexes_dir / "bm25_index.pkl"
 
-if faiss_path.exists():
+_search_initialized = False
+
+
+def _ensure_search_system() -> bool:
+    """Lazy-initialize heavy model components (embeddings, FAISS, cross-encoder)
+    on first search instead of loading at import time."""
+    global _search_initialized
+    if _search_initialized:
+        return True
+    if not faiss_path.exists():
+        logger.warning("No FAISS index found. Run 'python scripts/build_indexes.py' first.")
+        return False
+
     from src.agents.executor import ExecutorAgent
     from src.agents.orchestrator import Orchestrator
     from src.agents.planner import PlannerAgent
@@ -46,7 +65,7 @@ if faiss_path.exists():
 
     hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
     reranker = CrossEncoderReranker()
-    _ = reranker.model
+    _ = reranker.model  # Lazy load — disabled by default, ok if None
     scorer = CandidateScorer()
 
     profiles = ProfileStore()
@@ -63,8 +82,8 @@ if faiss_path.exists():
     orchestrator = Orchestrator(planner, executor, reflector)
     init_orchestrator(orchestrator)
     logger.info("Search system initialized")
-else:
-    logger.warning("No FAISS index found. Run 'python scripts/build_indexes.py' first.")
+    _search_initialized = True
+    return True
 
 SLIDER_DIMS = [
     ("Skill Match", "skill_match", DEFAULT_SLIDER_WEIGHTS["skill_match"]),
@@ -87,19 +106,30 @@ async def search_handler(
     *slider_values: float,
 ) -> tuple[str, str, str]:
     if not query.strip():
-        return "<p style='color: #ef4444;'>Please enter a search query.</p>", "", "[]"
-
-    from src.api.routes.search import _orchestrator
-
-    if _orchestrator is None:
         return (
-            "<p style='color: #f59e0b;'>Search system not initialized. "
-            "Please build indexes first.</p>",
+            "<div style='padding:40px;text-align:center;color:#9ca3af;'>"
+            "<p style='font-size:18px;margin-bottom:8px;'>&#128269; Enter a query to search</p>"
+            "<p style='font-size:14px;'>Describe the ideal candidate — skills, experience, location.</p>"
+            "</div>",
+            "",
+            "[]",
+        )
+
+    from src.ui.components import create_error_panel
+
+    if not _ensure_search_system():
+        return (
+            create_error_panel(
+                "Search system not initialized. Please build indexes first "
+                "by running <tt>python scripts/build_indexes.py</tt>."
+            ),
             "",
             "[]",
         )
 
     slider_weights = _parse_slider_weights(*slider_values)
+
+    from src.api.routes.search import _orchestrator
 
     try:
         t0 = time.time()
@@ -108,7 +138,11 @@ async def search_handler(
         logger.info(f"Search completed in {elapsed:.1f}s")
     except Exception as e:
         logger.exception("Search failed")
-        return f"<p style='color: #ef4444;'>Search failed: {e}</p>", "", "[]"
+        return (
+            create_error_panel(f"Search failed: {e}"),
+            "",
+            "[]",
+        )
 
     # Serialize results to JSON for caching in Gradio State
     raw_results = []
@@ -141,8 +175,9 @@ async def search_handler(
     methods_str = " + ".join(md.methods_used) if md and md.methods_used else "hybrid"
     badges = ""
     if md and md.listwise_ranked:
-        badges += '<span class="badge badge-listwise">\U0001f3c6 Listwise Ranked</span>'
-    badges += '<span class="badge badge-pii">\U0001f6e1\ufe0f PII Anonymized</span>'
+        badges += '<span class="badge badge-listwise">&#127942; Listwise Ranked</span>'
+    if md and md.pii_anonymized:
+        badges += '<span class="badge badge-pii">&#128737;&#65039; PII Anonymized</span>'
     badges += f'<span class="badge badge-method">{methods_str}</span>'
     metadata_header = f"""
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
@@ -165,46 +200,60 @@ def re_rank_handler(results_json: str, *slider_values: float) -> str:
     if not results_json or results_json == "[]":
         return "<p>No results to re-rank. Search first.</p>"
 
-    raw = json.loads(results_json)
-    slider_weights = _parse_slider_weights(*slider_values)
+    from src.ui.components import create_error_panel
+
+    try:
+        raw = json.loads(results_json)
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning("Re-rank received invalid JSON: %s", e)
+        return create_error_panel("Could not parse cached results. Please re-run your search.")
+
+    try:
+        slider_weights = _parse_slider_weights(*slider_values)
+    except Exception as e:
+        logger.warning("Slider parsing error in re_rank_handler: %s", e)
+        return create_error_panel(f"Could not parse slider weights: {e}")
+
     scorer = CandidateScorer()
 
-    for r in raw:
-        scores_dict = r.get("scores", {})
-        match_scores = scorer.compute_overall(scores_dict, slider_weights)
-        r["_re_score"] = match_scores.overall
-        r["_re_scores"] = match_scores
+    try:
+        for r in raw:
+            scores_dict = r.get("scores", {})
+            match_scores = scorer.compute_overall(scores_dict, slider_weights)
+            r["_re_score"] = match_scores.overall
+            r["_re_scores"] = match_scores
 
-    raw.sort(key=lambda x: x.get("_re_score", 0), reverse=True)
+        raw.sort(key=lambda x: x.get("_re_score", 0), reverse=True)
 
-    html = "<div class='results-container'>"
-    for rank, r in enumerate(raw, 1):
-        r["rank"] = rank
-        item = SearchResultItem(
-            rank=rank,
-            profile_id=r.get("profile_id", ""),
-            name=r.get("name", ""),
-            current_title=r.get("current_title"),
-            current_company=r.get("current_company"),
-            location=r.get("location"),
-            experience_years=r.get("experience_years"),
-            scores=r.get("_re_scores", MatchScores()),
-            matched_skills=r.get("matched_skills", []),
-            missing_skills=r.get("missing_skills", []),
-        )
-        html += create_candidate_card(item)
-    html += "</div>"
+        html = "<div class='results-container'>"
+        for rank, r in enumerate(raw, 1):
+            r["rank"] = rank
+            item = SearchResultItem(
+                rank=rank,
+                profile_id=r.get("profile_id", ""),
+                name=r.get("name", ""),
+                current_title=r.get("current_title"),
+                current_company=r.get("current_company"),
+                location=r.get("location"),
+                experience_years=r.get("experience_years"),
+                scores=r.get("_re_scores", MatchScores()),
+                matched_skills=r.get("matched_skills", []),
+                missing_skills=r.get("missing_skills", []),
+            )
+            html += create_candidate_card(item)
+        html += "</div>"
 
-    return html
+        return html
+    except Exception as e:
+        logger.exception("Re-rank processing failed")
+        return create_error_panel(f"Re-ranking failed: {e}")
 
 
 def create_app() -> gr.Blocks:
     with gr.Blocks(
-        title="India Runs \u2014 Intelligent Candidate Discovery",
-        theme=gr.themes.Soft(),
-        css="src/ui/styles.css",
+        title="India Runs — Intelligent Candidate Discovery",
     ) as app:
-        gr.Markdown("# India Runs \u2014 Intelligent Candidate Discovery")
+        gr.Markdown("# India Runs — Intelligent Candidate Discovery")
         gr.Markdown("*Beyond keywords. Beyond filters. AI that understands hiring.*")
 
         results_state = gr.State("")
@@ -253,8 +302,17 @@ def create_app() -> gr.Blocks:
                             label="Max Results", minimum=5, maximum=50, step=5, value=10,
                         )
 
-                results_area = gr.HTML(label="Results")
-                rationale_area = gr.HTML(label="Rationale Report")
+                results_area = gr.HTML(
+                    label="Results",
+                    value="<div style='padding:40px;text-align:center;color:#9ca3af;'>"
+                          "<p style='font-size:18px;margin-bottom:8px;'>&#128269; No search yet</p>"
+                          "<p style='font-size:14px;'>Enter a query above and click "
+                          "<strong>Search Candidates</strong> to find matching profiles.</p>"
+                          "<p style='font-size:12px;color:#d1d5db;margin-top:16px;'>"
+                          "Adjust the scoring sliders to fine-tune results.</p>"
+                          "</div>",
+                )
+                rationale_area = gr.HTML(label="Rationale Report", value="")
 
                 search_inputs = [
                     query_input, location_filter,
@@ -333,4 +391,9 @@ def create_app() -> gr.Blocks:
 app = create_app()
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        theme=gr.themes.Soft(),
+        css="src/ui/styles.css",
+    )
