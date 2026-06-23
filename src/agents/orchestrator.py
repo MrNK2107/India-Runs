@@ -117,6 +117,7 @@ def _parse_query_text(text: str) -> ParsedQuery:
         experience=ExperienceRequirements(),
         location=LocationRequirements(city=city),
         filters=QueryFilters(),
+        original_query=text.strip(),
     )
 
 

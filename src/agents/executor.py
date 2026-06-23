@@ -12,7 +12,7 @@ from src.core.models import (
 )
 from src.core.profile_store import ProfileStore
 from src.matching.scorer import CandidateScorer
-from src.matching.skill_matcher import SKILL_ALIASES, SkillMatcher
+from src.matching.skill_matcher import SkillMatcher
 from src.matching.behavioral_scorer import (
     compute_behavioral_score,
     compute_career_trajectory,
@@ -26,22 +26,19 @@ from src.search.reranker import CrossEncoderReranker
 def _skill_match_score(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> float:
+    """Score skill match using ONLY structured skills (no raw text — that's semantic/keyword's job).
+    
+    This prevents false positives like 'java' matching a career description
+    or 'js' matching node.js in raw text. The SkillMatcher uses fuzzy matching
+    with aliases against the structured skills array only.
+    """
     if not required_names:
         return 1.0
-    _matcher = SkillMatcher(similarity_threshold=0.8)
+    _matcher = SkillMatcher(similarity_threshold=0.85)
     matched = 0
     for rn in required_names:
         result = _matcher.find_best_match(rn, profile_skills)
         if result is not None:
-            matched += 1
-            continue
-        raw_lower = raw_text.lower() if raw_text else ""
-        rn_lower = rn.lower()
-        if rn_lower in raw_lower:
-            matched += 1
-            continue
-        aliases = SKILL_ALIASES.get(rn_lower, [])
-        if any(a in raw_lower for a in aliases):
             matched += 1
     return matched / len(required_names)
 
@@ -49,24 +46,19 @@ def _skill_match_score(
 def _match_skills_detail(
     required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
 ) -> tuple[list[str], list[str]]:
+    """Match skills using ONLY structured skills array.
+    
+    Returns (matched_names, missing_names) based on explicit skill entries.
+    """
     matched: list[str] = []
     missing: list[str] = []
-    _matcher = SkillMatcher(similarity_threshold=0.8)
+    _matcher = SkillMatcher(similarity_threshold=0.85)
     for rn in required_names:
         result = _matcher.find_best_match(rn, profile_skills)
         if result is not None:
             matched.append(rn)
-            continue
-        raw_lower = raw_text.lower() if raw_text else ""
-        rn_lower = rn.lower()
-        if rn_lower in raw_lower:
-            matched.append(rn)
-            continue
-        aliases = SKILL_ALIASES.get(rn_lower, [])
-        if any(a in raw_lower for a in aliases):
-            matched.append(rn)
-            continue
-        missing.append(rn)
+        else:
+            missing.append(rn)
     return matched, missing
 
 logger = logging.getLogger(__name__)
@@ -117,7 +109,9 @@ class ExecutorAgent:
             else:
                 rerank_candidates.append((pid, "", score))
 
-        reranked = self.reranker.rerank(search_text, rerank_candidates, top_k=top_k)
+        reranked = self.reranker.rerank(
+            parsed.original_query or search_text, rerank_candidates, top_k=top_k
+        )
 
         results: list[MatchResult] = []
         for _rank, (pid, rerank_score) in enumerate(reranked, start=1):

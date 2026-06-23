@@ -66,3 +66,6 @@ __MACOSX/
 .understand-anything/
 .understand-output/
 graphify-out/
+
+# Hermes AI coding assistant
+.hermes/

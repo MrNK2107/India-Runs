@@ -222,6 +222,7 @@ class ParsedQuery(BaseModel):
     education: EducationRequirements = Field(default_factory=EducationRequirements)
     salary: SalaryRequirements = Field(default_factory=SalaryRequirements)
     filters: QueryFilters = Field(default_factory=QueryFilters)
+    original_query: str = ""
 
 
 class JobQuery(BaseModel):
