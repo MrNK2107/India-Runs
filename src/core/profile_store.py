@@ -22,6 +22,7 @@ class ProfileStore:
         self._index_built = False
         self._sample_profiles: dict[str, Profile] = {}
         self._auto_init_samples()
+        self._file_handle = None
 
     def _auto_init_samples(self) -> None:
         """Automatically load sample profiles if main profile file is missing."""
@@ -123,9 +124,10 @@ class ProfileStore:
             return None
 
         try:
-            with open(self.path, encoding="utf-8") as f:
-                f.seek(offset)
-                line = f.readline()
+            if self._file_handle is None or self._file_handle.closed:
+                self._file_handle = open(self.path, encoding="utf-8")
+            self._file_handle.seek(offset)
+            line = self._file_handle.readline()
             raw = json.loads(line)
             profile = normalize_redrob(raw)
         except (OSError, ValueError, json.JSONDecodeError):
@@ -148,3 +150,10 @@ class ProfileStore:
     def __len__(self) -> int:
         self._build_offset_index()
         return len(self._offset_index) + len(self._sample_profiles)
+
+    def __del__(self) -> None:
+        if hasattr(self, "_file_handle") and self._file_handle is not None:
+            try:
+                self._file_handle.close()
+            except Exception:
+                pass
