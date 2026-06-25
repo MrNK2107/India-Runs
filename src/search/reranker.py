@@ -39,15 +39,16 @@ class CrossEncoderReranker:
             timeout_ms if timeout_ms is not None else settings.cross_encoder_timeout_ms
         )
         self.enabled = True
-        # Pre-load eagerly so first search call doesn't trigger lazy init
-        self._load_model()
+        # Pre-load in background thread to avoid blocking startup
+        import threading
+        threading.Thread(target=self._load_model, daemon=True).start()
 
     def _load_model(self) -> None:
         """Load the cross-encoder model synchronously."""
         if self._model_loaded:
             return
         try:
-            logger.info("Loading cross-encoder model: %s", self.model_name)
+            logger.info("Loading cross-encoder model (offline): %s", self.model_name)
             from sentence_transformers import CrossEncoder
 
             self._model = CrossEncoder(self.model_name)
@@ -56,11 +57,25 @@ class CrossEncoderReranker:
                 [("warmup query", "warmup document")], show_progress_bar=False
             )
             self._model_loaded = True
-            logger.info("Cross-encoder model loaded and ready")
-        except Exception as e:
-            logger.warning("Failed to load cross-encoder model: %s", e)
-            self._model_loaded = True  # don't retry
-            self._model = None
+            logger.info("Cross-encoder model loaded offline and ready")
+        except Exception as offline_err:
+            logger.info("Failed to load offline, attempting to download/load online: %s", offline_err)
+            try:
+                # Disable offline environment overrides
+                os.environ["HF_HUB_OFFLINE"] = "0"
+                os.environ["TRANSFORMERS_OFFLINE"] = "0"
+                from sentence_transformers import CrossEncoder
+
+                self._model = CrossEncoder(self.model_name)
+                _ = self._model.predict(
+                    [("warmup query", "warmup document")], show_progress_bar=False
+                )
+                self._model_loaded = True
+                logger.info("Cross-encoder model loaded online and ready")
+            except Exception as online_err:
+                logger.warning("Failed to load cross-encoder model online: %s", online_err)
+                self._model_loaded = True  # don't retry
+                self._model = None
 
     @property
     def model(self):
