@@ -233,18 +233,18 @@ class JobQuery(BaseModel):
 
 
 class MatchScores(BaseModel):
-    overall: float = Field(ge=0.0, le=1.0)
-    semantic_similarity: float = Field(ge=0.0, le=1.0)
-    keyword_match: float = Field(ge=0.0, le=1.0)
-    skill_match: float = Field(ge=0.0, le=1.0)
-    experience_match: float = Field(ge=0.0, le=1.0)
+    overall: float = Field(default=0.0, ge=0.0, le=1.0)
+    semantic_similarity: float = Field(default=0.0, ge=0.0, le=1.0)
+    keyword_match: float = Field(default=0.0, ge=0.0, le=1.0)
+    skill_match: float = Field(default=0.0, ge=0.0, le=1.0)
+    experience_match: float = Field(default=0.0, ge=0.0, le=1.0)
     location_match: float | None = Field(default=None, ge=0.0, le=1.0)
     education_match: float | None = Field(default=None, ge=0.0, le=1.0)
     cross_encoder_score: float | None = Field(default=None, ge=0.0, le=1.0)
     behavioral_score: float | None = Field(default=None, ge=0.0, le=1.0)
     career_trajectory_score: float | None = Field(default=None, ge=0.0, le=1.0)
     skill_proficiency_score: float | None = Field(default=None, ge=0.0, le=1.0)
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class SkillDetail(BaseModel):
@@ -305,6 +305,8 @@ class SearchRequest(BaseModel):
     max_results: int = Field(default=10, ge=1, le=100)
     include_rationale: bool = True
     language: str | None = None
+    use_turbo: bool = False
+    slider_weights: dict[str, float] = Field(default_factory=dict)
 
 
 class SearchResultItem(BaseModel):
