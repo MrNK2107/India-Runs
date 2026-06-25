@@ -26,9 +26,11 @@ async def search_candidates(request: SearchRequest) -> SearchResponse:
     try:
         response = await _orchestrator.run(
             raw_query=request.query,
+            slider_weights=request.slider_weights,
+            use_turbo=request.use_turbo,
+            top_k=request.max_results,
+            filters=request.filters,
         )
-        if request.include_rationale:
-            pass
         return response
     except Exception as e:
         logger.exception("Search failed")
