@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class VectorSearch:
     def __init__(self, dimension: int = 384) -> None:
         self.dimension = dimension
-        self.index: faiss.IndexFlatIP | None = None
+        self.index: faiss.Index | None = None
         self.id_map: list[str] = []
 
     def build_index(self, embeddings: np.ndarray, profile_ids: list[str]) -> None:
