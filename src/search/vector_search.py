@@ -31,7 +31,7 @@ class VectorSearch:
                 f"Embedding dimension {actual_dim} does not match "
                 f"VectorSearch dimension {expected_dim}"
             )
-        self.index = faiss.IndexFlatIP(self.dimension)
+        self.index = faiss.IndexHNSWFlat(self.dimension, 32, faiss.METRIC_INNER_PRODUCT)
         self.index.add(embeddings.astype(np.float32))
         self.id_map = list(profile_ids)
 
