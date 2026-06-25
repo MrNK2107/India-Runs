@@ -187,13 +187,16 @@ def _save_offset_index(
 
 def main():
     parser = argparse.ArgumentParser(description="Build FAISS + BM25 indexes from profiles")
+    parser.add_argument("--profiles", type=str, default=None,
+                        help="Path to candidate profiles file (JSON or JSONL)")
     parser.add_argument("--sample", type=int, default=0,
                         help="Process only N profiles (for quick testing)")
     parser.add_argument("--force", action="store_true",
                         help="Rebuild indexes even if they exist")
     args = parser.parse_args()
 
-    build_indexes(sample_count=args.sample, force=args.force)
+    profiles_p = Path(args.profiles) if args.profiles else CANDIDATES_PATH
+    build_indexes(profiles_path=profiles_p, sample_count=args.sample, force=args.force)
 
 
 if __name__ == "__main__":
