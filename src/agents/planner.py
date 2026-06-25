@@ -8,7 +8,14 @@ import re
 from src.agents.prompts import PLANNER_SYSTEM_PROMPT
 from src.core.config import get_llm_client, get_settings
 from src.core.constants import INDIAN_CITIES, INDIAN_COMPANIES
-from src.core.models import ParsedQuery, PreferredSkill, RequiredSkill, SkillImportance
+from src.core.models import (
+    ExperienceRequirements,
+    LocationRequirements,
+    ParsedQuery,
+    PreferredSkill,
+    RequiredSkill,
+    SkillImportance,
+)
 from src.language.code_mixed import CodeMixedProcessor
 from src.matching.skill_matcher import SKILL_ALIASES
 
@@ -154,8 +161,8 @@ class PlannerAgent:
         return ParsedQuery(
             required_skills=required,
             preferred_skills=preferred,
-            experience={"min_years": min_years, "max_years": max_years, "industry": industry},
-            location={"city": city, "remote_ok": "remote" in query.lower()},
+            experience=ExperienceRequirements(min_years=min_years, max_years=max_years, industry=industry),
+            location=LocationRequirements(city=city, remote_ok="remote" in query.lower()),
         )
 
     def _relax_params(self, params: dict) -> dict:
