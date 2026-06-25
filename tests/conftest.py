@@ -12,6 +12,7 @@ from src.core.models import (
     ProfileSource,
     Skill,
     SkillCategory,
+    ProficiencyLevel,
     WorkExperience,
 )
 
@@ -33,9 +34,9 @@ def sample_profile() -> Profile:
         ),
         skills=[
             Skill(name="Python", category=SkillCategory.PROGRAMMING_LANGUAGE,
-                  proficiency="advanced"),
-            Skill(name="Django", category=SkillCategory.FRAMEWORK, proficiency="advanced"),
-            Skill(name="AWS", category=SkillCategory.TOOL, proficiency="intermediate"),
+                  proficiency=ProficiencyLevel.ADVANCED),
+            Skill(name="Django", category=SkillCategory.FRAMEWORK, proficiency=ProficiencyLevel.ADVANCED),
+            Skill(name="AWS", category=SkillCategory.TOOL, proficiency=ProficiencyLevel.INTERMEDIATE),
         ],
         experience=[
             WorkExperience(title="Senior Engineer", company="Acme Corp",

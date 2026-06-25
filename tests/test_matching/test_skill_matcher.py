@@ -28,13 +28,14 @@ def test_skill_matcher_alias(sample_profile):
 
 
 def test_skill_matcher_fuzzy():
+    from src.core.models import SkillCategory
     matcher = SkillMatcher(similarity_threshold=0.5)
-    skills = [Skill(name="Python3", category="programming_language")]
+    skills = [Skill(name="Python3", category=SkillCategory.PROGRAMMING_LANGUAGE)]
     required = [RequiredSkill(name="Python", importance=SkillImportance.REQUIRED)]
     score, details = matcher.match_skills(required, skills)
     assert 0.0 <= score <= 1.0
     # Exact match should score at least as high as fuzzy
-    skills_exact = [Skill(name="Python", category="programming_language")]
+    skills_exact = [Skill(name="Python", category=SkillCategory.PROGRAMMING_LANGUAGE)]
     score_exact, _ = matcher.match_skills(required, skills_exact)
     assert score_exact >= score
 
