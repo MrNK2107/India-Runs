@@ -57,7 +57,10 @@ class TranslationPipeline:
             try:
                 from src.core.config import get_app_config
                 cfg = get_app_config()
-                mbart_model_name = cfg.get("translation", {}).get("fallback", "facebook/mbart-large-50-many-to-many-mmt")
+                mbart_model_name = (
+                    cfg.get("translation", {})
+                    .get("fallback", "facebook/mbart-large-50-many-to-many-mmt")
+                )
             except Exception:
                 mbart_model_name = "facebook/mbart-large-50-many-to-many-mmt"
 
@@ -67,7 +70,11 @@ class TranslationPipeline:
                 if not hasattr(self, "_mbart_tokenizer") or self._mbart_tokenizer is None:
                     logger.info(f"Loading MBART model: {mbart_model_name}")
                     self._mbart_tokenizer = MBart50TokenizerFast.from_pretrained(mbart_model_name)
-                    self._mbart_model = MBartForConditionalGeneration.from_pretrained(mbart_model_name)
+                    self._mbart_model = (
+                        MBartForConditionalGeneration.from_pretrained(
+                            mbart_model_name
+                        )
+                    )
 
                 mbart_lang_map = {
                     "hi": "hi_IN", "ta": "ta_IN", "te": "te_IN", "mr": "mr_IN",
@@ -82,7 +89,9 @@ class TranslationPipeline:
                     **encoded,
                     forced_bos_token_id=self._mbart_tokenizer.lang_code_to_id["en_XX"]
                 )
-                translated_text = self._mbart_tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
+                translated_text = self._mbart_tokenizer.batch_decode(
+                    generated_tokens, skip_special_tokens=True
+                )[0]
 
                 return {
                     "original": text,
