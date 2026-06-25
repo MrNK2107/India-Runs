@@ -59,7 +59,9 @@ class CrossEncoderReranker:
             self._model_loaded = True
             logger.info("Cross-encoder model loaded offline and ready")
         except Exception as offline_err:
-            logger.info("Failed to load offline, attempting to download/load online: %s", offline_err)
+            logger.info(
+                "Failed to load offline, attempting online: %s", offline_err
+            )
             try:
                 # Disable offline environment overrides
                 os.environ["HF_HUB_OFFLINE"] = "0"
