@@ -53,14 +53,53 @@ class TranslationPipeline:
             }
 
         except Exception as e:
-            logger.warning(f"Translation failed for {source_lang}: {e}")
-            return {
-                "original": text,
-                "translated": text,
-                "confidence": 0.0,
-                "model_used": "none",
-                "translation_fallback": True,
-            }
+            logger.warning(f"Google Translation failed for {source_lang}, trying MBART fallback: {e}")
+            try:
+                from src.core.config import get_app_config
+                cfg = get_app_config()
+                mbart_model_name = cfg.get("translation", {}).get("fallback", "facebook/mbart-large-50-many-to-many-mmt")
+            except Exception:
+                mbart_model_name = "facebook/mbart-large-50-many-to-many-mmt"
+
+            try:
+                from transformers import MBart50TokenizerFast, MBartForConditionalGeneration
+
+                if not hasattr(self, "_mbart_tokenizer") or self._mbart_tokenizer is None:
+                    logger.info(f"Loading MBART model: {mbart_model_name}")
+                    self._mbart_tokenizer = MBart50TokenizerFast.from_pretrained(mbart_model_name)
+                    self._mbart_model = MBartForConditionalGeneration.from_pretrained(mbart_model_name)
+
+                mbart_lang_map = {
+                    "hi": "hi_IN", "ta": "ta_IN", "te": "te_IN", "mr": "mr_IN",
+                    "bn": "bn_IN", "kn": "kn_IN", "ml": "ml_IN", "gu": "gu_IN",
+                    "pa": "pa_IN", "ur": "ur_PK",
+                }
+                mbart_code = mbart_lang_map.get(source_lang, "hi_IN")
+
+                self._mbart_tokenizer.src_lang = mbart_code
+                encoded = self._mbart_tokenizer(text, return_tensors="pt")
+                generated_tokens = self._mbart_model.generate(
+                    **encoded,
+                    forced_bos_token_id=self._mbart_tokenizer.lang_code_to_id["en_XX"]
+                )
+                translated_text = self._mbart_tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
+
+                return {
+                    "original": text,
+                    "translated": translated_text,
+                    "confidence": 0.70,
+                    "model_used": "MBart-50",
+                    "translation_fallback": True,
+                }
+            except Exception as mbart_err:
+                logger.warning(f"MBART translation fallback failed: {mbart_err}")
+                return {
+                    "original": text,
+                    "translated": text,
+                    "confidence": 0.0,
+                    "model_used": "none",
+                    "translation_fallback": True,
+                }
 
     def translate_batch(
         self, texts: list[tuple[str, str]]
