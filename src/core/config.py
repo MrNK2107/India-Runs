@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     log_level: str = "INFO"
-    max_replan_cycles: int = 3
+    max_replan_cycles: int = 1
     cross_encoder_timeout_ms: int = 0
 
     model_config = {"env_file": ".env", "extra": "ignore"}
@@ -66,9 +66,10 @@ def get_llm_client() -> Any:
     provider = settings.llm_provider
 
     if provider == "openai":
+        from pydantic import SecretStr
         return ChatOpenAI(
             model=settings.openai_model,
-            api_key=settings.openai_api_key,
+            api_key=SecretStr(settings.openai_api_key),
             temperature=0.1,
         )
     elif provider == "gemini":
