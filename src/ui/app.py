@@ -103,6 +103,7 @@ def _parse_slider_weights(*slider_values: float) -> dict[str, float]:
 
 async def search_handler(
     query: str, location: str, min_experience: int, remote_ok: bool, max_results: int,
+    use_turbo: bool,
     *slider_values: float,
 ) -> tuple[str, str, str]:
     if not query.strip():
@@ -130,10 +131,23 @@ async def search_handler(
     slider_weights = _parse_slider_weights(*slider_values)
 
     from src.api.routes.search import _orchestrator
+    from src.core.models import SearchFilters
+
+    filters = SearchFilters(
+        location=location.strip() if location.strip() else None,
+        min_experience_years=float(min_experience) if min_experience > 0 else None,
+        remote_ok=bool(remote_ok),
+    )
 
     try:
         t0 = time.time()
-        response = await _orchestrator.run(query, slider_weights=slider_weights)
+        response = await _orchestrator.run(
+            query,
+            slider_weights=slider_weights,
+            use_turbo=use_turbo,
+            top_k=max_results,
+            filters=filters,
+        )
         elapsed = time.time() - t0
         logger.info(f"Search completed in {elapsed:.1f}s")
     except Exception as e:
@@ -261,11 +275,15 @@ def create_app() -> gr.Blocks:
         with gr.Tabs():
             with gr.Tab("Search"):
                 with gr.Row():
-                    with gr.Column(scale=3):
+                    with gr.Column(scale=1):
                         query_input = gr.Textbox(
                             label="Job Query",
                             placeholder="e.g., senior DevOps engineer with 5+ yrs AWS...",
                             lines=3,
+                        )
+                        use_turbo_toggle = gr.Checkbox(
+                            label="Turbo Mode (Skip LLM planner/agent loops)",
+                            value=False,
                         )
                         gr.Examples(
                             examples=[
@@ -276,10 +294,16 @@ def create_app() -> gr.Blocks:
                             ],
                             inputs=query_input,
                         )
+                        location_filter = gr.Textbox(label="Location")
+                        experience_filter = gr.Slider(
+                            label="Min Experience (years)", minimum=0, maximum=20, step=1, value=0,
+                        )
+                        remote_ok = gr.Checkbox(label="Remote OK", value=False)
+                        max_results = gr.Slider(
+                            label="Max Results", minimum=5, maximum=50, step=5, value=10,
+                        )
 
-                        search_btn = gr.Button("Search Candidates", variant="primary", size="lg")
-
-                        with gr.Accordion("Scoring Weights", open=True):
+                        with gr.Accordion("Scoring Weights", open=False):
                             gr.Markdown(
                                 "Adjust the importance of each dimension. "
                                 "Results re-rank automatically after search."
@@ -292,51 +316,48 @@ def create_app() -> gr.Blocks:
                                 )
                                 slider_inputs.append(slider)
 
-                    with gr.Column(scale=1):
-                        location_filter = gr.Textbox(label="Location")
-                        experience_filter = gr.Slider(
-                            label="Min Experience (years)", minimum=0, maximum=20, step=1, value=0,
-                        )
-                        remote_ok = gr.Checkbox(label="Remote OK", value=False)
-                        max_results = gr.Slider(
-                            label="Max Results", minimum=5, maximum=50, step=5, value=10,
-                        )
+                        search_btn = gr.Button("Search Candidates", variant="primary", size="lg")
 
-                results_area = gr.HTML(
-                    label="Results",
-                    value="<div style='padding:40px;text-align:center;color:#9ca3af;'>"
-                          "<p style='font-size:18px;margin-bottom:8px;'>&#128269; No search yet</p>"
-                          "<p style='font-size:14px;'>Enter a query above and click "
-                          "<strong>Search Candidates</strong> to find matching profiles.</p>"
-                          "<p style='font-size:12px;color:#d1d5db;margin-top:16px;'>"
-                          "Adjust the scoring sliders to fine-tune results.</p>"
-                          "</div>",
-                )
-                rationale_area = gr.HTML(label="Rationale Report", value="")
+                    with gr.Column(scale=2):
+                        results_area = gr.HTML(
+                            label="Results",
+                            value="<div style='padding:40px;text-align:center;color:#9ca3af;'>"
+                                  "<p style='font-size:18px;margin-bottom:8px;'>&#128269; No search yet</p>"
+                                  "<p style='font-size:14px;'>Enter a query on the left and click "
+                                  "<strong>Search Candidates</strong> to find matching profiles.</p>"
+                                  "<p style='font-size:12px;color:#d1d5db;margin-top:16px;'>"
+                                  "Adjust the scoring sliders in the sidebar to fine-tune results.</p>"
+                                  "</div>",
+                        )
+                        rationale_area = gr.HTML(label="Rationale Report", value="")
+                        re_rank_btn = gr.Button("Re-Rank with Current Weights", variant="secondary")
 
                 search_inputs = [
                     query_input, location_filter,
                     experience_filter, remote_ok, max_results,
+                    use_turbo_toggle,
                     *slider_inputs,
                 ]
                 search_btn.click(
                     fn=search_handler,
                     inputs=search_inputs,
                     outputs=[results_area, rationale_area, results_state],
+                    show_progress="minimal",
                 )
 
-                re_rank_btn = gr.Button("Re-Rank with Current Weights", variant="secondary")
                 re_rank_inputs = [results_state, *slider_inputs]
                 re_rank_btn.click(
                     fn=re_rank_handler,
                     inputs=re_rank_inputs,
                     outputs=[results_area],
+                    show_progress="hidden",
                 )
                 for slider in slider_inputs:
                     slider.change(
                         fn=re_rank_handler,
                         inputs=re_rank_inputs,
                         outputs=[results_area],
+                        show_progress="hidden",
                     )
 
             with gr.Tab("Analytics"):
@@ -346,11 +367,13 @@ def create_app() -> gr.Blocks:
                     fn=create_analytics_dashboard,
                     inputs=[results_state],
                     outputs=[analytics_html],
+                    show_progress="hidden",
                 )
                 search_btn.click(
                     fn=create_analytics_dashboard,
                     inputs=[results_state],
                     outputs=[analytics_html],
+                    show_progress="hidden",
                 )
 
             with gr.Tab("About"):
@@ -392,7 +415,7 @@ app = create_app()
 
 if __name__ == "__main__":
     app.launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7860,
         theme=gr.themes.Soft(),
         css="src/ui/styles.css",
