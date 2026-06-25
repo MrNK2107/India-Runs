@@ -49,51 +49,7 @@ class PlackettLuceRanker:
                 self._client = None
         return self._client
 
-    def rank(
-        self,
-        candidates: list[MatchResult],
-        anonymized_profiles: dict[str, dict] | None = None,
-    ) -> list[tuple[str, float]]:
-        """Rank candidates by Plackett-Luce merit score (sync, with fallback).
 
-        Args:
-            candidates: List of match results to rank
-            anonymized_profiles: Optional dict of profile_id -> anonymized profile dicts
-
-        Returns:
-            List of (profile_id, merit_score) sorted descending by merit
-        """
-        if not candidates or len(candidates) < 2:
-            return [(c.profile_id, 1.0) for c in candidates]
-
-        if not self.enabled or self.client is None:
-            logger.info("Plackett-Luce disabled or client unavailable, using score-based fallback")
-            return self._pointwise_fallback(candidates)
-
-        n_candidates = len(candidates)
-        gamma = np.ones(n_candidates)
-
-        for round_idx in range(self.num_tournament_rounds):
-            groups = self._create_groups(candidates, self.group_size)
-            all_rankings = []
-
-            for group in groups:
-                partial_ranking = self._judge_group(group, anonymized_profiles)
-                if partial_ranking:
-                    all_rankings.append(partial_ranking)
-
-            if all_rankings:
-                gamma = self._mm_algorithm(gamma, all_rankings)
-                logger.info(
-                    f"  Round {round_idx + 1}: gamma range "
-                    f"[{gamma.min():.4f}, {gamma.max():.4f}]"
-                )
-
-        sorted_indices = np.argsort(-gamma)
-        return [
-            (candidates[i].profile_id, float(gamma[i]))
-            for i in sorted_indices
-        ]
 
     async def arank(
         self,
@@ -150,18 +106,7 @@ class PlackettLuceRanker:
             for i in range(0, len(shuffled), group_size)
         ]
 
-    def _judge_group(
-        self,
-        group: list[MatchResult],
-        anonymized_profiles: dict[str, dict] | None = None,
-    ) -> list[int] | None:
-        """Ask LLM to rank a group of candidates listwise (sync wrapper)."""
-        try:
-            import asyncio
-            return asyncio.run(self._judge_group_async(group, anonymized_profiles))
-        except RuntimeError:
-            logger.warning("Cannot run async judge from sync context, falling back")
-            return None
+
 
     async def _judge_group_async(
         self,
