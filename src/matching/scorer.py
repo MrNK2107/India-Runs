@@ -10,7 +10,7 @@ DIM_TO_ACTUAL: dict[str, str] = {
     "education_match": "education_match",
     "assessment_score": "cross_encoder_score",
     "behavioral_signals": "behavioral_score",
-    "cultural_fit": "cultural_fit",
+    "cultural_fit": "semantic_similarity",
 }
 
 
