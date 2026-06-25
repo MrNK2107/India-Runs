@@ -63,6 +63,22 @@ class CodeMixedProcessor:
         self.hinglish_model = hinglish_model
         self._ner_pipeline: Any | None = None
 
+    @property
+    def ner_pipeline(self) -> Any:
+        if self._ner_pipeline is None:
+            try:
+                from transformers import pipeline
+                logger.info(f"Loading Hinglish NER model: {self.hinglish_model}")
+                self._ner_pipeline = pipeline(
+                    "token-classification",
+                    model=self.hinglish_model,
+                    aggregation_strategy="simple"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load Hinglish NER pipeline: {e}")
+                self._ner_pipeline = None
+        return self._ner_pipeline
+
     def detect_code_mixed(self, text: str) -> bool:
         has_devanagari = bool(DEVANAGARI_PATTERN.search(text))
         latin_words = _count_latin_words(text)
@@ -79,7 +95,33 @@ class CodeMixedProcessor:
         return False
 
     def extract_entities(self, text: str) -> list[Entity]:
-        return self._regex_ner_fallback(text)
+        if not self.detect_code_mixed(text):
+            return self._regex_ner_fallback(text)
+
+        nlp = self.ner_pipeline
+        if nlp is None:
+            return self._regex_ner_fallback(text)
+
+        try:
+            results = nlp(text)
+            entities: list[Entity] = []
+            for res in results:
+                label = res.get("entity_group") or res.get("entity") or "UNKNOWN"
+                entities.append(
+                    Entity(
+                        text=res.get("word", ""),
+                        label=label,
+                        start=res.get("start", 0),
+                        end=res.get("end", 0),
+                        confidence=float(res.get("score", 1.0)),
+                    )
+                )
+            if not entities:
+                return self._regex_ner_fallback(text)
+            return entities
+        except Exception as e:
+            logger.warning(f"Hinglish NER extraction failed: {e}, falling back to regex")
+            return self._regex_ner_fallback(text)
 
     def _regex_ner_fallback(self, text: str) -> list[Entity]:
         entities: list[Entity] = []
