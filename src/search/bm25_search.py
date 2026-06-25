@@ -25,14 +25,14 @@ class BM25Search:
             return []
         tokenized_query = self._tokenize(query)
         scores = self.index.get_scores(tokenized_query)
-        
+
         n_candidates = len(scores)
         if n_candidates <= top_k:
             top_indices = np.argsort(scores)[::-1]
         else:
             partition_indices = np.argpartition(-scores, top_k)[:top_k]
             top_indices = partition_indices[np.argsort(-scores[partition_indices])]
-            
+
         results: list[tuple[str, float]] = []
         for idx in top_indices:
             if scores[idx] < 0:

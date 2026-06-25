@@ -53,7 +53,10 @@ class TranslationPipeline:
             }
 
         except Exception as e:
-            logger.warning(f"Google Translation failed for {source_lang}, trying MBART fallback: {e}")
+            logger.warning(
+                "Google Translation failed for %s, trying MBART: %s",
+                source_lang, e
+            )
             try:
                 from src.core.config import get_app_config
                 cfg = get_app_config()
