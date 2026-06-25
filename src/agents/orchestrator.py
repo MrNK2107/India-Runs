@@ -21,6 +21,7 @@ from src.core.models import (
     SearchMetadata,
     SearchResponse,
     SearchResultItem,
+    SearchFilters,
 )
 from src.ranking.listwise_ranker import PlackettLuceRanker
 from src.rationale.generator import RationaleGenerator
@@ -41,6 +42,8 @@ class AgentState(TypedDict):
     start_time_ms: int
     slider_weights: dict[str, float]
     listwise_ranked: bool
+    top_k: int
+    filters: dict | None
 
 
 _SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\s+", re.IGNORECASE)
@@ -135,6 +138,8 @@ class Orchestrator:
         self.max_replans = settings.max_replan_cycles
         self.min_good_matches = config.get("min_good_matches_for_pass", 8)
         self.graph = self._build_graph()
+        self.compiled_graph = self.graph.compile()
+
 
     def _build_graph(self) -> StateGraph:
         workflow = StateGraph(AgentState)
@@ -159,14 +164,17 @@ class Orchestrator:
         )
         workflow.add_edge("generate_rationale", END)
 
-        return workflow.compile()
+        return workflow
 
     async def run(
         self, raw_query: str,
         slider_weights: dict[str, float] | None = None,
+        use_turbo: bool = False,
+        top_k: int = 50,
+        filters: SearchFilters | None = None,
     ) -> SearchResponse:
-        if _is_simple_query(raw_query):
-            return await self._turbo_run(raw_query, slider_weights)
+        if use_turbo:
+            return await self._turbo_run(raw_query, slider_weights, top_k, filters)
 
         initial_state: AgentState = {
             "raw_query": raw_query,
@@ -180,17 +188,35 @@ class Orchestrator:
             "total_candidates_searched": 0,
             "start_time_ms": int(time.time() * 1000),
             "slider_weights": slider_weights or {},
+            "listwise_ranked": False,
+            "top_k": top_k,
+            "filters": filters.model_dump() if filters else None,
         }
-        final_state = await self.graph.ainvoke(initial_state)
+        final_state = await self.compiled_graph.ainvoke(initial_state)
         return self._build_response(final_state)
 
     async def _turbo_run(
         self, raw_query: str,
         slider_weights: dict[str, float] | None = None,
+        top_k: int = 50,
+        filters: SearchFilters | None = None,
     ) -> SearchResponse:
         parsed = _parse_query_text(raw_query)
+        if filters:
+            if filters.location:
+                parsed.location.city = filters.location
+            if filters.min_experience_years is not None:
+                parsed.experience.min_years = filters.min_experience_years
+            if filters.max_experience_years is not None:
+                parsed.experience.max_years = filters.max_experience_years
+            parsed.location.remote_ok = filters.remote_ok or parsed.location.remote_ok
+            if filters.exclude_companies:
+                parsed.filters.exclude_companies = list(set(parsed.filters.exclude_companies + filters.exclude_companies))
+            if filters.include_companies:
+                parsed.filters.include_companies = list(set(parsed.filters.include_companies + filters.include_companies))
+
         start_time = int(time.time() * 1000)
-        results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
+        results = await self.executor.execute(parsed, top_k=top_k, slider_weights=slider_weights)
         elapsed = int(time.time() * 1000) - start_time
         items: list[SearchResultItem] = []
         for i, r in enumerate(results[:100], start=1):
@@ -241,6 +267,22 @@ class Orchestrator:
         else:
             parsed = await self.planner.plan(query)
 
+        # Merge filters from state if present
+        f = state.get("filters")
+        if f:
+            if f.get("location"):
+                parsed.location.city = f["location"]
+            if f.get("min_experience_years") is not None:
+                parsed.experience.min_years = float(f["min_experience_years"])
+            if f.get("max_experience_years") is not None:
+                parsed.experience.max_years = float(f["max_experience_years"])
+            if f.get("remote_ok"):
+                parsed.location.remote_ok = bool(f["remote_ok"])
+            if f.get("exclude_companies"):
+                parsed.filters.exclude_companies = list(set(parsed.filters.exclude_companies + f["exclude_companies"]))
+            if f.get("include_companies"):
+                parsed.filters.include_companies = list(set(parsed.filters.include_companies + f["include_companies"]))
+
         parsed_dict = parsed.model_dump() if hasattr(parsed, "model_dump") else {}
         return {"parsed_query": parsed_dict}
 
@@ -251,7 +293,8 @@ class Orchestrator:
             if parsed_dict else ParsedQuery()
         )
         slider_weights = state.get("slider_weights") or None
-        results = await self.executor.execute(parsed, top_k=50, slider_weights=slider_weights)
+        top_k = state.get("top_k", 50)
+        results = await self.executor.execute(parsed, top_k=top_k, slider_weights=slider_weights)
         methods_used = []
         if state.get("replan_count", 0) > 0:
             methods_used.append("hybrid+rerank+replan")
