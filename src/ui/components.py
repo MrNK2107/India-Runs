@@ -18,32 +18,32 @@ MATCH_COLORS = {
 }
 
 
-_PASTEL_BAR_COLORS = {
-    "Overall": "#a78bfa",
-    "Skill": "#34d399",
-    "Experience": "#60a5fa",
-    "Semantic": "#c084fc",
-    "Keyword": "#fbbf24",
-    "Education": "#f472b6",
-    "AI Rerank": "#22d3ee",
-    "Behavioral": "#fb923c",
-    "Career": "#a78bfa",
-    "Proficiency": "#818cf8",
+_BAR_COLORS = {
+    "Overall": "#b8a9c9",
+    "Skill": "#8ab89e",
+    "Experience": "#9a8ab0",
+    "Semantic": "#a8ccb8",
+    "Keyword": "#ccc09f",
+    "Education": "#ccafb6",
+    "AI Rerank": "#b5c8da",
+    "Behavioral": "#b8929a",
+    "Career": "#b8a87c",
+    "Proficiency": "#b8a9c9",
 }
 
 
-def _pastel_color_for(label: str) -> str:
-    return _PASTEL_BAR_COLORS.get(label.strip(), "#a78bfa")
+def _bar_color(label: str) -> str:
+    return _BAR_COLORS.get(label.strip(), "#b8a9c9")
 
 
 def _score_bar(label: str, value: float, color: str | None = None) -> str:
     pct = max(0, min(100, int(value * 100)))
-    c = color or _pastel_color_for(label)
+    c = color or _bar_color(label)
     return f"""
     <div class="score-bar-row">
         <span class="score-bar-label">{label}</span>
         <div class="score-bar-track">
-            <div class="score-bar-fill" style="width:{pct}%;background:{c};box-shadow:0 0 6px {c}60;"></div>
+            <div class="score-bar-fill" style="width:{pct}%;background:{c};"></div>
         </div>
         <span class="score-bar-pct">{pct}%</span>
     </div>"""
@@ -69,21 +69,21 @@ def _score_badge(value: float) -> str:
 def create_candidate_card(item: SearchResultItem) -> str:
     s = item.scores if item.scores is not None else MatchScores()
     bars = ""
-    bars += _score_bar("Overall", s.overall, "#a78bfa")
-    bars += _score_bar("Skill", s.skill_match, "#34d399")
-    bars += _score_bar("Experience", s.experience_match, "#60a5fa")
-    bars += _score_bar("Semantic", s.semantic_similarity, "#c084fc")
-    bars += _score_bar("Keyword", s.keyword_match, "#fbbf24")
+    bars += _score_bar("Overall", s.overall)
+    bars += _score_bar("Skill", s.skill_match)
+    bars += _score_bar("Experience", s.experience_match)
+    bars += _score_bar("Semantic", s.semantic_similarity)
+    bars += _score_bar("Keyword", s.keyword_match)
     if s.education_match is not None:
-        bars += _score_bar("Education", s.education_match, "#f472b6")
+        bars += _score_bar("Education", s.education_match)
     if s.cross_encoder_score is not None:
-        bars += _score_bar("AI Rerank", s.cross_encoder_score, "#22d3ee")
+        bars += _score_bar("AI Rerank", s.cross_encoder_score)
     if s.behavioral_score is not None:
-        bars += _score_bar("Behavioral", s.behavioral_score, "#fb923c")
+        bars += _score_bar("Behavioral", s.behavioral_score)
     if s.career_trajectory_score is not None:
-        bars += _score_bar("Career", s.career_trajectory_score, "#818cf8")
+        bars += _score_bar("Career", s.career_trajectory_score)
     if s.skill_proficiency_score is not None:
-        bars += _score_bar("Proficiency", s.skill_proficiency_score, "#f472b6")
+        bars += _score_bar("Proficiency", s.skill_proficiency_score)
 
     skills_html = "".join(
         f'<span class="skill-chip matched">{skill}</span>' for skill in item.matched_skills[:8]
@@ -168,10 +168,10 @@ def create_score_radar_chart(scores: dict) -> str:
 
     return f"""
     <svg width="220" height="220" viewBox="0 0 220 220">
-        <polygon points="{outer_points}" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+        <polygon points="{outer_points}" fill="#f5f0e8" stroke="#e8e0d4" stroke-width="1"/>
         {grid_lines}
-        <polygon points="{data_points}" fill="#3b82f640" stroke="#3b82f6" stroke-width="2"/>
-        <circle cx="{cx}" cy="{cy}" r="2" fill="#3b82f6"/>
+        <polygon points="{data_points}" fill="#d4c9e380" stroke="#b8a9c9" stroke-width="2"/>
+        <circle cx="{cx}" cy="{cy}" r="2" fill="#b8a9c9"/>
         {labels}
     </svg>
     """
@@ -297,7 +297,7 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
             return f"""
             <div class="metric-card">
                 <div class="metric-label">{label}</div>
-                <div class="metric-value" style="color:{color};-webkit-text-fill-color:{color};">{format_str.format(val)}</div>
+                <div class="metric-value" style="color:{color};">{format_str.format(val)}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{status}</div>
             </div>"""
 
