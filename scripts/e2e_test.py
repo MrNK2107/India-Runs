@@ -275,8 +275,8 @@ async def run_tests():
             profile = store.get(mr.profile_id)
             if profile:
                 rationale = gen._template_rationale(mr, profile)
-                check("rationale-template-fallback", rationale is not None,
-                      f"len={len(rationale.generated_rationale) if rationale else 0}")
+                check("rationale-template-fallback", rationale is not None and len(rationale.summary) > 0,
+                      f"summary_len={len(rationale.summary) if rationale else 0}")
             else:
                 check("rationale-template-fallback", True, "skipped (no profile)")
         else:

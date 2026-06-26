@@ -4,15 +4,11 @@ from typing import Any
 
 import numpy as np
 
-from src.core.models import MatchResult, Profile
+from src.core.constants import IIT_NIT_BITS, TIER_1_CITIES
+from src.core.models import MatchResult, PersonalInfo, Profile
 
-TIER_1_CITIES = {
-    "bangalore", "bengaluru", "hyderabad", "pune", "chennai",
-    "mumbai", "kolkata", "noida", "gurgaon", "gurugram",
-    "delhi", "new delhi",
-}
 
-IIT_NIT_BITS = {"iit", "nit", "bits", "iiit"}
+_EMPTY_PROFILE = Profile(personal=PersonalInfo(name=""))
 
 
 def _get_city_tier(profile: Profile) -> str | None:
@@ -49,18 +45,21 @@ def compute_demographic_parity(
         return 1.0
 
     if protected_attribute == "university":
-        protected_count = sum(1 for m in top_100 if _is_top_university(profiles.get(m.profile_id)))
+        protected_count = sum(  # noqa: E501
+            1 for m in top_100
+            if _is_top_university(profiles.get(m.profile_id) or _EMPTY_PROFILE)
+        )
         unprotected_count = total - protected_count
     elif protected_attribute in ("city", "location"):
         protected_count = sum(
             1 for m in top_100
-            if _get_city_tier(profiles.get(m.profile_id)) == "tier2"
+            if _get_city_tier(profiles.get(m.profile_id) or _EMPTY_PROFILE) == "tier2"
         )
         unprotected_count = total - protected_count
     elif protected_attribute == "language":
         protected_count = sum(
             1 for m in top_100
-            if (profiles.get(m.profile_id) or Profile).metadata.language_detected != "en"
+            if (profiles.get(m.profile_id) or _EMPTY_PROFILE).metadata.language_detected != "en"
         )
         unprotected_count = total - protected_count
     else:

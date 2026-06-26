@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
-from src.agents.prompts import RATIONALE_SYSTEM_PROMPT
 from src.core.config import get_llm_client, get_settings
 from src.core.models import (
     MatchRecommendation,
@@ -40,11 +40,13 @@ class RationaleGenerator:
                 raise RuntimeError("LLM client unavailable")
 
             prompt = self._build_prompt(match, profile, job_requirements)
-            from langchain_core.messages import HumanMessage, SystemMessage
+            from langchain_core.messages import HumanMessage
 
             messages = [
-                SystemMessage(content=RATIONALE_SYSTEM_PROMPT),
-                HumanMessage(content=prompt),
+                HumanMessage(
+                    content="Generate a candidate evaluation report for a recruiter. "
+                    f"Output valid JSON only.\n\n{prompt}"
+                ),
             ]
             response = await self.client.ainvoke(messages)
             content = response.content if hasattr(response, "content") else str(response)
@@ -54,7 +56,8 @@ class RationaleGenerator:
             return self._template_rationale(match, profile)
 
     async def generate_batch(
-        self, matches: list[MatchResult], profiles: dict[str, Profile], job_requirements: dict,
+        self, matches: list[MatchResult], profiles: dict[str, Profile],
+        job_requirements: dict[str, Any],
     ) -> list[Rationale]:
         results: list[Rationale] = []
         for m in matches:
@@ -99,7 +102,7 @@ class RationaleGenerator:
         except (json.JSONDecodeError, TypeError, ValueError):
             return Rationale(summary="Could not parse rationale response from LLM.")
 
-    def _template_rationale(self, match: MatchResult, profile: Profile) -> Rationale:
+    def _template_rationale(self, match: MatchResult, profile: Profile | None) -> Rationale:
         matched = set(match.matched_skills)
         missing = set(match.missing_skills)
         skill_details = [

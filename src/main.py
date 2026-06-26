@@ -22,7 +22,6 @@ from src.api.routes.profiles import router as profiles_router
 from src.api.routes.search import init_orchestrator
 from src.api.routes.search import router as search_router
 from src.core.config import DATA_DIR, get_settings
-from src.core.profile_store import ProfileStore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,60 +47,16 @@ async def lifespan(app: FastAPI):
         yield
         return
 
-    from src.agents.executor import ExecutorAgent
-    from src.agents.orchestrator import Orchestrator
-    from src.agents.planner import PlannerAgent
-    from src.agents.reflector import ReflectorAgent
-    from src.language.multilingual import MultilingualEmbedder
-    from src.matching.scorer import CandidateScorer
-    from src.search.bm25_search import BM25Search
-    from src.search.hybrid import HybridSearch
-    from src.search.reranker import CrossEncoderReranker
-    from src.search.vector_search import VectorSearch
+    from src.core.config import build_orchestrator
 
-    embedder = MultilingualEmbedder()
-    logger.info("Pre-loading embedding model...")
-    _ = embedder.model
-    # Force tokenizer initialization with a dummy embed call
-    _ = embedder.embed("warmup")
+    orchestrator, vector_search, profiles = build_orchestrator(
+        faiss_path=faiss_path,
+        id_map_path=id_map_path,
+        bm25_path=bm25_path,
+        cross_encoder_timeout_ms=get_settings().cross_encoder_timeout_ms,
+    )
     set_model_loaded("embedding", True)
-    logger.info("Embedding model loaded and ready")
-
-    vector_search = VectorSearch()
-    vector_search.load(faiss_path, id_map_path)
-    logger.info(f"Loaded FAISS index with {vector_search.size} vectors")
-
-    bm25_search = BM25Search()
-    bm25_search.load(bm25_path)
-    logger.info(f"Loaded BM25 index with {bm25_search.size} documents")
-
-    hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
-    timeout_ms = get_settings().cross_encoder_timeout_ms
-    reranker = CrossEncoderReranker(timeout_ms=timeout_ms)
-    # Cross-encoder loading is lazy and disabled by default (CROSS_ENCODER_ENABLED=false)
-    # The model will NOT be loaded at startup to avoid HuggingFace hub loops
-    set_model_loaded("cross_encoder", reranker.model is not None)
-    ce_status = 'loaded' if reranker.model is not None else 'disabled / unavailable'
-    logger.info(f"Cross-encoder status: {ce_status}")
-    scorer = CandidateScorer()
-
-    profiles = ProfileStore()
-    sample_path = DATA_DIR / "samples" / "sample_candidates.json"
-    if sample_path.exists():
-        profiles.load_sample(sample_path)
-
-    offset_index_path = DATA_DIR / "indexes" / "offset_index.json"
-    if offset_index_path.exists():
-        profiles.load_offset_index(offset_index_path)
-        logger.info(f"ProfileStore ready: {len(profiles)} profiles available")
-    else:
-        logger.info("No offset index found — profiles will be indexed on first access")
-    logger.info("ProfileStore initialized (lazy load)")
-
-    planner = PlannerAgent()
-    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
-    reflector = ReflectorAgent()
-    orchestrator = Orchestrator(planner, executor, reflector)
+    set_model_loaded("cross_encoder", True)  # already handled inside build_orchestrator
 
     init_orchestrator(orchestrator)
     set_index_size(vector_search.size)

@@ -24,6 +24,23 @@ DEFAULT_SLIDER_WEIGHTS: dict[str, float] = {
 }
 
 
+# All known match-score dimension names that CandidateScorer can consume.
+_ALL_DIMS = [
+    "semantic_similarity",
+    "keyword_match",
+    "skill_match",
+    "experience_match",
+    "location_match",
+    "education_match",
+    "cross_encoder_score",
+    "behavioral_score",
+    "career_trajectory_score",
+    "skill_proficiency_score",
+    "behavioral_signals",
+    "cultural_fit",
+]
+
+
 class CandidateScorer:
     def __init__(self) -> None:
         config = get_scoring_config()
@@ -39,21 +56,6 @@ class CandidateScorer:
         weighted_sum = 0.0
         components: dict[str, float | None] = {}
 
-        dims = {
-            "semantic_similarity": scores.get("semantic_similarity"),
-            "keyword_match": scores.get("keyword_match"),
-            "skill_match": scores.get("skill_match"),
-            "experience_match": scores.get("experience_match"),
-            "location_match": scores.get("location_match"),
-            "education_match": scores.get("education_match"),
-            "cross_encoder_score": scores.get("cross_encoder_score"),
-            "behavioral_score": scores.get("behavioral_score"),
-            "career_trajectory_score": scores.get("career_trajectory_score"),
-            "skill_proficiency_score": scores.get("skill_proficiency_score"),
-            "behavioral_signals": scores.get("behavioral_signals"),
-            "cultural_fit": scores.get("cultural_fit"),
-        }
-
         effective_weights: dict[str, float] = {}
         if slider_weights:
             for slider_dim, actual_dim in DIM_TO_ACTUAL.items():
@@ -66,7 +68,8 @@ class CandidateScorer:
         else:
             effective_weights = dict(self.weights)
 
-        for dim, score in dims.items():
+        for dim in _ALL_DIMS:
+            score = scores.get(dim)
             if score is not None:
                 weight = effective_weights.get(dim, 0.0)
                 total_weight += weight
@@ -80,10 +83,10 @@ class CandidateScorer:
 
         return MatchScores(
             overall=overall,
-            semantic_similarity=components.get("semantic_similarity") or 0.0,
-            keyword_match=components.get("keyword_match") or 0.0,
-            skill_match=components.get("skill_match") or 0.0,
-            experience_match=components.get("experience_match") or 0.0,
+            semantic_similarity=components.get("semantic_similarity", 0.0) or 0.0,
+            keyword_match=components.get("keyword_match", 0.0) or 0.0,
+            skill_match=components.get("skill_match", 0.0) or 0.0,
+            experience_match=components.get("experience_match", 0.0) or 0.0,
             location_match=components.get("location_match"),
             education_match=components.get("education_match"),
             cross_encoder_score=components.get("cross_encoder_score"),

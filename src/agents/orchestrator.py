@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, StateGraph
 
@@ -18,10 +18,10 @@ from src.core.models import (
     ParsedQuery,
     QueryFilters,
     Rationale,
+    SearchFilters,
     SearchMetadata,
     SearchResponse,
     SearchResultItem,
-    SearchFilters,
 )
 from src.ranking.listwise_ranker import PlackettLuceRanker
 from src.rationale.generator import RationaleGenerator
@@ -31,19 +31,19 @@ logger = logging.getLogger(__name__)
 
 class AgentState(TypedDict):
     raw_query: str
-    parsed_query: dict | None
-    results: list[dict]
-    evaluations: dict | None
+    parsed_query: dict[str, Any] | None
+    results: list[dict[str, Any]]
+    evaluations: dict[str, Any] | None
     replan_count: int
     max_replans: int
     should_continue: bool
-    search_metadata: dict
+    search_metadata: dict[str, Any]
     total_candidates_searched: int
     start_time_ms: int
     slider_weights: dict[str, float]
     listwise_ranked: bool
     top_k: int
-    filters: dict | None
+    filters: dict[str, Any] | None
 
 
 _SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\s+", re.IGNORECASE)
@@ -96,6 +96,43 @@ STOP_WORDS = frozenset({
 })
 
 
+def _dict_to_match_result(r: dict, rank_override: int | None = None) -> MatchResult:
+    """Convert a raw results dict (from state or JSON) into a MatchResult.
+
+    Extracted to eliminate 4x-repeated reconstruction blocks across
+    _listwise_ranking_node, _rationale_node, _build_response, and _turbo_run.
+    """
+    from src.core.models import MatchScores
+
+    scores_dict = r.get("scores", {})
+    if not isinstance(scores_dict, dict):
+        scores_dict = {}
+    match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
+
+    return MatchResult(
+        query_id=r.get("query_id", ""),
+        profile_id=r.get("profile_id", ""),
+        rank=rank_override if rank_override is not None else r.get("rank", 1),
+        name=r.get("name", ""),
+        current_title=r.get("current_title"),
+        current_company=r.get("current_company"),
+        location=r.get("location"),
+        experience_years=r.get("experience_years"),
+        scores=match_scores,
+        matched_skills=r.get("matched_skills", []),
+        missing_skills=r.get("missing_skills", []),
+    )
+
+
+def _merge_filter_list(
+    existing: list[str], incoming: list[str] | None,
+) -> list[str]:
+    """Merge two filter lists (deduped), handling None incoming."""
+    if not incoming:
+        return list(existing)
+    return list(set(existing + incoming))
+
+
 def _parse_query_text(text: str) -> ParsedQuery:
     from src.core.constants import INDIAN_CITIES
     from src.core.models import RequiredSkill
@@ -141,7 +178,7 @@ class Orchestrator:
         self.compiled_graph = self.graph.compile()
 
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> StateGraph[AgentState]:
         workflow = StateGraph(AgentState)
 
         workflow.add_node("plan", self._plan_node)
@@ -192,7 +229,7 @@ class Orchestrator:
             "top_k": top_k,
             "filters": filters.model_dump() if filters else None,
         }
-        final_state = await self.compiled_graph.ainvoke(initial_state)
+        final_state: AgentState = await self.compiled_graph.ainvoke(initial_state)  # type: ignore[assignment]
         return self._build_response(final_state)
 
     async def _turbo_run(
@@ -210,10 +247,12 @@ class Orchestrator:
             if filters.max_experience_years is not None:
                 parsed.experience.max_years = filters.max_experience_years
             parsed.location.remote_ok = filters.remote_ok or parsed.location.remote_ok
-            if filters.exclude_companies:
-                parsed.filters.exclude_companies = list(set(parsed.filters.exclude_companies + filters.exclude_companies))
-            if filters.include_companies:
-                parsed.filters.include_companies = list(set(parsed.filters.include_companies + filters.include_companies))
+            parsed.filters.exclude_companies = _merge_filter_list(
+                parsed.filters.exclude_companies, filters.exclude_companies,
+            )
+            parsed.filters.include_companies = _merge_filter_list(
+                parsed.filters.include_companies, filters.include_companies,
+            )
 
         start_time = int(time.time() * 1000)
         results = await self.executor.execute(parsed, top_k=top_k, slider_weights=slider_weights)
@@ -256,7 +295,7 @@ class Orchestrator:
             ),
         )
 
-    async def _plan_node(self, state: AgentState) -> dict:
+    async def _plan_node(self, state: AgentState    ) -> dict[str, Any]:
         query = state["raw_query"]
         if state["replan_count"] > 0 and state["evaluations"]:
             feedback = ""
@@ -278,15 +317,19 @@ class Orchestrator:
                 parsed.experience.max_years = float(f["max_experience_years"])
             if f.get("remote_ok"):
                 parsed.location.remote_ok = bool(f["remote_ok"])
-            if f.get("exclude_companies"):
-                parsed.filters.exclude_companies = list(set(parsed.filters.exclude_companies + f["exclude_companies"]))
-            if f.get("include_companies"):
-                parsed.filters.include_companies = list(set(parsed.filters.include_companies + f["include_companies"]))
+            exclude = f.get("exclude_companies") or None
+            parsed.filters.exclude_companies = _merge_filter_list(
+                parsed.filters.exclude_companies, exclude,
+            )
+            include = f.get("include_companies") or None
+            parsed.filters.include_companies = _merge_filter_list(
+                parsed.filters.include_companies, include,
+            )
 
         parsed_dict = parsed.model_dump() if hasattr(parsed, "model_dump") else {}
         return {"parsed_query": parsed_dict}
 
-    async def _execute_node(self, state: AgentState) -> dict:
+    async def _execute_node(self, state: AgentState) -> dict[str, Any]:
         parsed_dict = state.get("parsed_query") or {}
         parsed = (
             ParsedQuery.model_validate(parsed_dict, strict=False)
@@ -311,7 +354,7 @@ class Orchestrator:
             },
         }
 
-    async def _listwise_ranking_node(self, state: AgentState) -> dict:
+    async def _listwise_ranking_node(self, state: AgentState) -> dict[str, Any]:
         results_raw = state.get("results", [])
         if not results_raw or len(results_raw) < 2:
             return {"listwise_ranked": False}
@@ -322,26 +365,7 @@ class Orchestrator:
         anonymized_profiles: dict[str, dict] = {}
         for r in results_raw:
             if isinstance(r, dict):
-                from src.core.models import MatchScores
-                scores_dict = r.get("scores", {})
-                if not isinstance(scores_dict, dict):
-                    scores_dict = {}
-                match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
-                match_results.append(
-                    MatchResult(
-                        query_id=r.get("query_id", ""),
-                        profile_id=r.get("profile_id", ""),
-                        rank=r.get("rank", 1),
-                        name=r.get("name", ""),
-                        current_title=r.get("current_title"),
-                        current_company=r.get("current_company"),
-                        location=r.get("location"),
-                        experience_years=r.get("experience_years"),
-                        scores=match_scores,
-                        matched_skills=r.get("matched_skills", []),
-                        missing_skills=r.get("missing_skills", []),
-                    )
-                )
+                match_results.append(_dict_to_match_result(r))
 
             pid = r.get("profile_id", "") if isinstance(r, dict) else r.profile_id
             if pid and hasattr(self.executor, "profile_store"):
@@ -379,7 +403,7 @@ class Orchestrator:
             "search_metadata": methods,
         }
 
-    async def _reflect_node(self, state: AgentState) -> dict:
+    async def _reflect_node(self, state: AgentState) -> dict[str, Any]:
         parsed_dict = state.get("parsed_query") or {}
         parsed = (
             ParsedQuery.model_validate(parsed_dict, strict=False)
@@ -404,7 +428,7 @@ class Orchestrator:
             return "replan"
         return "done"
 
-    async def _rationale_node(self, state: AgentState) -> dict:
+    async def _rationale_node(self, state: AgentState) -> dict[str, Any]:
         results_raw = state.get("results", [])
         if not results_raw:
             return {"should_continue": False}
@@ -412,24 +436,7 @@ class Orchestrator:
         rationales = []
         for r in results_raw[:20]:
             if isinstance(r, dict):
-                from src.core.models import MatchScores
-                scores_dict = r.get("scores", {})
-                if not isinstance(scores_dict, dict):
-                    scores_dict = {}
-                match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
-                match_result = MatchResult(
-                    query_id="",
-                    profile_id=r.get("profile_id", ""),
-                    rank=r.get("rank", 1),
-                    name=r.get("name", ""),
-                    current_title=r.get("current_title"),
-                    current_company=r.get("current_company"),
-                    location=r.get("location"),
-                    experience_years=r.get("experience_years"),
-                    scores=match_scores,
-                    matched_skills=r.get("matched_skills", []),
-                    missing_skills=r.get("missing_skills", []),
-                )
+                match_result = _dict_to_match_result(r)
                 rationale = self.rationale_gen._template_rationale(match_result, None)
                 rationales.append({
                     "profile_id": r.get("profile_id", ""),
@@ -444,24 +451,7 @@ class Orchestrator:
 
         for i, r in enumerate(results_raw[:100], start=1):
             if isinstance(r, dict):
-                from src.core.models import MatchScores
-                scores_dict = r.get("scores", {})
-                if not isinstance(scores_dict, dict):
-                    scores_dict = {}
-                match_scores = MatchScores(**scores_dict) if scores_dict else MatchScores()
-                match_result = MatchResult(
-                    query_id="",
-                    profile_id=r.get("profile_id", ""),
-                    rank=i,
-                    name=r.get("name", ""),
-                    current_title=r.get("current_title"),
-                    current_company=r.get("current_company"),
-                    location=r.get("location"),
-                    experience_years=r.get("experience_years"),
-                    scores=match_scores,
-                    matched_skills=r.get("matched_skills", []),
-                    missing_skills=r.get("missing_skills", []),
-                )
+                match_result = _dict_to_match_result(r, rank_override=i)
                 rationale = self.rationale_gen._template_rationale(match_result, None)
                 items.append(
                     SearchResultItem(
@@ -472,7 +462,7 @@ class Orchestrator:
                         current_company=match_result.current_company,
                         location=match_result.location,
                         experience_years=match_result.experience_years,
-                        scores=match_scores,
+                        scores=match_result.scores,
                         matched_skills=match_result.matched_skills,
                         missing_skills=match_result.missing_skills,
                         rationale=Rationale(

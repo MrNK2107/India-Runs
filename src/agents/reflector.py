@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import Any
 
 from src.agents.prompts import REFLECTOR_SYSTEM_PROMPT
 from src.core.config import get_llm_client, get_settings
@@ -27,7 +28,7 @@ class ReflectorAgent:
                 self._client = None
         return self._client
 
-    async def reflect(self, query: ParsedQuery, results: list[MatchResult]) -> dict:
+    async def reflect(self, query: ParsedQuery, results: list[MatchResult]) -> dict[str, Any]:
         try:
             if self.client is None:
                 raise RuntimeError("LLM client unavailable")
@@ -109,7 +110,9 @@ class ReflectorAgent:
             })
         return evaluations
 
-    def _should_replan(self, evaluations: list | dict, threshold: int = 8) -> bool:
+    def _should_replan(  # noqa: E501
+        self, evaluations: list[dict[str, Any]] | dict[str, Any], threshold: int = 3
+    ) -> bool:
         if isinstance(evaluations, list):
             good_matches = {"strong_match", "good_match"}
             good = sum(
@@ -119,7 +122,9 @@ class ReflectorAgent:
             return good < threshold
         return False
 
-    def _generate_feedback(self, evaluations: list | dict, results: list[MatchResult]) -> str:
+    def _generate_feedback(  # noqa: E501
+        self, evaluations: list[dict[str, Any]] | dict[str, Any], results: list[MatchResult]
+    ) -> str:
         if isinstance(evaluations, list):
             weak = [
                 ev for ev in evaluations

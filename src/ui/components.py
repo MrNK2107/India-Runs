@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+# ruff: noqa: E501 — long HTML/CSS inline style strings are intentional
 from src.core.models import MatchResult, MatchScores, Profile, Rationale, SearchResultItem
 
 
@@ -20,12 +21,12 @@ MATCH_COLORS = {
 def _score_bar(label: str, value: float, color: str = "#3b82f6") -> str:
     pct = max(0, min(100, int(value * 100)))
     return f"""
-    <div style="display:flex;align-items:center;margin:2px 0;gap:6px;">
-        <span style="font-size:11px;color:#6b7280;width:85px;text-align:right;">{label}</span>
-        <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;">
-            <div style="width:{pct}%;height:100%;background:{color};border-radius:4px;"></div>
+    <div class="score-bar-row" style="display:flex;align-items:center;margin:4px 0;gap:8px;">
+        <span class="score-bar-label" style="font-size:11px;opacity:0.75;width:85px;text-align:right;">{label}</span>
+        <div class="score-bar-track" style="flex:1;height:6px;background:rgba(128,128,128,0.15);border-radius:3px;overflow:hidden;">
+            <div class="score-bar-fill" style="width:{pct}%;height:100%;background:{color};border-radius:3px;box-shadow: 0 0 6px {color}80;"></div>
         </div>
-        <span style="font-size:11px;color:#374151;width:30px;text-align:right;">{pct}%</span>
+        <span class="score-bar-pct" style="font-size:11px;opacity:0.9;width:32px;text-align:right;font-weight:600;">{pct}%</span>
     </div>"""
 
 
@@ -74,35 +75,36 @@ def create_candidate_card(item: SearchResultItem) -> str:
 
     return f"""
     <div class="candidate-card">
-        <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;">
+        <div class="candidate-header" style="display:flex;justify-content:space-between;align-items:start;gap:16px;">
             <div style="flex:1;">
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <strong style="font-size:18px;">{item.name}</strong>
-                    <span style="font-size:12px;color:#9ca3af;">#{item.rank}</span>
+                    <span style="font-size:12px;opacity:0.5;">#{item.rank}</span>
+                    <span style="font-size:11px;opacity:0.4;background:rgba(128,128,128,0.15);padding:1px 6px;border-radius:4px;font-family:monospace;margin-left:4px;">ID: {item.profile_id}</span>
                 </div>
-                <div style="color:#6b7280;margin-top:4px;">
+                <div style="opacity:0.85;margin-top:4px;font-size:14px;font-weight:500;">
                     {item.current_title or 'N/A'}
                     {(
-            f' <span style="color:#9ca3af;">at</span> '
-            f'<strong>{item.current_company}</strong>'
-            if item.current_company else ""
-        )}
+                        f' <span style="opacity:0.5;font-weight:normal;">at</span> '
+                        f'<strong>{item.current_company}</strong>'
+                        if item.current_company else ""
+                    )}
                 </div>
-                <div style="color:#9ca3af;font-size:13px;margin-top:2px;">
+                <div style="opacity:0.6;font-size:13px;margin-top:2px;">
                     {item.location or 'Location N/A'}
                     {_bullet_years(item.experience_years)}
                 </div>
             </div>
             {_score_badge(s.overall)}
         </div>
-        <div style="margin-top:12px;">
-            <div style="font-size:13px;color:#374151;margin-bottom:4px;">
+        <div class="candidate-score-breakdown" style="margin-top:14px;">
+            <div style="font-size:13px;opacity:0.85;margin-bottom:6px;font-weight:600;">
                 Score Breakdown
-                <span style="color:#9ca3af;font-size:11px;">(confidence: {s.confidence:.0%})</span>
+                <span style="opacity:0.5;font-size:11px;font-weight:normal;">(confidence: {s.confidence:.0%})</span>
             </div>
             {bars}
         </div>
-        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:4px;">
+        <div class="candidate-skills-list" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;">
             {skills_html}
             {missing_html}
         </div>
@@ -215,14 +217,16 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
             if not isinstance(scores_dict, dict):
                 scores_dict = {}
             match_scores = MatchScores(
-                overall=scores_dict.get("overall", r.get("_re_score", 0)),
-                semantic_similarity=scores_dict.get("semantic_similarity"),
-                keyword_match=scores_dict.get("keyword_match"),
-                skill_match=scores_dict.get("skill_match", 0),
-                experience_match=scores_dict.get("experience_match", 0),
-                location_match=scores_dict.get("location_match"),
-                education_match=scores_dict.get("education_match"),
-                confidence=scores_dict.get("confidence", 0),
+                overall=float(scores_dict.get("overall", r.get("_re_score", 0)) or 0),
+                semantic_similarity=float(scores_dict.get("semantic_similarity") or 0),
+                keyword_match=float(scores_dict.get("keyword_match") or 0),
+                skill_match=float(scores_dict.get("skill_match", 0) or 0),
+                experience_match=float(scores_dict.get("experience_match", 0) or 0),
+                location_match=float(scores_dict.get("location_match") or 0)
+                if scores_dict.get("location_match") is not None else None,
+                education_match=float(scores_dict.get("education_match") or 0)
+                if scores_dict.get("education_match") is not None else None,
+                confidence=float(scores_dict.get("confidence", 0) or 0),
             )
             match_results.append(
                 MatchResult(
@@ -344,7 +348,7 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
     """
 
 
-def _build_distribution_table(match_results: list) -> str:
+def _build_distribution_table(match_results: list[MatchResult]) -> str:
     """Build a summary table of match categories."""
     strong = sum(1 for m in match_results if m.scores.overall >= 0.8)
     good = sum(1 for m in match_results if 0.6 <= m.scores.overall < 0.8)

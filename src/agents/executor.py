@@ -105,7 +105,7 @@ class ExecutorAgent:
                 for pid in pids_to_fetch
             ]
             fetched_profiles = await asyncio.gather(*fetch_tasks)
-            
+
         for pid, p in zip(pids_to_fetch, fetched_profiles):
             if p is not None:
                 local_profile_cache[pid] = p
@@ -166,6 +166,48 @@ class ExecutorAgent:
         return max(0.0, min(1.0, score / max_score))
 
     @staticmethod
+    def _prepare_scores_dict(
+        pid: str,
+        profile: Profile,
+        vec_scores: dict[str, float],
+        bm25_scores: dict[str, float],
+        rerank_score: float | None,
+        skill_overlap: float,
+        exp_match: float,
+        all_req: list[str],
+    ) -> dict[str, float | None]:
+        """Build the raw scores dict for a single candidate, before weighting."""
+        honeypot_reason = detect_honeypot(profile)
+        honeypot_penalty = 0.15 if honeypot_reason else 1.0
+
+        return {
+            "semantic_similarity": vec_scores.get(pid),
+            "keyword_match": bm25_scores.get(pid),
+            "skill_match": skill_overlap * honeypot_penalty,
+            "experience_match": exp_match * honeypot_penalty,
+            "location_match": None,
+            "education_match": None,
+            "cross_encoder_score": rerank_score * honeypot_penalty if rerank_score else None,
+            "behavioral_score": compute_behavioral_score(profile.signals) * honeypot_penalty,
+            "career_trajectory_score": compute_career_trajectory(profile) * honeypot_penalty,
+            "skill_proficiency_score": (
+                compute_skill_proficiency(profile, all_req) * honeypot_penalty
+            ),
+        }
+
+    @staticmethod
+    def _extract_candidate_info(profile: Profile, pid: str) -> tuple[str, str | None, str | None, str | None, float | None]:  # noqa: E501
+        """Extract basic candidate display info from a Profile."""
+        loc = profile.personal.location
+        return (
+            profile.personal.name if profile.personal else "",
+            profile.professional.current_title if profile.professional else None,
+            profile.professional.current_company if profile.professional else None,
+            loc.city if profile.personal and loc else None,
+            profile.professional.total_experience_years if profile.professional else None,
+        )
+
+    @staticmethod
     def _score_single_candidate(
         pid: str,
         rerank_score: float | None,
@@ -189,25 +231,10 @@ class ExecutorAgent:
         )
         exp_match = min(1.0, total_years / 10.0)
 
-        honeypot_reason = detect_honeypot(profile)
-        honeypot_penalty = 0.15 if honeypot_reason else 1.0
-
-        behavioral_score = compute_behavioral_score(profile.signals)
-        career_trajectory = compute_career_trajectory(profile)
-        skill_prof = compute_skill_proficiency(profile, all_req)
-
-        scores_dict: dict[str, float | None] = {
-            "semantic_similarity": vec_scores.get(pid),
-            "keyword_match": bm25_scores.get(pid),
-            "skill_match": skill_overlap * honeypot_penalty,
-            "experience_match": exp_match * honeypot_penalty,
-            "location_match": None,
-            "education_match": None,
-            "cross_encoder_score": rerank_score * honeypot_penalty if rerank_score else None,
-            "behavioral_score": behavioral_score * honeypot_penalty,
-            "career_trajectory_score": career_trajectory * honeypot_penalty,
-            "skill_proficiency_score": skill_prof * honeypot_penalty,
-        }
+        scores_dict = ExecutorAgent._prepare_scores_dict(
+            pid, profile, vec_scores, bm25_scores, rerank_score,
+            skill_overlap, exp_match, all_req,
+        )
 
         scorer = CandidateScorer()
         match_scores = scorer.compute_overall(scores_dict, slider_weights)
@@ -216,25 +243,17 @@ class ExecutorAgent:
             req_names, profile.skills, profile.raw_text,
         )
 
-        loc = profile.personal.location
-        city = loc.city if profile.personal and loc else None
+        name, title, company, city, exp_years = ExecutorAgent._extract_candidate_info(profile, pid)
 
         return MatchResult(
             query_id="",
             profile_id=pid,
             rank=0,
-            name=profile.personal.name if profile.personal else "",
-            current_title=(
-                profile.professional.current_title if profile.professional else None
-            ),
-            current_company=(
-                profile.professional.current_company if profile.professional else None
-            ),
+            name=name,
+            current_title=title,
+            current_company=company,
             location=city,
-            experience_years=(
-                profile.professional.total_experience_years
-                if profile.professional else None
-            ),
+            experience_years=exp_years,
             scores=match_scores,
             matched_skills=list(set(req_only_matched)),
             missing_skills=list(set(req_only_missing)),

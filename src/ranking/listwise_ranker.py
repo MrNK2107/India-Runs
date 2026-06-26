@@ -40,7 +40,7 @@ class PlackettLuceRanker:
         self._client = None
 
     @property
-    def client(self) -> Any:
+    def client(self) -> Any:  # noqa: ANN401
         if self._client is None:
             try:
                 self._client = get_llm_client()

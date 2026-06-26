@@ -4,6 +4,7 @@ import hashlib
 import re
 from typing import Any
 
+from src.core.constants import IIT_NIT_BITS, METRO_CITIES
 from src.core.models import Profile
 
 # Overused LLM-style verbs to strip during style anonymization
@@ -15,7 +16,7 @@ LLM_OVERUSED_VERBS: set[str] = {
     "utilized", "implemented", "established", "spearheading", "spearheads",
 }
 
-LLM_POWER_PHRASES: list[re.Pattern] = [
+LLM_POWER_PHRASES: list[re.Pattern[str]] = [
     re.compile(r"\bpassionate about\b", re.IGNORECASE),
     re.compile(r"\bproven track record\b", re.IGNORECASE),
     re.compile(r"\bresults[-\s]oriented\b", re.IGNORECASE),
@@ -72,10 +73,9 @@ def anonymize_profile(profile: Profile) -> dict[str, Any]:
 
 def _get_education_tier(profile: Profile) -> str:
     """Classify education into tier-1, tier-2, or unknown."""
-    iit_nit_bits = {"iit", "nit", "bits", "iiit"}
     for edu in profile.education:
         inst = (edu.institution or "").lower()
-        if any(prefix in inst for prefix in iit_nit_bits):
+        if any(prefix in inst for prefix in IIT_NIT_BITS):
             return "tier-1"
     if len(profile.education) > 0:
         return "tier-2"
@@ -84,10 +84,6 @@ def _get_education_tier(profile: Profile) -> str:
 
 def _get_location_tier(profile: Profile) -> str:
     """Classify location into metro, tier-2, tier-3, or unknown."""
-    metro_cities = {
-        "bangalore", "bengaluru", "hyderabad", "pune", "chennai",
-        "mumbai", "kolkata", "delhi", "new delhi", "ahmedabad",
-    }
     city = ""
     if profile.personal and profile.personal.location:
         city = (profile.personal.location.city or "").lower()
@@ -96,7 +92,7 @@ def _get_location_tier(profile: Profile) -> str:
             if exp.location:
                 city = exp.location.lower().split(",")[0].strip()
                 break
-    if city in metro_cities:
+    if city in METRO_CITIES:
         return "metro"
     if city:
         return "tier-2/3"

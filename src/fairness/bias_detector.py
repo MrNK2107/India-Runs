@@ -2,15 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core.constants import IIT_NIT_BITS, TIER_1_CITIES
 from src.core.models import MatchResult, Profile
-
-TIER_1_CITIES = {
-    "bangalore", "bengaluru", "hyderabad", "pune", "chennai",
-    "mumbai", "kolkata", "noida", "gurgaon", "gurugram",
-    "delhi", "new delhi",
-}
-
-IIT_NIT_BITS = {"iit", "nit", "bits", "iiit"}
 
 
 class BiasDetector:

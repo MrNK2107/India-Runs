@@ -201,3 +201,18 @@ PROFILES_PATH = DATA_DIR / "profiles" / "profiles.json"
 QUERIES_PATH = DATA_DIR / "queries" / "queries.json"
 GROUND_TRUTH_PATH = DATA_DIR / "ground_truth" / "ground_truth.json"
 SAMPLE_PATH = DATA_DIR / "samples" / "sample_candidates.json"
+
+# ── Fairness / Bias Detection Constants ──────────────────────────────
+
+TIER_1_CITIES: frozenset[str] = frozenset({
+    "bangalore", "bengaluru", "hyderabad", "pune", "chennai",
+    "mumbai", "kolkata", "noida", "gurgaon", "gurugram",
+    "delhi", "new delhi",
+})
+
+IIT_NIT_BITS: frozenset[str] = frozenset({"iit", "nit", "bits", "iiit"})
+
+METRO_CITIES: frozenset[str] = frozenset({
+    "bangalore", "bengaluru", "hyderabad", "pune", "chennai",
+    "mumbai", "kolkata", "delhi", "new delhi", "ahmedabad",
+})

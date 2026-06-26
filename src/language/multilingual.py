@@ -27,12 +27,14 @@ class MultilingualEmbedder:
         return self._model
 
     def embed(self, text: str) -> np.ndarray:
-        return self.model.encode(text, normalize_embeddings=True)
+        result = self.model.encode(text, normalize_embeddings=True)
+        return np.asarray(result)
 
     def embed_batch(self, texts: list[str], batch_size: int = 64) -> np.ndarray:
-        return self.model.encode(
+        result = self.model.encode(
             texts, batch_size=batch_size, normalize_embeddings=True, show_progress_bar=False,
         )
+        return np.asarray(result)
 
     def cosine_similarity(self, vec_a: np.ndarray, vec_b: np.ndarray) -> float:
         return float(np.dot(vec_a, vec_b))

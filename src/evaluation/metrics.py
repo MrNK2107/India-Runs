@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from statistics import mean
+from typing import Any
 
 
 def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
@@ -38,7 +39,7 @@ def ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
     return dcg / idcg if idcg > 0 else 0.0
 
 
-def cross_lingual_mrr(results: dict) -> float:
+def cross_lingual_mrr(results: dict[str, Any]) -> float:
     non_en_queries = {
         qid
         for qid, q in results.get("queries", {}).items()

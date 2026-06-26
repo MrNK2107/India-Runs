@@ -4,6 +4,7 @@ import json
 import logging
 from collections import OrderedDict
 from pathlib import Path
+from typing import TextIO
 
 from src.core.config import DATA_DIR
 from src.core.constants import SAMPLE_PATH
@@ -22,15 +23,17 @@ class ProfileStore:
         self._index_built = False
         self._sample_profiles: dict[str, Profile] = {}
         self._auto_init_samples()
-        self._file_handle = None
+        self._file_handle: TextIO | None = None
 
     def _auto_init_samples(self) -> None:
-        """Automatically load sample profiles if main profile file is missing."""
-        if self.path.exists():
-            return
+        """Automatically load sample profiles alongside the main profile file.
+
+        Samples are always loaded so they are available for quick access,
+        even when the main 100K profile JSONL is present.
+        """
         sample_path = SAMPLE_PATH
         if not sample_path.exists():
-            logger.warning(f"No profile data found at {self.path} or {sample_path}")
+            logger.warning(f"No sample data found at {sample_path}")
             return
         self.load_sample(sample_path)
 

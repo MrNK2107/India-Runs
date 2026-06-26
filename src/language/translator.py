@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+from typing import Any
 
 from deep_translator import GoogleTranslator
 
@@ -28,7 +29,7 @@ class TranslationPipeline:
 
     def translate_to_english(
         self, text: str, source_lang: str, is_batch_call: bool = False,
-    ) -> dict[str, str | float | bool]:
+    ) -> dict[str, str | float | bool]:  # type: ignore[return-value]
         if source_lang == "en":
             return {
                 "original": text,
@@ -115,7 +116,7 @@ class TranslationPipeline:
 
     def translate_batch(
         self, texts: list[tuple[str, str]]
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         results: list[dict] = []
         for i, (text, lang) in enumerate(texts):
             if i > 0 and i % 10 == 0:

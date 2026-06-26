@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
+from typing import Any
 
 from src.core.models import RequiredSkill, Skill, SkillImportance
 
@@ -47,13 +48,13 @@ class SkillMatcher:
 
     def match_skills(
         self, required: list[RequiredSkill], candidate_skills: list[Skill],
-    ) -> tuple[float, list[dict]]:
+    ) -> tuple[float, list[dict[str, Any]]]:
         if not required:
             return 1.0, []
 
         total_weight = 0.0
         weighted_score = 0.0
-        details: list[dict] = []
+        details: list[dict[str, Any]] = []
 
         for req in required:
             importance_weight = self._importance_weight(req.importance)

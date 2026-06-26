@@ -1,95 +1,169 @@
-/* Score badges */
-.score-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-weight: 600;
-    font-size: 14px;
-}
-.score-strong { background: #d1fae5; color: #065f46; }
-.score-good { background: #dbeafe; color: #1e40af; }
-.score-potential { background: #fef3c7; color: #92400e; }
-.score-weak { background: #fee2e2; color: #991b1b; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* Skill chips */
+/* Main CSS Overrides */
+body, grad-container, .gradio-container {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Glassmorphic Candidate Card */
+.candidate-card {
+    background: var(--block-background-fill, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border-color-primary, rgba(128, 128, 128, 0.15));
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.candidate-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.15), 0 0 15px var(--primary-500, rgba(99, 102, 241, 0.15));
+    border-color: var(--primary-500, #6366f1);
+}
+
+/* Score Badges */
+.score-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 65px;
+    height: 65px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.score-badge.score-strong {
+    background: rgba(16, 185, 129, 0.1) !important;
+    color: #10b981 !important;
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+.score-badge.score-good {
+    background: rgba(59, 130, 246, 0.1) !important;
+    color: #3b82f6 !important;
+    border: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+
+.score-badge.score-potential {
+    background: rgba(245, 158, 11, 0.1) !important;
+    color: #f59e0b !important;
+    border: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+
+.score-badge.score-weak {
+    background: rgba(239, 68, 68, 0.1) !important;
+    color: #ef4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+}
+
+/* Skill Chips */
 .skill-chip {
     display: inline-block;
-    padding: 2px 8px;
+    padding: 4px 10px;
     margin: 2px;
-    border-radius: 4px;
-    font-size: 12px;
-    background: #f3f4f6;
-    color: #374151;
-}
-.skill-chip.matched { background: #d1fae5; color: #065f46; }
-.skill-chip.missing { background: #fee2e2; color: #991b1b; }
-
-/* Candidate card */
-.candidate-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
-    transition: box-shadow 0.2s;
-}
-.candidate-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-/* Metric card for analytics */
-.metric-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-}
-.metric-label {
-    font-size: 13px;
-    color: #6b7280;
-    margin-bottom: 8px;
-}
-.metric-value {
-    font-size: 28px;
-    font-weight: 700;
-}
-
-/* Results container */
-.results-container {
-    max-height: 800px;
-    overflow-y: auto;
-}
-
-/* Badges */
-.badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
+    border-radius: 6px;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
+    transition: all 0.2s;
 }
-.badge-listwise {
-    background: #eef2ff;
-    color: #4338ca;
-    border: 1px solid #c7d2fe;
+
+.skill-chip.matched {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
 }
-.badge-pii {
-    background: #f0fdf4;
-    color: #15803d;
-    border: 1px solid #bbf7d0;
+
+.skill-chip.missing {
+    background: rgba(239, 68, 68, 0.08);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.15);
 }
-.badge-method {
-    background: #f5f3ff;
-    color: #7c3aed;
-    border: 1px solid #ddd6fe;
+
+/* Metric Cards for Live Analytics */
+.metric-card {
+    background: var(--block-background-fill, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border-color-primary, rgba(128, 128, 128, 0.15));
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s;
 }
+
+.metric-card:hover {
+    transform: translateY(-1px);
+}
+
+.metric-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.6;
+    margin-bottom: 6px;
+}
+
+.metric-value {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Results Sidebar Container */
+.results-container {
+    max-height: 850px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* Scrollbar Customization */
 .results-container::-webkit-scrollbar {
     width: 6px;
 }
 .results-container::-webkit-scrollbar-track {
-    background: #f9fafb;
+    background: transparent;
 }
 .results-container::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: rgba(128, 128, 128, 0.3);
     border-radius: 3px;
+}
+.results-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(128, 128, 128, 0.5);
+}
+
+/* Status Badges */
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+.badge-listwise {
+    background: rgba(99, 102, 241, 0.1);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+}
+.badge-pii {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.badge-method {
+    background: rgba(139, 92, 246, 0.1);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+/* Hide text-based Gradio processing / timing status labels */
+.meta-text, .meta-text-status, .progress-text, .generating .meta-text, .loading .meta-text {
+    display: none !important;
 }

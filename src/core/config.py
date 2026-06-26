@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -37,24 +37,79 @@ def load_yaml_config(filename: str) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-@lru_cache
+@cache
 def get_settings() -> Settings:
     return Settings()
 
 
-@lru_cache
+@cache
 def get_scoring_config() -> dict[str, Any]:
     return load_yaml_config("scoring_weights.yaml")
 
 
-@lru_cache
+@cache
 def get_model_config() -> dict[str, Any]:
     return load_yaml_config("models.yaml")
 
 
-@lru_cache
+@cache
 def get_app_config() -> dict[str, Any]:
     return load_yaml_config("settings.yaml")
+
+
+def build_orchestrator(
+    faiss_path: Path,
+    id_map_path: Path,
+    bm25_path: Path,
+    cross_encoder_timeout_ms: int = 0,
+) -> tuple[Any, Any, Any]:
+    """Build the full search dependency chain.
+
+    Shared between main.py (FastAPI lifespan) and app.py (Gradio UI)
+    to avoid duplicating the ~40-line initialization block.
+
+    Returns (Orchestrator, VectorSearch, ProfileStore).
+    """
+    from src.agents.executor import ExecutorAgent
+    from src.agents.orchestrator import Orchestrator
+    from src.agents.planner import PlannerAgent
+    from src.agents.reflector import ReflectorAgent
+    from src.core.profile_store import ProfileStore
+    from src.language.multilingual import MultilingualEmbedder
+    from src.matching.scorer import CandidateScorer
+    from src.search.bm25_search import BM25Search
+    from src.search.hybrid import HybridSearch
+    from src.search.reranker import CrossEncoderReranker
+    from src.search.vector_search import VectorSearch
+
+    embedder = MultilingualEmbedder()
+    _ = embedder.model
+    _ = embedder.embed("warmup")
+
+    vector_search = VectorSearch()
+    vector_search.load(faiss_path, id_map_path)
+
+    bm25_search = BM25Search()
+    bm25_search.lazy_load(bm25_path)  # background thread — first search will wait if needed
+
+    hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
+    reranker = CrossEncoderReranker(timeout_ms=cross_encoder_timeout_ms)
+    scorer = CandidateScorer()
+
+    profiles = ProfileStore()
+    offset_idx = faiss_path.parent / "offset_index.json"
+    if offset_idx.exists():
+        profiles.load_offset_index(offset_idx)
+    sample = faiss_path.parent.parent / "samples" / "sample_candidates.json"
+    if sample.exists():
+        profiles.load_sample(sample)
+
+    planner = PlannerAgent()
+    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
+    reflector = ReflectorAgent()
+    orchestrator = Orchestrator(planner, executor, reflector)
+
+    return orchestrator, vector_search, profiles
 
 
 def get_llm_client() -> Any:

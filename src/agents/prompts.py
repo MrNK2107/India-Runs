@@ -31,6 +31,17 @@ PLANNER_SYSTEM_PROMPT = (
     "- Location preferences (city, remote preference)\n"
     "- Education requirements\n"
     "- Any exclusion criteria\n\n"
+    "CRITICAL INSTRUCTIONS FOR SKILL EXTRACTION:\n"
+    "1. Do NOT literally extract vague high-level concepts, job titles, or abstract goals as skills. "  # noqa: E501
+    "For example, do NOT extract 'Full-Stack Development', 'Full-Stack Developer', 'Web Transformation', "  # noqa: E501
+    "'Modern Standards', 'Cloud Engineer', 'Software Engineer', or 'Database Developer' as skills.\n"  # noqa: E501
+    "2. Instead, map these abstract job-role terms into the concrete technical skills, languages, "  # noqa: E501
+    "frameworks, or databases that real candidates would list in their profile skills array. For example:\n"  # noqa: E501
+    "   - 'Full-Stack Developer' -> map to ['React', 'Node.js', 'JavaScript', 'HTML', 'CSS']\n"  # noqa: E501
+    "   - 'Cloud Engineer' / 'DevOps' -> map to ['AWS', 'Terraform', 'Docker', 'Kubernetes', 'CI/CD']\n"  # noqa: E501
+    "   - 'Backend Developer' -> map to ['Python', 'Django', 'FastAPI', 'Node.js', 'SQL', 'PostgreSQL']\n"  # noqa: E501
+    "   - 'Frontend Developer' -> map to ['React', 'TypeScript', 'Next.js', 'HTML', 'CSS', 'JavaScript']\n"  # noqa: E501
+    "3. Use standard, commonly-used skill names that candidates actually list.\n\n"
     "Output ONLY valid JSON, no other text. "
     "Do NOT wrap in markdown code fences. Return raw JSON only.\n"
     "Schema:\n"
@@ -61,26 +72,6 @@ REFLECTOR_SYSTEM_PROMPT = (
     'A "potential_match" means they are worth a phone screen.\n'
     'A "weak_match" means they should be dropped.\n\n'
     "Output valid JSON array. No other text."
-)
-
-RATIONALE_SYSTEM_PROMPT = (
-    "You are generating a candidate evaluation report for a recruiter.\n\n"
-    "JOB REQUIREMENTS:\n"
-    "{job_requirements_json}\n\n"
-    "CANDIDATE PROFILE:\n"
-    "{candidate_profile_summary}\n\n"
-    "MATCH SCORES:\n"
-    "{scores_json}\n\n"
-    "Generate a detailed rationale report. Be specific \u2014 reference actual companies, "
-    "roles, and skills from the profile. Do not make generic statements.\n\n"
-    "Requirements:\n"
-    "- summary: 2-3 sentences, specific to this candidate\n"
-    "- strengths: list specific matches with evidence\n"
-    "- gaps: list specific concerns or missing requirements\n"
-    "- skill_details: for each required skill, note if found and the evidence\n"
-    "- experience_analysis: paragraph about work history relevance\n"
-    "- recommendation: one of strong_match, good_match, potential_match, weak_match\n\n"
-    "Output valid JSON only."
 )
 
 REPLAN_SYSTEM_PROMPT = (

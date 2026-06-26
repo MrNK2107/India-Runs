@@ -13,10 +13,8 @@ _project_root = str(Path(__file__).resolve().parent.parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src.api.routes.search import init_orchestrator  # noqa: E402
 from src.core.config import DATA_DIR  # noqa: E402
-from src.core.models import MatchScores, SearchResultItem  # noqa: E402
-from src.core.profile_store import ProfileStore  # noqa: E402
+from src.core.models import MatchScores, Rationale, SearchResultItem  # noqa: E402
 from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer  # noqa: E402
 from src.ui.components import (  # noqa: E402
     create_analytics_dashboard,
@@ -44,42 +42,14 @@ def _ensure_search_system() -> bool:
         logger.warning("No FAISS index found. Run 'python scripts/build_indexes.py' first.")
         return False
 
-    from src.agents.executor import ExecutorAgent
-    from src.agents.orchestrator import Orchestrator
-    from src.agents.planner import PlannerAgent
-    from src.agents.reflector import ReflectorAgent
-    from src.language.multilingual import MultilingualEmbedder
-    from src.search.bm25_search import BM25Search
-    from src.search.hybrid import HybridSearch
-    from src.search.reranker import CrossEncoderReranker
-    from src.search.vector_search import VectorSearch
+    from src.api.routes.search import init_orchestrator
+    from src.core.config import build_orchestrator
 
-    embedder = MultilingualEmbedder()
-    _ = embedder.model
-
-    vector_search = VectorSearch()
-    vector_search.load(faiss_path, id_map_path)
-
-    bm25_search = BM25Search()
-    bm25_search.load(bm25_path)
-
-    hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
-    reranker = CrossEncoderReranker()
-    _ = reranker.model  # Lazy load — disabled by default, ok if None
-    scorer = CandidateScorer()
-
-    profiles = ProfileStore()
-    offset_index_path = DATA_DIR / "indexes" / "offset_index.json"
-    if offset_index_path.exists():
-        profiles.load_offset_index(offset_index_path)
-    sample_path = DATA_DIR / "samples" / "sample_candidates.json"
-    if sample_path.exists():
-        profiles.load_sample(sample_path)
-
-    planner = PlannerAgent()
-    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
-    reflector = ReflectorAgent()
-    orchestrator = Orchestrator(planner, executor, reflector)
+    orchestrator, _, _ = build_orchestrator(
+        faiss_path=faiss_path,
+        id_map_path=id_map_path,
+        bm25_path=bm25_path,
+    )
     init_orchestrator(orchestrator)
     logger.info("Search system initialized")
     _search_initialized = True
@@ -242,6 +212,7 @@ def re_rank_handler(results_json: str, *slider_values: float) -> str:
         html = "<div class='results-container'>"
         for rank, r in enumerate(raw, 1):
             r["rank"] = rank
+            rationale_dict = r.get("rationale", {}) or {}
             item = SearchResultItem(
                 rank=rank,
                 profile_id=r.get("profile_id", ""),
@@ -253,6 +224,7 @@ def re_rank_handler(results_json: str, *slider_values: float) -> str:
                 scores=r.get("_re_scores", MatchScores()),
                 matched_skills=r.get("matched_skills", []),
                 missing_skills=r.get("missing_skills", []),
+                rationale=Rationale(**rationale_dict) if isinstance(rationale_dict, dict) else Rationale(),
             )
             html += create_candidate_card(item)
         html += "</div>"
@@ -322,11 +294,11 @@ def create_app() -> gr.Blocks:
                         results_area = gr.HTML(
                             label="Results",
                             value="<div style='padding:40px;text-align:center;color:#9ca3af;'>"
-                                  "<p style='font-size:18px;margin-bottom:8px;'>&#128269; No search yet</p>"
-                                  "<p style='font-size:14px;'>Enter a query on the left and click "
-                                  "<strong>Search Candidates</strong> to find matching profiles.</p>"
-                                  "<p style='font-size:12px;color:#d1d5db;margin-top:16px;'>"
-                                  "Adjust the scoring sliders in the sidebar to fine-tune results.</p>"
+                                  "<p style='font-size:18px;margin-bottom:8px;'>&#128269; No search yet</p>"  # noqa: E501
+                                  "<p style='font-size:14px;'>Enter a query on the left and click "  # noqa: E501
+                                  "<strong>Search Candidates</strong> to find matching profiles.</p>"  # noqa: E501
+                                  "<p style='font-size:12px;color:#d1d5db;margin-top:16px;'>"  # noqa: E501
+                                  "Adjust the scoring sliders in the sidebar to fine-tune results.</p>"  # noqa: E501
                                   "</div>",
                         )
                         rationale_area = gr.HTML(label="Rationale Report", value="")

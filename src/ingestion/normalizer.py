@@ -130,20 +130,8 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
 
     raw_text = _build_raw_text(prof, experience, skills, education, certs, languages)
 
-    from src.matching.skill_matcher import SKILL_ALIASES as _KNOWN_ALIASES
     existing_skill_names = {s.name.lower() for s in skills}
-    raw_lower = raw_text.lower()
-    for _canon, _aliases in _KNOWN_ALIASES.items():
-        if _canon not in existing_skill_names and _canon in raw_lower:
-            skills.append(
-                Skill(
-                    name=_canon.title(),
-                    category=_infer_skill_category(_canon),
-                    evidence="Extracted from profile text",
-                    confidence=0.6,
-                )
-            )
-            existing_skill_names.add(_canon)
+    skills = _enrich_skills_from_text(skills, raw_text, existing_skill_names)
 
     if native_langs:
         personal.native_language = native_langs[0]
@@ -164,6 +152,30 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
             data_quality_score=0.0,
         ),
     )
+
+
+def _enrich_skills_from_text(
+    skills: list[Skill],
+    raw_text: str,
+    existing_skill_names: set[str],
+) -> list[Skill]:
+    """Append skill aliases found in raw text but missing from structured skills."""
+    from src.matching.skill_matcher import SKILL_ALIASES as _KNOWN_ALIASES
+
+    enriched = list(skills)
+    raw_lower = raw_text.lower()
+    for canon, _aliases in _KNOWN_ALIASES.items():
+        if canon not in existing_skill_names and canon in raw_lower:
+            enriched.append(
+                Skill(
+                    name=canon.title(),
+                    category=_infer_skill_category(canon),
+                    evidence="Extracted from profile text",
+                    confidence=0.6,
+                )
+            )
+            existing_skill_names.add(canon)
+    return enriched
 
 
 def _infer_skill_category(name: str) -> Any:

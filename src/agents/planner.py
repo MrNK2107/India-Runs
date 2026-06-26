@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any
 
 from src.agents.prompts import PLANNER_SYSTEM_PROMPT
 from src.core.config import get_llm_client, get_settings
@@ -34,11 +35,12 @@ def _strip_json_fences(content: str) -> str:
 class PlannerAgent:
     def __init__(self) -> None:
         self._client = None
+        self._code_mixed_processor: CodeMixedProcessor | None = None
         settings = get_settings()
         self.model = settings.openai_model
 
     @property
-    def client(self):
+    def client(self) -> Any:
         if self._client is None:
             try:
                 self._client = get_llm_client()
@@ -47,9 +49,12 @@ class PlannerAgent:
                 self._client = None
         return self._client
 
-    async def plan(self, raw_query: str) -> ParsedQuery:
+    async def plan(self, raw_query: str) -> ParsedQuery:  # noqa: C901
+        # mypy: return type is inferred from the return statements below
         try:
-            processor = CodeMixedProcessor()
+            if self._code_mixed_processor is None:
+                self._code_mixed_processor = CodeMixedProcessor()
+            processor = self._code_mixed_processor
             if processor.detect_code_mixed(raw_query):
                 logger.info("Code-mixed query detected, applying TinT prompting")
                 tint_query = (
@@ -89,7 +94,7 @@ class PlannerAgent:
             return self._fallback_parse(raw_query)
 
     async def replan(
-        self, original_query: str, previous_params: dict, feedback: str,
+        self, original_query: str, previous_params: dict[str, Any], feedback: str,
     ) -> ParsedQuery:
         try:
             prompt = (
@@ -161,7 +166,9 @@ class PlannerAgent:
         return ParsedQuery(
             required_skills=required,
             preferred_skills=preferred,
-            experience=ExperienceRequirements(min_years=min_years, max_years=max_years, industry=industry),
+            experience=ExperienceRequirements(  # noqa: E501
+                min_years=min_years, max_years=max_years, industry=industry,
+            ),
             location=LocationRequirements(city=city, remote_ok="remote" in query.lower()),
         )
 

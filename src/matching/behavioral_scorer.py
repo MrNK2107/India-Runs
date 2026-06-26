@@ -14,6 +14,40 @@ from src.core.models import Profile, Signals
 
 logger = logging.getLogger(__name__)
 
+# Known founding years for company time-travel checks.
+# (Kept local — this is detection-domain data, not a general company list.)
+_COMPANY_FOUNDED: dict[str, int] = {
+    "mindtree": 1999,
+    "dunder mifflin": 2000,
+    "hooli": 2005,
+    "acme corp": 2000,
+    "globex inc": 1990,
+    "pied piper": 2014,
+    "infosys": 1981,
+    "tcs": 1968,
+    "wipro": 1945,
+    "cognizant": 1994,
+    "tech mahindra": 1986,
+    "hcl": 1976,
+    "l&t infotech": 1997,
+    "mphasis": 1992,
+    "oracle": 1977,
+    "microsoft": 1975,
+    "amazon": 1994,
+    "google": 1998,
+    "swiggy": 2014,
+    "zomato": 2008,
+    "razorpay": 2013,
+    "ola": 2010,
+    "cred": 2018,
+    "byju's": 2011,
+    "flipkart": 2007,
+    "ola electric": 2017,
+    "zepto": 2021,
+    "nykaa": 2012,
+}
+
+
 # ── Honeypot Detection ──────────────────────────────────────────────
 
 
@@ -26,43 +60,13 @@ def detect_honeypot(profile: Profile) -> str | None:
 
     # 1. Time-travel: Experience at company before it could exist
     if profile.experience:
-        company_founded = {
-            "mindtree": 1999,
-            "dunder mifflin": 2000,
-            "hooli": 2005,
-            "acme corp": 2000,
-            "globex inc": 1990,
-            "pied piper": 2014,
-            "infosys": 1981,
-            "tcs": 1968,
-            "wipro": 1945,
-            "cognizant": 1994,
-            "tech mahindra": 1986,
-            "hcl": 1976,
-            "l&t infotech": 1997,
-            "mphasis": 1992,
-            "oracle": 1977,
-            "microsoft": 1975,
-            "amazon": 1994,
-            "google": 1998,
-            "swiggy": 2014,
-            "zomato": 2008,
-            "razorpay": 2013,
-            "ola": 2010,
-            "cred": 2018,
-            "byju's": 2011,
-            "flipkart": 2007,
-            "ola electric": 2017,
-            "zepto": 2021,
-            "nykaa": 2012,
-        }
         for job in profile.experience:
             if not job.start_date or not job.company:
                 continue
             try:
                 start_year = int(str(job.start_date).split("-")[0])
                 company_lower = job.company.strip().lower()
-                founding = company_founded.get(company_lower)
+                founding = _COMPANY_FOUNDED.get(company_lower)
                 if founding and start_year < founding:
                     reasons.append(
                         f"Start year {start_year} before {job.company} founded ({founding})"
