@@ -18,53 +18,72 @@ MATCH_COLORS = {
 }
 
 
-def _score_bar(label: str, value: float, color: str = "#3b82f6") -> str:
+_PASTEL_BAR_COLORS = {
+    "Overall": "#a78bfa",
+    "Skill": "#34d399",
+    "Experience": "#60a5fa",
+    "Semantic": "#c084fc",
+    "Keyword": "#fbbf24",
+    "Education": "#f472b6",
+    "AI Rerank": "#22d3ee",
+    "Behavioral": "#fb923c",
+    "Career": "#a78bfa",
+    "Proficiency": "#818cf8",
+}
+
+
+def _pastel_color_for(label: str) -> str:
+    return _PASTEL_BAR_COLORS.get(label.strip(), "#a78bfa")
+
+
+def _score_bar(label: str, value: float, color: str | None = None) -> str:
     pct = max(0, min(100, int(value * 100)))
+    c = color or _pastel_color_for(label)
     return f"""
-    <div class="score-bar-row" style="display:flex;align-items:center;margin:4px 0;gap:8px;">
-        <span class="score-bar-label" style="font-size:11px;opacity:0.75;width:85px;text-align:right;">{label}</span>
-        <div class="score-bar-track" style="flex:1;height:6px;background:rgba(128,128,128,0.15);border-radius:3px;overflow:hidden;">
-            <div class="score-bar-fill" style="width:{pct}%;height:100%;background:{color};border-radius:3px;box-shadow: 0 0 6px {color}80;"></div>
+    <div class="score-bar-row">
+        <span class="score-bar-label">{label}</span>
+        <div class="score-bar-track">
+            <div class="score-bar-fill" style="width:{pct}%;background:{c};box-shadow:0 0 6px {c}60;"></div>
         </div>
-        <span class="score-bar-pct" style="font-size:11px;opacity:0.9;width:32px;text-align:right;font-weight:600;">{pct}%</span>
+        <span class="score-bar-pct">{pct}%</span>
     </div>"""
 
 
 def _score_badge(value: float) -> str:
     pct = int(value * 100)
     if pct >= 70:
-        color = "#10b981"
-        label = "strong"
+        css_class = "score-strong"
     elif pct >= 50:
-        color = "#3b82f6"
-        label = "good"
+        css_class = "score-good"
     elif pct >= 30:
-        color = "#f59e0b"
-        label = "potential"
+        css_class = "score-potential"
     else:
-        color = "#ef4444"
-        label = "weak"
+        css_class = "score-weak"
     return f"""
-    <div class="score-badge score-{label}"
-         style="background:{color}15;color:{color};border:1px solid {color}30;">
-        <span style="font-size:20px;font-weight:700;">{pct}</span>
-        <span style="font-size:11px;opacity:0.8;">%</span>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">{label}</div>
+    <div class="score-badge {css_class}">
+        <div class="score-badge-value">{pct}</div>
+        <div class="score-badge-label">{css_class.replace('score-', '')}</div>
     </div>"""
 
 
 def create_candidate_card(item: SearchResultItem) -> str:
     s = item.scores if item.scores is not None else MatchScores()
     bars = ""
-    bars += _score_bar("Overall", s.overall, "#6366f1")
-    bars += _score_bar("Skill", s.skill_match, "#10b981")
-    bars += _score_bar("Experience", s.experience_match, "#3b82f6")
-    bars += _score_bar("Semantic", s.semantic_similarity, "#8b5cf6")
-    bars += _score_bar("Keyword", s.keyword_match, "#f59e0b")
+    bars += _score_bar("Overall", s.overall, "#a78bfa")
+    bars += _score_bar("Skill", s.skill_match, "#34d399")
+    bars += _score_bar("Experience", s.experience_match, "#60a5fa")
+    bars += _score_bar("Semantic", s.semantic_similarity, "#c084fc")
+    bars += _score_bar("Keyword", s.keyword_match, "#fbbf24")
     if s.education_match is not None:
-        bars += _score_bar("Education", s.education_match, "#ec4899")
+        bars += _score_bar("Education", s.education_match, "#f472b6")
     if s.cross_encoder_score is not None:
-        bars += _score_bar("AI Rerank", s.cross_encoder_score, "#06b6d4")
+        bars += _score_bar("AI Rerank", s.cross_encoder_score, "#22d3ee")
+    if s.behavioral_score is not None:
+        bars += _score_bar("Behavioral", s.behavioral_score, "#fb923c")
+    if s.career_trajectory_score is not None:
+        bars += _score_bar("Career", s.career_trajectory_score, "#818cf8")
+    if s.skill_proficiency_score is not None:
+        bars += _score_bar("Proficiency", s.skill_proficiency_score, "#f472b6")
 
     skills_html = "".join(
         f'<span class="skill-chip matched">{skill}</span>' for skill in item.matched_skills[:8]
@@ -77,34 +96,34 @@ def create_candidate_card(item: SearchResultItem) -> str:
     <div class="candidate-card">
         <div class="candidate-header" style="display:flex;justify-content:space-between;align-items:start;gap:16px;">
             <div style="flex:1;">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <strong style="font-size:18px;">{item.name}</strong>
-                    <span style="font-size:12px;opacity:0.5;">#{item.rank}</span>
-                    <span style="font-size:11px;opacity:0.4;background:rgba(128,128,128,0.15);padding:1px 6px;border-radius:4px;font-family:monospace;margin-left:4px;">ID: {item.profile_id}</span>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span class="candidate-rank">#{item.rank}</span>
+                    <span class="candidate-name">{item.name}</span>
+                    <code style="font-size:10px;color:var(--text-muted);background:rgba(167,139,250,0.06);padding:1px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;">{item.profile_id}</code>
                 </div>
-                <div style="opacity:0.85;margin-top:4px;font-size:14px;font-weight:500;">
+                <div class="candidate-role">
                     {item.current_title or 'N/A'}
                     {(
-                        f' <span style="opacity:0.5;font-weight:normal;">at</span> '
+                        f'<span style="opacity:0.45;font-weight:400;"> at </span>'
                         f'<strong>{item.current_company}</strong>'
                         if item.current_company else ""
                     )}
                 </div>
-                <div style="opacity:0.6;font-size:13px;margin-top:2px;">
+                <div class="candidate-meta">
                     {item.location or 'Location N/A'}
                     {_bullet_years(item.experience_years)}
                 </div>
             </div>
             {_score_badge(s.overall)}
         </div>
-        <div class="candidate-score-breakdown" style="margin-top:14px;">
-            <div style="font-size:13px;opacity:0.85;margin-bottom:6px;font-weight:600;">
-                Score Breakdown
-                <span style="opacity:0.5;font-size:11px;font-weight:normal;">(confidence: {s.confidence:.0%})</span>
+        <div style="margin-top:16px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;letter-spacing:0.3px;">
+                SCORE BREAKDOWN
+                <span style="font-weight:400;color:var(--text-muted);font-size:11px;margin-left:6px;">confidence: {s.confidence:.0%}</span>
             </div>
             {bars}
         </div>
-        <div class="candidate-skills-list" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;">
+        <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;">
             {skills_html}
             {missing_html}
         </div>
@@ -186,15 +205,8 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         compute_all_fairness_metrics,
     )
 
-    # Early return for empty results
     if not results_json or results_json.strip() in ("[]", "", "{}"):
-        return (
-            "<div style='padding:60px;text-align:center;color:#9ca3af;'>"
-            "<p style='font-size:24px;margin-bottom:12px;'>&#128202;</p>"
-            "<p style='font-size:18px;'>No results to analyze</p>"
-            "<p style='font-size:14px;'>Run a search first to see analytics and fairness metrics.</p>"  # noqa: E501
-            "</div>"
-        )
+        return create_empty_analytics()
 
     try:
         raw = json.loads(results_json) if results_json else []
@@ -203,13 +215,8 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
 
     total = len(raw)
     listwise_ranked = any(r.get("listwise_ranked", False) for r in raw) if raw else False
-    listwise_badge = (
-        '<span style="background:#6366f140;color:#6366f1;padding:2px 8px;'
-        'border-radius:4px;font-size:12px;">Listwise Ranked</span>'
-        if listwise_ranked else ""
-    )
+    listwise_badge = '<span class="badge badge-listwise">🏆 Listwise Ranked</span>' if listwise_ranked else ""
 
-    # Build MatchResults + determine metadata from first item
     match_results = []
     for r in raw:
         if isinstance(r, dict):
@@ -239,10 +246,7 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
                     missing_skills=r.get("missing_skills", []),
                 )
             )
-            if r.get("_listwise_ranked"):
-                listwise_ranked = True
 
-    # Compute score distribution
     scores = [m.scores.overall for m in match_results if m.scores.overall > 0]
     if scores:
         avg_score = sum(scores) / len(scores)
@@ -252,21 +256,23 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         for s in scores:
             idx = min(9, int(s * 10))
             bins[idx] += 1
-        max_bin = max(bins) if bins else 1
+        max_bin = max(bins) or 1
+        pastel_colors = [
+            "#fbcfe8", "#fed7aa", "#fde68a", "#a7f3d0",
+            "#bfdbfe", "#c4b5fd", "#ddd6fe", "#fbcfe8",
+            "#fed7aa", "#a7f3d0"
+        ]
         bar_chart = "".join(
-            f'<div style="flex:1;background:{"#6366f1" if i >= 4 else "#93c5fd"};'
+            f'<div style="flex:1;background:{pastel_colors[i]};'
             f'height:{max(4, int(b * 120 / max_bin))}px;'
-            f'border-radius:4px 4px 0 0;" '
+            f'border-radius:4px 4px 0 0;transition:height 0.5s;" '
             f'title="{int(i*10)}-{int(i*10+9)}%: {b} candidates"></div>'
             for i, b in enumerate(bins)
         )
     else:
-        avg_score = 0
-        max_score = 0
-        min_score = 0
-        bar_chart = '<div style="color:#9ca3af;padding:40px;text-align:center;">No results to analyze</div>'  # noqa: E501
+        avg_score = max_score = min_score = 0
+        bar_chart = '<div style="text-align:center;padding:30px;color:var(--text-muted);">No scores to display</div>'
 
-    # Compute fairness metrics
     metric_cards = ""
     if len(match_results) >= 3:
         profiledict = _get_bias_profiles(match_results)
@@ -274,23 +280,25 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         dp = fairness.get("demographic_parity", {})
         lang_bias = fairness.get("language_bias", {})
 
-        # Helper
         def _metric_card(label, value, threshold, format_str="{:.3f}"):
             val = value if isinstance(value, (int, float)) else 0
             if val < threshold:
-                color = "#10b981"
-                status = "No bias detected"
+                cls = "pastel-green"
+                color = "#059669"
+                status = "✅ No bias detected"
             elif val < threshold * 2:
-                color = "#f59e0b"
-                status = "Monitor closely"
+                cls = "pastel-amber"
+                color = "#d97706"
+                status = "👀 Monitor closely"
             else:
-                color = "#ef4444"
-                status = "Bias detected"
+                cls = "pastel-rose"
+                color = "#e11d48"
+                status = "⚠️ Bias detected"
             return f"""
             <div class="metric-card">
                 <div class="metric-label">{label}</div>
-                <div class="metric-value" style="color:{color};">{format_str.format(val)}</div>
-                <div style="font-size:12px;color:#9ca3af;">{status}</div>
+                <div class="metric-value" style="color:{color};-webkit-text-fill-color:{color};">{format_str.format(val)}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{status}</div>
             </div>"""
 
         metric_cards = _metric_card("University Parity", dp.get("university", 1.0), 0.8)
@@ -303,44 +311,31 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
             "{:.1f} ranks",
         )
 
-    grid_style = "display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;"
-    axis_style = (
-        "display:flex;justify-content:space-between;"
-        "font-size:11px;color:#9ca3af;margin-top:4px;"
-    )
-
-    header_style = (
-        "display:flex;justify-content:space-between;"
-        "align-items:center;margin-bottom:16px;"
-    )
     return f"""
-    <div style="padding:20px;">
-        <div style="{header_style}">
-            <h3 style="margin:0;">Fairness & Bias Metrics</h3>
+    <div style="padding:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3 style="margin:0;font-size:20px;font-weight:700;color:var(--text-primary);">Fairness &amp; Bias Metrics</h3>
             <div style="display:flex;gap:8px;align-items:center;">
                 {listwise_badge}
-                <span style="background:#10b98120;color:#10b981;padding:2px 8px;
-                    border-radius:4px;font-size:12px;">PII Anonymized</span>
-                <span style="font-size:12px;color:#9ca3af;">
-                    {total} candidates analyzed
-                </span>
+                <span class="badge badge-pii">🔒 PII Anonymized</span>
+                <span style="font-size:12px;color:var(--text-muted);">{total} candidates</span>
             </div>
         </div>
-        <div style="{grid_style}">
-            {metric_cards or _empty_metric_card()}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+            {metric_cards or '<div class="metric-card"><div class="metric-label">Run a search to see metrics</div></div>'}
         </div>
 
-        <h3 style="margin:24px 0 16px;">Score Distribution</h3>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:130px;">
+        <h3 style="margin:28px 0 16px;font-size:18px;font-weight:700;color:var(--text-primary);">Score Distribution</h3>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:130px;padding:0 4px;">
             {bar_chart}
         </div>
-        <div style="{axis_style}">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;">
             <span>0%</span><span>50%</span><span>100%</span>
         </div>
-        <div style="display:flex;gap:24px;margin-top:12px;font-size:13px;color:#6b7280;">
-            <span>Avg: <strong>{avg_score:.1%}</strong></span>
-            <span>Max: <strong>{max_score:.1%}</strong></span>
-            <span>Min: <strong>{min_score:.1%}</strong></span>
+        <div style="display:flex;gap:24px;margin-top:12px;font-size:13px;color:var(--text-secondary);">
+            <span>Avg: <strong style="color:var(--text-primary);">{avg_score:.1%}</strong></span>
+            <span>Max: <strong style="color:var(--text-primary);">{max_score:.1%}</strong></span>
+            <span>Min: <strong style="color:var(--text-primary);">{min_score:.1%}</strong></span>
         </div>
 
         {_build_distribution_table(match_results)}
@@ -349,39 +344,30 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
 
 
 def _build_distribution_table(match_results: list[MatchResult]) -> str:
-    """Build a summary table of match categories."""
     strong = sum(1 for m in match_results if m.scores.overall >= 0.8)
     good = sum(1 for m in match_results if 0.6 <= m.scores.overall < 0.8)
     potential = sum(1 for m in match_results if 0.4 <= m.scores.overall < 0.6)
     weak = sum(1 for m in match_results if m.scores.overall < 0.4)
     total = len(match_results) or 1
     return f"""
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;">
-        <div style="background:#10b98115;padding:12px;border-radius:8px;text-align:center;">
-            <div style="font-size:24px;font-weight:700;color:#10b981;">{strong}</div>
-            <div style="font-size:12px;color:#6b7280;">Strong ({strong*100//total}%)</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;">
+        <div style="background:rgba(52,211,153,0.1);padding:16px;border-radius:var(--radius-md);text-align:center;border:1px solid rgba(52,211,153,0.15);">
+            <div style="font-size:28px;font-weight:800;color:#059669;">{strong}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Strong ({strong*100//total}%)</div>
         </div>
-        <div style="background:#3b82f615;padding:12px;border-radius:8px;text-align:center;">
-            <div style="font-size:24px;font-weight:700;color:#3b82f6;">{good}</div>
-            <div style="font-size:12px;color:#6b7280;">Good ({good*100//total}%)</div>
+        <div style="background:rgba(96,165,250,0.1);padding:16px;border-radius:var(--radius-md);text-align:center;border:1px solid rgba(96,165,250,0.15);">
+            <div style="font-size:28px;font-weight:800;color:#2563eb;">{good}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Good ({good*100//total}%)</div>
         </div>
-        <div style="background:#f59e0b15;padding:12px;border-radius:8px;text-align:center;">
-            <div style="font-size:24px;font-weight:700;color:#f59e0b;">{potential}</div>
-            <div style="font-size:12px;color:#6b7280;">Potential ({potential*100//total}%)</div>
+        <div style="background:rgba(251,191,36,0.1);padding:16px;border-radius:var(--radius-md);text-align:center;border:1px solid rgba(251,191,36,0.15);">
+            <div style="font-size:28px;font-weight:800;color:#d97706;">{potential}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Potential ({potential*100//total}%)</div>
         </div>
-        <div style="background:#ef444415;padding:12px;border-radius:8px;text-align:center;">
-            <div style="font-size:24px;font-weight:700;color:#ef4444;">{weak}</div>
-            <div style="font-size:12px;color:#6b7280;">Weak ({weak*100//total}%)</div>
+        <div style="background:rgba(251,113,133,0.1);padding:16px;border-radius:var(--radius-md);text-align:center;border:1px solid rgba(251,113,133,0.15);">
+            <div style="font-size:28px;font-weight:800;color:#e11d48;">{weak}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Weak ({weak*100//total}%)</div>
         </div>
     </div>"""
-
-
-def _empty_metric_card() -> str:
-    return (
-        '<div class="metric-card">'
-        '<div class="metric-label">Run a search to see metrics</div>'
-        '</div>'
-    )
 
 
 def _get_bias_profiles(match_results: list[MatchResult]) -> dict[str, Profile]:
@@ -405,7 +391,7 @@ def create_rationale_panel(rationale: Rationale | None, profile_summary: str) ->
     if rationale is None:
         return ""
 
-    color = MATCH_COLORS.get(rationale.recommendation.value, "#6b7280")
+    color = MATCH_COLORS.get(rationale.recommendation.value, "#a78bfa")
     summary = rationale.summary or "No summary available."
 
     strengths_html = "".join(
@@ -416,21 +402,21 @@ def create_rationale_panel(rationale: Rationale | None, profile_summary: str) ->
     )
 
     return f"""
-    <div class="candidate-card" style="border-left:4px solid {color};">
-        <h4>Rationale: {profile_summary}</h4>
-        <p style="color:#374151;">{summary}</p>
+    <div class="candidate-card rationale-panel" style="border-left-color:{color};">
+        <h4 style="margin:0 0 4px;font-size:15px;font-weight:600;color:var(--text-primary);">Rationale: {profile_summary}</h4>
+        <p style="color:var(--text-secondary);font-size:13px;line-height:1.6;margin:6px 0;">{summary}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
             <div>
-                <strong style="color:#10b981;">Strengths</strong>
-                <ul style="margin:8px 0;padding-left:20px;font-size:13px;">{strengths_html}</ul>
+                <strong style="color:#059669;font-size:13px;">✓ Strengths</strong>
+                <ul style="margin:6px 0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.6;">{strengths_html}</ul>
             </div>
             <div>
-                <strong style="color:#ef4444;">Gaps</strong>
-                <ul style="margin:8px 0;padding-left:20px;font-size:13px;">{gaps_html}</ul>
+                <strong style="color:#e11d48;font-size:13px;">✗ Gaps</strong>
+                <ul style="margin:6px 0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.6;">{gaps_html}</ul>
             </div>
         </div>
-        <div style="margin-top:12px;">
-            <span class="score-badge" style="background:{color}20;color:{color};">
+        <div style="margin-top:8px;">
+            <span class="badge badge-listwise" style="background:{color}15;color:{color};border-color:{color}30;">
                 {rationale.recommendation.value}
             </span>
         </div>
@@ -438,27 +424,123 @@ def create_rationale_panel(rationale: Rationale | None, profile_summary: str) ->
     """
 
 
-def create_loading_spinner() -> str:
-    return """\
-    <div style="display:flex;justify-content:center;padding:40px;">
-        <div style="width:40px;height:40px;border:4px solid #e5e7eb;
-             border-top-color:#3b82f6;border-radius:50%;
-             animation:spin 0.8s linear infinite;"></div>
+# ── Progressive Loading Steps ──────────────────────────────────────────
+LOADING_STEPS = [
+    ("🔍", "Parsing query", "Understanding job requirements, skills, and context"),
+    ("📡", "Searching index", "Scanning 100K+ profiles with hybrid search"),
+    ("⚡", "AI reranking", "Cross-encoder scoring for precision matching"),
+    ("📊", "Computing scores", "Multi-signal evaluation across 6 dimensions"),
+    ("🎯", "Building results", "Assembling ranked shortlist with rationales"),
+]
+
+LOADING_STEP_TIMING = [0.15, 0.40, 0.60, 0.80, 1.0]
+
+
+def _step_class(i: int, current_step: int) -> str:
+    if current_step < 0:
+        return "completed"
+    if i < current_step:
+        return "completed"
+    if i == current_step:
+        return "active"
+    return ""
+
+
+def _step_extra(i: int, current_step: int, desc: str) -> str:
+    if i == current_step and 0 <= current_step < len(LOADING_STEPS):
+        return f'<br><span style="font-size:10px;color:var(--text-muted);">{desc}</span>'
+    return ""
+
+
+def create_progress_html(current_step: int = 0) -> str:
+    """Generate animated progress bar with step labels.
+
+    Args:
+        current_step: 0 to 4, -1 means all completed (final state)
+    """
+    if current_step < 0:
+        steps_html = "".join(
+            f'<div class="progress-step completed">'
+            f'<span class="step-icon">{icon}</span>{label}</div>'
+            for icon, label, _ in LOADING_STEPS
+        )
+        pct = 100
+    else:
+        steps_html = "".join(
+            f'<div class="progress-step {_step_class(i, current_step)}">'
+            f'<span class="step-icon">{icon}</span>{label}'
+            f'{_step_extra(i, current_step, desc)}'
+            f'</div>'
+            for i, (icon, label, desc) in enumerate(LOADING_STEPS)
+        )
+        pct = int(sum(LOADING_STEP_TIMING[:current_step + 1]) / len(LOADING_STEPS) * 100)
+
+    step_label = LOADING_STEPS[current_step][1] if 0 <= current_step < len(LOADING_STEPS) else "Complete"
+    step_desc = LOADING_STEPS[current_step][2] if 0 <= current_step < len(LOADING_STEPS) else ""
+
+    icon = "✅" if current_step < 0 else "⏳"
+    return f"""
+    <div class="progress-container">
+        <div class="progress-header">
+            <div class="progress-title">
+                <span>{icon}</span>
+                {step_label}
+            </div>
+            <span class="progress-step-label">{step_desc}</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-fill" style="width:{pct}%;"></div>
+        </div>
+        <div class="progress-steps">
+            {steps_html}
+        </div>
     </div>
-    <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    """
+
+
+def create_premium_spinner(message: str = "Searching candidates...") -> str:
+    return f"""\
+    <div class="premium-spinner">
+        <div class="premium-spinner-ring"></div>
+        <div class="premium-spinner-text">{message}</div>
+        <div class="premium-spinner-sub">This may take 10-30 seconds for deep search</div>
+    </div>
+    """
+
+
+def create_empty_state() -> str:
+    return """\
+    <div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        <div class="empty-state-title">No search yet</div>
+        <div class="empty-state-desc">
+            Describe the ideal candidate on the left and click <strong>Search Candidates</strong>
+            to find matching profiles.
+        </div>
+        <div class="empty-state-hint">
+            Adjust scoring sliders in the sidebar to fine-tune results
+        </div>
+    </div>
     """
 
 
 def create_error_panel(message: str) -> str:
     """Return a prominent error message panel for display in the UI."""
     return f"""\
-    <div style="border:2px solid #fecaca;background:#fef2f2;border-radius:10px;
-                padding:20px;margin:12px 0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span style="font-size:24px;">&#9888;&#65039;</span>
-            <strong style="color:#991b1b;font-size:16px;">Error</strong>
+    <div style="border:1px solid var(--pastel-coral, #fecaca);background:rgba(254,202,202,0.15);backdrop-filter:blur(8px);border-radius:var(--radius-md);padding:20px;margin:12px 0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <span style="font-size:22px;">⚠️</span>
+            <strong style="color:#e11d48;font-size:15px;">Error</strong>
         </div>
-        <p style="color:#b91c1c;margin:0;font-size:14px;line-height:1.5;">{message}</p>
+        <p style="color:#be123c;margin:0;font-size:13px;line-height:1.6;">{message}</p>
     </div>"""
+
+
+def create_empty_analytics() -> str:
+    return """\
+    <div class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <div class="empty-state-title">No results to analyze</div>
+        <div class="empty-state-desc">Run a search first to see analytics and fairness metrics.</div>
+    </div>
+    """
