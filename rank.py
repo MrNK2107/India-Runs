@@ -1,16 +1,22 @@
 # ruff: noqa: E501
 #!/usr/bin/env python3
 """
-Redrob India Runs — Main ranking entry point.
+India Runs — AI-Powered Candidate Ranking.
 
 Usage:
-  python rank.py --candidates ./candidates.jsonl --out ./submission.csv
 
-Runs a multi-query retrieval pipeline with hybrid search (FAISS + BM25),
-cross-encoder reranking, and 10-dimension weighted scoring covering
-semantic, skill, behavioral, career trajectory, and proficiency signals.
+  # Interactive mode (full agentic pipeline)
+  python rank.py
+  # → Prompts you to enter a job query, runs Planner→Executor→Reflector pipeline
 
-Produces a 100-row submission.csv with candidate_id, rank, score, reasoning.
+  # Single query via CLI arg
+  python rank.py --query "senior software engineer python aws bangalore"
+
+  # Batch mode (runs 20 hardcoded strategic queries)
+  python rank.py --batch
+
+  # All modes
+  python rank.py --out submission.csv
 """
 import argparse
 import asyncio
@@ -21,13 +27,15 @@ import sys
 import time
 from pathlib import Path
 
-# Force offline mode before any sentence-transformers imports
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.agents.executor import ExecutorAgent
+from src.agents.orchestrator import Orchestrator
+from src.agents.planner import PlannerAgent
+from src.agents.reflector import ReflectorAgent
 from src.core.config import DATA_DIR
 from src.core.models import Profile
 from src.core.profile_store import ProfileStore
@@ -46,46 +54,45 @@ logger = logging.getLogger(__name__)
 
 from src.core.query_parser import expand_with_aliases, parse_query
 
+BANNER = """
+╔═══════════════════════════════════════════════════════════╗
+║         India Runs — AI-Powered Candidate Ranking        ║
+║     Full agentic pipeline: Plan → Search → Reflect       ║
+╚═══════════════════════════════════════════════════════════╝
+"""
 
-# ── Strategic search queries ──────────────────────────────────────────
-# Each query targets a distinct role/tech stack. Queries are concise
-# so the enhanced parser extracts genuine skills (not noise words).
-# Query expansion generates alias variations automatically.
+# ── Strategic search queries (batch mode) ────────────────────────────
+# These are detailed, sentence-like queries so the rule-based parser
+# extracts experience, location, and skill requirements properly.
 SEARCH_QUERIES = [
-    # Core software engineering
-    "senior software engineer python java javascript postgresql distributed systems microservices",
-    "backend developer python django fastapi postgresql redis docker kafka",
-    "frontend developer react typescript next.js javascript tailwind html",
-    "full stack developer react node.js typescript mongodb next.js aws",
+    "senior software engineer with 5+ years python java javascript postgresql distributed systems microservices in bangalore",
+    "backend developer 3+ years python django fastapi postgresql redis docker kafka in mumbai",
+    "frontend developer with react typescript next.js javascript tailwind html css experience in bangalore",
+    "full stack developer 4+ years react node.js typescript mongodb next.js aws in hyderabad",
 
-    # Data & ML
-    "senior data scientist machine learning python pytorch sql nlp deep learning analytics",
-    "data engineer apache spark airflow kafka python etl snowflake aws",
-    "ml engineer deep learning computer vision nlp pytorch tensorflow python",
+    "senior data scientist 5+ years machine learning python pytorch sql nlp deep learning analytics in bangalore",
+    "data engineer 3+ years apache spark airflow kafka python etl snowflake aws in pune",
+    "ml engineer deep learning computer vision nlp pytorch tensorflow python 3+ years in chennai",
 
-    # Cloud & DevOps
-    "senior devops engineer docker kubernetes terraform aws ci/cd prometheus",
-    "cloud solutions architect aws azure gcp terraform kubernetes",
+    "senior devops engineer 5+ years docker kubernetes terraform aws ci/cd prometheus linux in bangalore",
+    "cloud solutions architect aws azure gcp terraform kubernetes 7+ years in mumbai",
 
-    # Java ecosystem
-    "senior java developer spring boot microservices hibernate kafka mysql",
+    "senior java developer 5+ years spring boot microservices hibernate kafka mysql in hyderabad",
 
-    # Mobile
-    "mobile developer android kotlin flutter ios react native dart",
+    "mobile developer android kotlin flutter ios react native dart 3+ years in bangalore",
 
-    # Python specialists
-    "senior python developer fastapi flask django postgresql redis docker aws",
+    "senior python developer 4+ years fastapi flask django postgresql redis docker aws in pune",
 
-    # Leadership / Architecture
-    "engineering manager tech lead distributed systems microservices java cloud aws",
-    "solutions architect system design scalability microservices cloud kubernetes aws python",
+    "engineering manager tech lead distributed systems microservices java cloud aws 8+ years in bangalore",
+    "solutions architect system design scalability microservices cloud kubernetes aws python 7+ years in mumbai",
 
-    # Security & QA
-    "cybersecurity engineer application security penetration testing python",
-    "qa automation engineer selenium cypress pytest playwright ci/cd",
+    "cybersecurity engineer application security penetration testing python 3+ years in bangalore",
+    "qa automation engineer 3+ years selenium cypress pytest playwright ci/cd in chennai",
 
-    # Data analysis & BI
-    "data analyst sql python tableau power bi statistics excel pandas",
+    "data analyst sql python tableau power bi statistics excel pandas 2+ years in mumbai",
+    "devops engineer docker kubernetes terraform ansible jenkins ci/cd aws linux 3+ years in hyderabad",
+    "product manager technical saas analytics user research agile jira 5+ years in bangalore",
+    "site reliability engineer kubernetes prometheus grafana terraform aws incident response 4+ years in bangalore",
 ]
 
 # ── Company quality tiers ──────────────────────────────────────────────
@@ -481,78 +488,10 @@ def _fill_from_full_index(
     return remaining
 
 
-async def main():
-    parser = argparse.ArgumentParser(
-        description="Redrob India Runs — candidate ranking pipeline"
-    )
-    parser.add_argument(
-        "--candidates",
-        default=None,
-        help="Path to candidates.jsonl (not used in sample mode — uses built-in samples)",
-    )
-    parser.add_argument(
-        "--out",
-        default="submission.csv",
-        help="Output CSV path (default: submission.csv)",
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.INFO)
-
-    t0 = time.time()
-    print("Loading search system...", file=sys.stderr)
-
-    hybrid_search, reranker, scorer, profiles = load_search_system()
-    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
-
-    all_pids = profiles.get_all_pids()
-    total_profiles = len(all_pids)
-    print(f"Total profiles available: {total_profiles}", file=sys.stderr)
-
-    # Build location_map lazily — only for profiles we actually load
-    location_map: dict[str, str] = {}
-
-    # Honeypot screening on sample profiles only (screening all 100k is too slow)
-    # Honeypots are penalized at scoring time in executor anyway
-    honeypot_pids: set[str] = set()
-    print("Honeypot screening active at scoring time in executor", file=sys.stderr)
-
-    # ── Run multi-query pipeline ──────────────────────────────────
-    print("Running multi-query search pipeline...", file=sys.stderr)
-    candidates = await run_pipeline(profiles, executor, location_map)
-
-    existing_pids = {c["candidate_id"] for c in candidates}
-    # Also build location_map from matched profiles
-    for c in candidates:
-        pid = c["candidate_id"]
-        if pid not in location_map:
-            p = c.get("profile") or profiles.get(pid)
-            if p and p.personal and p.personal.location:
-                location_map[pid] = p.personal.location.city or "Unknown"
-
-    print(f"Found {len(candidates)} matched candidates from {len(SEARCH_QUERIES)} queries",
-          file=sys.stderr)
-
-    # ── Fill remaining from full 100k ─────────────────────────────
-    if len(candidates) < 100:
-        needed = 100 - len(candidates)
-        remaining = _fill_from_full_index(
-            profiles, all_pids, existing_pids, honeypot_pids, needed
-        )
-        candidates.extend(remaining)
-        print(f"Filled {len(remaining)} remaining slots from full index to reach 100",
-              file=sys.stderr)
-
-    # ── Sort by score descending, tie-break by ID ─────────────────
+def _write_submission(candidates: list[dict], out_path: str, location_map: dict[str, str]) -> list[dict]:
+    """Sort, build reasoning, write CSV, verify, and print summary."""
     candidates.sort(key=lambda x: (-x["score"], x["candidate_id"]))
 
-    # ── Build final rows ──────────────────────────────────────────
     rows = []
     for rank, c in enumerate(candidates[:100], start=1):
         reasoning = _build_reasoning(
@@ -568,8 +507,6 @@ async def main():
             "reasoning": reasoning,
         })
 
-    # ── Write CSV ─────────────────────────────────────────────────
-    out_path = Path(args.out)
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f, fieldnames=["candidate_id", "rank", "score", "reasoning"]
@@ -577,32 +514,194 @@ async def main():
         writer.writeheader()
         writer.writerows(rows)
 
-    elapsed = time.time() - t0
-    print(f"\nSubmission written to {out_path}", file=sys.stderr)
-    print(f"Total rows: {len(rows)}", file=sys.stderr)
-    print(f"Score range: {rows[-1]['score']:.4f} - {rows[0]['score']:.4f}", file=sys.stderr)
-    print(f"Total time: {elapsed:.1f}s", file=sys.stderr)
-
-    # ── Verification ──────────────────────────────────────────────
     cids = [r["candidate_id"] for r in rows]
     assert len(set(cids)) == len(cids), "Duplicate candidate IDs!"
     assert all(c.startswith("CAND_") for c in cids), "Invalid candidate ID format!"
     assert len(rows) == 100, f"Expected 100 rows, got {len(rows)}"
 
-    # Verify non-increasing scores
     for i in range(len(rows) - 1):
         if rows[i]["score"] < rows[i + 1]["score"]:
             print(f"WARNING: Score increase at rank {rows[i]['rank']} -> {rows[i+1]['rank']}",
                   file=sys.stderr)
 
-    # Verify ranks 1-100 are complete
     ranks = {r["rank"] for r in rows}
     assert ranks == set(range(1, 101)), f"Ranks missing: {set(range(1,101)) - ranks}"
+
+    print(f"\nSubmission written to {out_path}", file=sys.stderr)
+    print(f"Total rows: {len(rows)}", file=sys.stderr)
+    print(f"Score range: {rows[-1]['score']:.4f} - {rows[0]['score']:.4f}", file=sys.stderr)
 
     print("\nTop 10:", file=sys.stderr)
     for r in rows[:10]:
         print(f"  #{r['rank']} {r['candidate_id']} score={r['score']:.4f} — {r['reasoning'][:120]}...",
               file=sys.stderr)
+    return rows
+
+
+async def _run_interactive(
+    orchestrator: Orchestrator,
+    profiles: ProfileStore,
+    all_pids: list[str],
+    out_path: str,
+    query: str | None = None,
+):
+    """Interactive mode: prompt user for query (unless provided), run full agentic pipeline."""
+    print(BANNER, file=sys.stderr)
+
+    if query is None:
+        print(file=sys.stderr)
+        print("Enter a job description or search query to find the best candidates.", file=sys.stderr)
+        print("  Example: senior software engineer with python and aws experience in bangalore", file=sys.stderr)
+        print(file=sys.stderr)
+        if sys.stdin.isatty():
+            raw_query = input("Query: ").strip()
+        else:
+            raw_query = sys.stdin.read().strip()
+        if not raw_query:
+            print("No query entered. Exiting.", file=sys.stderr)
+            return
+    else:
+        raw_query = query.strip()
+        print(f"Query: {raw_query}", file=sys.stderr)
+
+    print(file=sys.stderr)
+    print("Running full agentic pipeline (Planner → Search → Reflect)...", file=sys.stderr)
+    t0 = time.perf_counter()
+
+    try:
+        response = await orchestrator.run(raw_query, use_turbo=False, top_k=100)
+    except Exception as e:
+        print(f"Full pipeline failed ({e}). Falling back to turbo mode...", file=sys.stderr)
+        response = await orchestrator.run(raw_query, use_turbo=True, top_k=100)
+
+    elapsed = time.perf_counter() - t0
+
+    candidates: list[dict] = []
+    location_map: dict[str, str] = {}
+    for item in response.results:
+        pid = item.profile_id
+        profile = profiles.get(pid)
+        if profile is None:
+            continue
+        if pid not in location_map:
+            loc = profile.personal.location.city if profile.personal and profile.personal.location else "Unknown"
+            location_map[pid] = loc
+        candidates.append({
+            "candidate_id": pid,
+            "score": round(item.scores.overall if item.scores else 0.5, 4),
+            "matched_skills": item.matched_skills,
+            "missing_skills": item.missing_skills,
+            "title": item.current_title,
+            "company": item.current_company,
+            "query": raw_query,
+            "experience_years": item.experience_years,
+            "profile": profile,
+        })
+
+    print(f"Found {len(candidates)} matched candidates in {elapsed:.1f}s", file=sys.stderr)
+
+    honeypot_pids: set[str] = set()
+    existing_pids = {c["candidate_id"] for c in candidates}
+    if len(candidates) < 100:
+        needed = 100 - len(candidates)
+        remaining = _fill_from_full_index(profiles, all_pids, existing_pids, honeypot_pids, needed)
+        candidates.extend(remaining)
+        print(f"Filled {len(remaining)} remaining slots from full index to reach 100", file=sys.stderr)
+
+    _write_submission(candidates, out_path, location_map)
+    print(f"Total time: {elapsed:.1f}s", file=sys.stderr)
+
+
+async def _run_batch(profiles: ProfileStore, executor: ExecutorAgent, out_path: str):
+    """Batch mode: run all hardcoded SEARCH_QUERIES with a heads-up."""
+    print(BANNER, file=sys.stderr)
+    print(file=sys.stderr)
+    print("█ BATCH MODE █ Running 20 pre-defined strategic search queries.", file=sys.stderr)
+    print("  These cover: Software Engineering, Data/ML, Cloud/DevOps,", file=sys.stderr)
+    print("  Java, Mobile, Security, QA, Data Analysis, Product, and SRE roles.", file=sys.stderr)
+    print("  Each query is expanded with alias variants for broader coverage.", file=sys.stderr)
+    print("  Results are merged across all queries and filled to 100 rows.", file=sys.stderr)
+    print(file=sys.stderr)
+    print(f"  Queries to run: {len(SEARCH_QUERIES)}", file=sys.stderr)
+    print(f"  Profiles available: {len(profiles.get_all_pids())}", file=sys.stderr)
+    print(file=sys.stderr)
+    print("  Starting search in 3 seconds... (Ctrl+C to cancel)", file=sys.stderr)
+    await asyncio.sleep(3)
+
+    all_pids = profiles.get_all_pids()
+    location_map: dict[str, str] = {}
+
+    print("Running multi-query search pipeline...", file=sys.stderr)
+    candidates = await run_pipeline(profiles, executor, location_map)
+
+    for c in candidates:
+        pid = c["candidate_id"]
+        if pid not in location_map:
+            p = c.get("profile") or profiles.get(pid)
+            if p and p.personal and p.personal.location:
+                location_map[pid] = p.personal.location.city or "Unknown"
+
+    print(f"Found {len(candidates)} matched candidates from {len(SEARCH_QUERIES)} queries", file=sys.stderr)
+
+    honeypot_pids: set[str] = set()
+    existing_pids = {c["candidate_id"] for c in candidates}
+    if len(candidates) < 100:
+        needed = 100 - len(candidates)
+        remaining = _fill_from_full_index(profiles, all_pids, existing_pids, honeypot_pids, needed)
+        candidates.extend(remaining)
+        print(f"Filled {len(remaining)} remaining slots from full index to reach 100", file=sys.stderr)
+
+    _write_submission(candidates, out_path, location_map)
+
+
+async def main():
+    parser = argparse.ArgumentParser(
+        description="India Runs — AI-Powered Candidate Ranking"
+    )
+    parser.add_argument(
+        "--out",
+        default="submission.csv",
+        help="Output CSV path (default: submission.csv)",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+    parser.add_argument(
+        "--query", "-q",
+        default=None,
+        help="Single query to run (omitting enters interactive mode)",
+    )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Run all hardcoded strategic queries instead of interactive mode",
+    )
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.INFO)
+
+    t0 = time.time()
+    print("Loading search system...", file=sys.stderr)
+
+    hybrid_search, reranker, scorer, profiles = load_search_system()
+    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
+    all_pids = profiles.get_all_pids()
+
+    print(f"Total profiles available: {len(all_pids)}", file=sys.stderr)
+    print(f"Index loaded in {time.time() - t0:.1f}s", file=sys.stderr)
+
+    if args.batch:
+        await _run_batch(profiles, executor, args.out)
+        return
+
+    planner = PlannerAgent()
+    reflector = ReflectorAgent()
+    orchestrator = Orchestrator(planner, executor, reflector)
+
+    await _run_interactive(orchestrator, profiles, all_pids, args.out, query=args.query)
 
 
 if __name__ == "__main__":
