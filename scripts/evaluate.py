@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import sys
@@ -90,6 +91,8 @@ def find_index_dir() -> Path | None:
 def evaluate(
     queries_path: Path = QUERIES_PATH,
     ground_truth_path: Path = GROUND_TRUTH_PATH,
+    use_full_pipeline: bool = False,
+    skip_reranker: bool = False,
 ) -> dict:
     index_dir = find_index_dir()
     if index_dir is None:
@@ -125,6 +128,25 @@ def evaluate(
     embedder = MultilingualEmbedder()
     hybrid = HybridSearch(vector_search, bm25_search, embedder)
 
+    # Optionally build full pipeline components
+    executor = None
+    scorer = None
+    reranker = None
+    profiles = None
+    if use_full_pipeline:
+        from rank import _enhanced_parse_query, _expand_with_aliases
+        from src.search.reranker import CrossEncoderReranker
+        from src.matching.scorer import CandidateScorer
+        from src.agents.executor import ExecutorAgent
+        from src.core.profile_store import ProfileStore
+
+        logger.info("Loading full pipeline components...")
+        reranker = CrossEncoderReranker(timeout_ms=0)
+        scorer = CandidateScorer()
+        profiles = ProfileStore()
+        profiles.load_offset_index(index_dir / "offset_index.json")
+        executor = ExecutorAgent(hybrid, reranker, scorer, profiles)
+
     all_metrics: dict[str, list] = {
         "p@5": [], "p@10": [], "p@20": [],
         "r@5": [], "r@10": [], "r@20": [],
@@ -145,11 +167,27 @@ def evaluate(
             continue
 
         t0 = time.perf_counter()
-        results = hybrid.search(query_text, top_k=50)
+
+        if use_full_pipeline and executor is not None:
+            # Use full pipeline: parse → executor → (optional cross-encoder) → scorer
+            variants = _expand_with_aliases(query_text)[:3]
+            all_pid_scores: dict[str, float] = {}
+            for variant in variants:
+                parsed = _enhanced_parse_query(variant)
+                results = asyncio.run(executor.execute(parsed, top_k=30, skip_reranker=skip_reranker))
+                for r in results:
+                    pid = r.profile_id
+                    score = r.scores.overall
+                    if pid not in all_pid_scores or score > all_pid_scores[pid]:
+                        all_pid_scores[pid] = score
+            retrieved = [pid for pid, _ in sorted(all_pid_scores.items(), key=lambda x: -x[1])]
+        else:
+            # Use hybrid search directly
+            results = hybrid.search(query_text, top_k=50)
+            retrieved = [pid for pid, _ in results]
+
         elapsed = (time.perf_counter() - t0) * 1000
         all_metrics["latencies"].append(elapsed)
-
-        retrieved = [pid for pid, _ in results]
 
         for k in (5, 10, 20):
             all_metrics[f"p@{k}"].append(precision_at_k(retrieved, relevant, k))
@@ -200,9 +238,23 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    result = evaluate()
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate search quality")
+    parser.add_argument("--full-pipeline", action="store_true",
+                        help="Use full executor pipeline (cross-encoder + scorer)")
+    parser.add_argument("--skip-reranker", action="store_true",
+                        help="Skip cross-encoder, use hybrid RRF scores for ranking")
+    parser.add_argument("--sample", type=int, default=0,
+                        help="Evaluate only N queries for quick testing")
+    args = parser.parse_args()
+
+    result = evaluate(use_full_pipeline=args.full_pipeline, skip_reranker=args.skip_reranker)
     if result:
         report_path = DATA_DIR / "evaluation_report.json"
+        if args.full_pipeline and args.skip_reranker:
+            report_path = DATA_DIR / "evaluation_report_hybrid_pipeline.json"
+        elif args.full_pipeline:
+            report_path = DATA_DIR / "evaluation_report_full.json"
         with open(report_path, "w") as f:
             json.dump(result, f, indent=2)
         logger.info(f"Report saved to {report_path}")

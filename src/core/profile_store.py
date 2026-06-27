@@ -23,7 +23,13 @@ class ProfileStore:
         self._index_built = False
         self._sample_profiles: dict[str, Profile] = {}
         self._auto_init_samples()
+        self._auto_load_offset_index()
         self._file_handle: TextIO | None = None
+
+    def _auto_load_offset_index(self) -> None:
+        offset_path = DATA_DIR / "indexes" / "offset_index.json"
+        if offset_path.exists() and not self._index_built:
+            self.load_offset_index(offset_path)
 
     def _auto_init_samples(self) -> None:
         """Automatically load sample profiles alongside the main profile file.
@@ -143,6 +149,10 @@ class ProfileStore:
 
     def get_all_sample(self) -> dict[str, Profile]:
         return dict(self._sample_profiles)
+
+    def get_all_pids(self) -> list[str]:
+        self._build_offset_index()
+        return list(self._offset_index.keys())
 
     def __contains__(self, pid: str) -> bool:
         if pid in self._sample_profiles or pid in self._cache:

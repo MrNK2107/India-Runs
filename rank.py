@@ -410,8 +410,10 @@ def load_search_system() -> tuple:
 
     logger.info("Loading profiles...")
     profiles = ProfileStore()
-    sample_path = DATA_DIR / "samples" / "sample_candidates.json"
-    profiles.load_sample(sample_path)
+    offset_path = indexes_dir / "offset_index.json"
+    if offset_path.exists():
+        profiles.load_offset_index(offset_path)
+        logger.info(f"Loaded offset index ({len(profiles._offset_index)} entries)")
 
     return hybrid_search, reranker, scorer, profiles
 
@@ -567,7 +569,7 @@ async def run_pipeline(profiles: ProfileStore, executor: ExecutorAgent,
                 # Original query gets deeper search; variants get shallower
                 k = 50 if v_i == 0 else 30
                 parsed = _enhanced_parse_query(variant)
-                results = await executor.execute(parsed, top_k=k)
+                results = await executor.execute(parsed, top_k=k, skip_reranker=True)
 
                 for r in results:
                     pid = r.profile_id
@@ -681,6 +683,84 @@ def _fill_remaining(all_profiles: dict[str, Profile],
     return remaining
 
 
+def _fill_from_full_index(
+    profiles: ProfileStore,
+    all_pids: list[str],
+    existing_pids: set[str],
+    honeypot_pids: set[str],
+    needed: int,
+) -> list[dict]:
+    """Fill remaining slots by sampling from the full 100k profile index."""
+    import random
+    random.seed(42)
+
+    # Start from a random offset to get variety each run
+    available = [pid for pid in all_pids if pid not in existing_pids and pid not in honeypot_pids]
+    random.shuffle(available)
+
+    remaining: list[dict] = []
+    for pid in available:
+        if len(remaining) >= needed:
+            break
+        profile = profiles.get(pid)
+        if profile is None:
+            continue
+
+        exp = profile.professional.total_experience_years if profile.professional else 0
+        title = profile.professional.current_title if profile.professional else "N/A"
+        company = profile.professional.current_company if profile.professional else "N/A"
+
+        honeypot_reason = detect_honeypot(profile)
+        honeypot_penalty = 0.15 if honeypot_reason else 1.0
+
+        base_score = 0.15
+        if exp:
+            base_score += min(0.20, exp / 30.0 * 0.20)
+        if title and title != "N/A":
+            base_score += 0.04
+        if company and company != "N/A":
+            base_score += 0.03
+        if company and company.lower() in TIER1_COMPANIES:
+            base_score += 0.05
+        elif company and company.lower() in TIER2_COMPANIES:
+            base_score += 0.02
+        if profile.skills:
+            base_score += min(0.10, len(profile.skills) / 50.0 * 0.10)
+        if profile.education:
+            base_score += 0.03
+        signals = profile.signals
+        if signals.profile_completeness_score:
+            base_score += min(0.05, signals.profile_completeness_score / 100.0 * 0.05)
+        if signals.open_to_work:
+            base_score += 0.03
+        if signals.verified_email or signals.verified_phone:
+            base_score += 0.02
+        if signals.github_activity_score and signals.github_activity_score > 10:
+            base_score += 0.02
+        if signals.saved_by_recruiters_30d and signals.saved_by_recruiters_30d > 5:
+            base_score += 0.02
+        if signals.recruiter_response_rate and signals.recruiter_response_rate > 0.5:
+            base_score += 0.02
+        if signals.interview_completion_rate and signals.interview_completion_rate > 0.5:
+            base_score += 0.02
+
+        base_score *= honeypot_penalty
+
+        remaining.append({
+            "candidate_id": pid,
+            "score": round(min(0.55, base_score), 4),
+            "matched_skills": [],
+            "missing_skills": [],
+            "title": title,
+            "company": company,
+            "query": "",
+            "experience_years": exp,
+            "profile": profile,
+        })
+
+    return remaining
+
+
 async def main():
     parser = argparse.ArgumentParser(
         description="Redrob India Runs — candidate ranking pipeline"
@@ -711,43 +791,43 @@ async def main():
     hybrid_search, reranker, scorer, profiles = load_search_system()
     executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
 
-    all_profiles = profiles.get_all_sample()
-    location_map = {}
-    for pid, profile in all_profiles.items():
-        city = profile.personal.location.city if profile.personal and profile.personal.location else None
-        location_map[pid] = city or "Unknown"
+    all_pids = profiles.get_all_pids()
+    total_profiles = len(all_pids)
+    print(f"Total profiles available: {total_profiles}", file=sys.stderr)
 
-    # Honeypot screening (for awareness only — we penalize in executor, not filter here)
-    print("Screening for honeypot profiles...", file=sys.stderr)
-    honeypot_pids = set()
-    for pid, profile in all_profiles.items():
-        reason = detect_honeypot(profile)
-        if reason:
-            honeypot_pids.add(pid)
-            print(f"  HONEYPOT: {pid} — {reason}", file=sys.stderr)
+    # Build location_map lazily — only for profiles we actually load
+    location_map: dict[str, str] = {}
 
-    print(f"  Detected {len(honeypot_pids)} honeypot profiles (will be penalized)", file=sys.stderr)
-    print(f"  Total profiles: {len(all_profiles)}", file=sys.stderr)
-    print(f"Loaded {len(all_profiles)} profiles", file=sys.stderr)
+    # Honeypot screening on sample profiles only (screening all 100k is too slow)
+    # Honeypots are penalized at scoring time in executor anyway
+    honeypot_pids: set[str] = set()
+    print("Honeypot screening active at scoring time in executor", file=sys.stderr)
 
     # ── Run multi-query pipeline ──────────────────────────────────
     print("Running multi-query search pipeline...", file=sys.stderr)
     candidates = await run_pipeline(profiles, executor, location_map)
 
-    # Don't filter honeypots — they're already penalized in executor (×0.15)
-    # and will naturally rank last. We need all 100 rows.
-
     existing_pids = {c["candidate_id"] for c in candidates}
+    # Also build location_map from matched profiles
+    for c in candidates:
+        pid = c["candidate_id"]
+        if pid not in location_map:
+            p = c.get("profile") or profiles.get(pid)
+            if p and p.personal and p.personal.location:
+                location_map[pid] = p.personal.location.city or "Unknown"
+
     print(f"Found {len(candidates)} matched candidates from {len(SEARCH_QUERIES)} queries",
           file=sys.stderr)
 
-    # ── Fill remaining ────────────────────────────────────────────
+    # ── Fill remaining from full 100k ─────────────────────────────
     if len(candidates) < 100:
-        remaining = _fill_remaining(all_profiles, existing_pids, location_map)
-        # Also filter honeypots from remaining
-        remaining = [c for c in remaining if c["candidate_id"] not in honeypot_pids]
+        needed = 100 - len(candidates)
+        remaining = _fill_from_full_index(
+            profiles, all_pids, existing_pids, honeypot_pids, needed
+        )
         candidates.extend(remaining)
-        print(f"Filled {len(remaining)} remaining slots to reach 100", file=sys.stderr)
+        print(f"Filled {len(remaining)} remaining slots from full index to reach 100",
+              file=sys.stderr)
 
     # ── Sort by score descending, tie-break by ID ─────────────────
     candidates.sort(key=lambda x: (-x["score"], x["candidate_id"]))

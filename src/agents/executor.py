@@ -67,6 +67,7 @@ class ExecutorAgent:
         parsed: ParsedQuery,
         top_k: int = 50,
         slider_weights: dict[str, float] | None = None,
+        skip_reranker: bool = False,
     ) -> list[MatchResult]:
         search_text = self._query_to_search_text(parsed)
 
@@ -77,6 +78,7 @@ class ExecutorAgent:
         hybrid_results = self.hybrid_search.reciprocal_rank_fusion(
             [vector_raw, bm25_raw], k=self.hybrid_search.rrf_k
         )
+        rrf_scores: dict[str, float] = dict(hybrid_results)
 
         vec_scores: dict[str, float] = {
             pid: self._norm_vec_score(s) for pid, s in vector_raw
@@ -96,7 +98,8 @@ class ExecutorAgent:
                 local_profile_cache[pid] = p
             return p
 
-        pids_to_fetch = [pid for pid, _ in filtered[: self._rerank_top_k]]
+        fetch_top_k = self._rerank_top_k if not skip_reranker else top_k * 2
+        pids_to_fetch = [pid for pid, _ in filtered[:fetch_top_k]]
         loop = asyncio.get_running_loop()
         num_fetch_workers = min(16, len(pids_to_fetch) or 1)
         with ThreadPoolExecutor(max_workers=num_fetch_workers) as fetch_pool:
@@ -110,30 +113,32 @@ class ExecutorAgent:
             if p is not None:
                 local_profile_cache[pid] = p
 
-        rerank_candidates: list[tuple[str, str, float]] = []
-        for pid, score in filtered[: self._rerank_top_k]:
-            profile = local_profile_cache.get(pid)
-            if profile is not None:
-                rerank_candidates.append((pid, profile.raw_text[:2000], score))
-            else:
-                rerank_candidates.append((pid, "", score))
-
-        reranked = self.reranker.rerank(
-            parsed.original_query or search_text, rerank_candidates, top_k=top_k
-        )
+        if skip_reranker:
+            candidate_scores = filtered[:top_k * 2]
+        else:
+            rerank_candidates: list[tuple[str, str, float]] = []
+            for pid, score in filtered[: self._rerank_top_k]:
+                profile = local_profile_cache.get(pid)
+                if profile is not None:
+                    rerank_candidates.append((pid, profile.raw_text[:2000], score))
+                else:
+                    rerank_candidates.append((pid, "", score))
+            candidate_scores = self.reranker.rerank(
+                parsed.original_query or search_text, rerank_candidates, top_k=top_k
+            )
 
         req_names = [rs.name for rs in parsed.required_skills]
         pref_names = [ps.name for ps in parsed.preferred_skills]
         all_req = req_names + pref_names
 
         scoring_args = []
-        for pid, rerank_score in reranked:
+        for pid, rerank_score in candidate_scores:
             profile = _get_profile(pid)
             if profile is None:
                 continue
             scoring_args.append(
                 (pid, rerank_score, profile, parsed, vec_scores, bm25_scores,
-                 slider_weights, req_names, all_req)
+                 slider_weights, req_names, all_req, skip_reranker)
             )
 
         loop = asyncio.get_running_loop()
@@ -218,6 +223,7 @@ class ExecutorAgent:
         slider_weights: dict[str, float] | None,
         req_names: list[str],
         all_req: list[str],
+        skip_reranker: bool = False,
     ) -> MatchResult | None:
         matched_skills_list, missing_skills_list = _match_skills_detail(
             all_req, profile.skills, profile.raw_text,
@@ -238,6 +244,9 @@ class ExecutorAgent:
 
         scorer = CandidateScorer()
         match_scores = scorer.compute_overall(scores_dict, slider_weights)
+
+        if skip_reranker and rerank_score is not None:
+            match_scores.overall = rerank_score
 
         req_only_matched, req_only_missing = _match_skills_detail(
             req_names, profile.skills, profile.raw_text,
