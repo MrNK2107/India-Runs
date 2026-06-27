@@ -453,11 +453,6 @@ def _step_extra(i: int, current_step: int, desc: str) -> str:
 
 
 def create_progress_html(current_step: int = 0) -> str:
-    """Generate animated progress bar with step labels.
-
-    Args:
-        current_step: 0 to 4, -1 means all completed (final state)
-    """
     if current_step < 0:
         steps_html = "".join(
             f'<div class="progress-step completed">'
@@ -498,12 +493,23 @@ def create_progress_html(current_step: int = 0) -> str:
     """
 
 
-def create_premium_spinner(message: str = "Searching candidates...") -> str:
+def create_loading_overlay(message: str = "Searching candidates...") -> str:
     return f"""\
-    <div class="premium-spinner">
-        <div class="premium-spinner-ring"></div>
-        <div class="premium-spinner-text">{message}</div>
-        <div class="premium-spinner-sub">This may take 10-30 seconds for deep search</div>
+    <div class="loading-overlay">
+        <div class="loading-ring-container">
+            <div class="loading-ring"></div>
+            <div class="loading-ring"></div>
+            <div class="loading-ring"></div>
+        </div>
+        <div class="loading-text">{message}</div>
+        <div class="loading-sub">This may take 10-30 seconds for deep search</div>
+        <div class="loading-particles">
+            <div class="loading-particle"></div>
+            <div class="loading-particle"></div>
+            <div class="loading-particle"></div>
+            <div class="loading-particle"></div>
+            <div class="loading-particle"></div>
+        </div>
     </div>
     """
 
@@ -511,8 +517,8 @@ def create_premium_spinner(message: str = "Searching candidates...") -> str:
 def create_empty_state() -> str:
     return """\
     <div class="empty-state">
-        <div class="empty-state-icon">🔍</div>
-        <div class="empty-state-title">No search yet</div>
+        <div class="empty-state-icon" style="animation:float 3s ease-in-out infinite;">🔍</div>
+        <div class="empty-state-title">Ready to find talent</div>
         <div class="empty-state-desc">
             Describe the ideal candidate on the left and click <strong>Search Candidates</strong>
             to find matching profiles.
@@ -527,20 +533,20 @@ def create_empty_state() -> str:
 def create_error_panel(message: str) -> str:
     """Return a prominent error message panel for display in the UI."""
     return f"""\
-    <div style="border:1px solid var(--pastel-coral, #fecaca);background:rgba(254,202,202,0.15);backdrop-filter:blur(8px);border-radius:var(--radius-md);padding:20px;margin:12px 0;">
+    <div style="border:1.5px solid var(--red-100);background:rgba(254,226,226,0.15);backdrop-filter:blur(8px);border-radius:var(--radius-md);padding:20px;margin:12px 0;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
             <span style="font-size:22px;">⚠️</span>
-            <strong style="color:#e11d48;font-size:15px;">Error</strong>
+            <strong style="color:var(--red-700);font-size:15px;">Error</strong>
         </div>
-        <p style="color:#be123c;margin:0;font-size:13px;line-height:1.6;">{message}</p>
+        <p style="color:var(--red-700);margin:0;font-size:13px;line-height:1.6;">{message}</p>
     </div>"""
 
 
 def create_empty_analytics() -> str:
     return """\
     <div class="empty-state">
-        <div class="empty-state-icon">📊</div>
-        <div class="empty-state-title">No results to analyze</div>
+        <div class="empty-state-icon" style="animation:float 3s ease-in-out infinite;">📊</div>
+        <div class="empty-state-title">No results yet</div>
         <div class="empty-state-desc">Run a search first to see analytics and fairness metrics.</div>
     </div>
     """

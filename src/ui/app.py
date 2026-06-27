@@ -22,6 +22,7 @@ from src.ui.components import (  # noqa: E402
     create_analytics_dashboard,
     create_candidate_card,
     create_empty_state,
+    create_loading_overlay,
     create_progress_html,
     create_rationale_panel,
 )
@@ -326,10 +327,19 @@ def create_app() -> gr.Blocks:
                     *slider_inputs,
                 ]
                 search_btn.click(
+                    fn=lambda: create_loading_overlay("Initializing search..."),
+                    outputs=[results_area],
+                    show_progress="hidden",
+                ).then(
                     fn=search_handler,
                     inputs=search_inputs,
                     outputs=[results_area, rationale_area, results_state],
                     show_progress="full",
+                ).then(
+                    fn=create_analytics_dashboard,
+                    inputs=[results_state],
+                    outputs=[analytics_html],
+                    show_progress="hidden",
                 )
 
                 re_rank_inputs = [results_state, *slider_inputs]
@@ -351,12 +361,6 @@ def create_app() -> gr.Blocks:
                 analytics_html = gr.HTML(label="Analytics Dashboard")
                 refresh_btn = gr.Button("Refresh Analytics", variant="secondary")
                 refresh_btn.click(
-                    fn=create_analytics_dashboard,
-                    inputs=[results_state],
-                    outputs=[analytics_html],
-                    show_progress="hidden",
-                )
-                search_btn.click(
                     fn=create_analytics_dashboard,
                     inputs=[results_state],
                     outputs=[analytics_html],
@@ -420,6 +424,5 @@ if __name__ == "__main__":
     app.launch(
         server_name="127.0.0.1",
         server_port=7860,
-        theme=gr.themes.Soft(),
         css="src/ui/styles.css",
     )
