@@ -95,7 +95,7 @@ def _run_full_pipeline(
     skip_reranker: bool,
 ) -> dict:
     """Run full pipeline across all queries in a single event loop."""
-    from rank import _enhanced_parse_query, _expand_with_aliases
+    from src.core.query_parser import expand_with_aliases, parse_query
     from src.search.reranker import CrossEncoderReranker
     from src.matching.scorer import CandidateScorer
     from src.agents.executor import ExecutorAgent
@@ -127,10 +127,10 @@ def _run_full_pipeline(
                 continue
 
             t0 = time.perf_counter()
-            variants = _expand_with_aliases(query_text)[:3]
+            variants = expand_with_aliases(query_text)[:3]
             all_pid_scores: dict[str, float] = {}
             for variant in variants:
-                parsed = _enhanced_parse_query(variant)
+                parsed = parse_query(variant)
                 results = await executor.execute(parsed, top_k=30, skip_reranker=skip_reranker)
                 for r in results:
                     pid = r.profile_id

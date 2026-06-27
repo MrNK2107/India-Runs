@@ -12,11 +12,8 @@ from src.agents.planner import PlannerAgent
 from src.agents.reflector import ReflectorAgent
 from src.core.config import get_scoring_config, get_settings
 from src.core.models import (
-    ExperienceRequirements,
-    LocationRequirements,
     MatchResult,
     ParsedQuery,
-    QueryFilters,
     Rationale,
     SearchFilters,
     SearchMetadata,
@@ -134,31 +131,8 @@ def _merge_filter_list(
 
 
 def _parse_query_text(text: str) -> ParsedQuery:
-    from src.core.constants import INDIAN_CITIES
-    from src.core.models import RequiredSkill
-
-    lower = text.strip().lower()
-
-    city = None
-    for c in sorted(INDIAN_CITIES, key=len, reverse=True):
-        if c.lower() in lower:
-            city = c
-            break
-
-    words = lower.split()
-    skill_words = [w for w in words if w not in STOP_WORDS and len(w) > 1]
-    # Exclude detected city name from skills
-    if city:
-        skill_words = [w for w in skill_words if w != city.lower()]
-    deduped = list(dict.fromkeys(skill_words))
-
-    return ParsedQuery(
-        required_skills=[RequiredSkill(name=s) for s in deduped[:10]],
-        experience=ExperienceRequirements(),
-        location=LocationRequirements(city=city),
-        filters=QueryFilters(),
-        original_query=text.strip(),
-    )
+    from src.core.query_parser import parse_query
+    return parse_query(text)
 
 
 class Orchestrator:
