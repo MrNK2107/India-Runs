@@ -654,6 +654,66 @@ async def _run_batch(profiles: ProfileStore, executor: ExecutorAgent, out_path: 
     _write_submission(candidates, out_path, location_map)
 
 
+def _check_llm_config() -> None:
+    """Prompt for missing API key before running the full agentic pipeline."""
+    from src.core.config import get_settings
+    settings = get_settings()
+    provider = settings.llm_provider
+
+    if provider == "ollama":
+        import urllib.request
+        try:
+            urllib.request.urlopen(f"{settings.ollama_base_url}/api/tags", timeout=2)
+        except Exception:
+            print(file=sys.stderr)
+            print("╔══════════════════════════════════════════════════════════╗", file=sys.stderr)
+            print("║  Ollama is configured but not reachable                 ║", file=sys.stderr)
+            print(f"║  ({settings.ollama_base_url})", file=sys.stderr)
+            print("║                                                          ║", file=sys.stderr)
+            print("║  Options:                                                ║", file=sys.stderr)
+            print("║  1. Start Ollama and pull a model                        ║", file=sys.stderr)
+            print("║  2. Enter an OpenAI API key for GPT-4o-mini              ║", file=sys.stderr)
+            print("║  3. Enter a Google Gemini API key                        ║", file=sys.stderr)
+            print("║  4. Press Enter to use turbo mode (no LLM)               ║", file=sys.stderr)
+            print("╚══════════════════════════════════════════════════════════╝", file=sys.stderr)
+            choice = input("Choice (1/2/3/4): ").strip()
+            if choice == "2":
+                key = input("OpenAI API key: ").strip()
+                if key:
+                    os.environ["LLM_PROVIDER"] = "openai"
+                    os.environ["OPENAI_API_KEY"] = key
+                    get_settings.cache_clear()
+            elif choice == "3":
+                key = input("Google Gemini API key: ").strip()
+                if key:
+                    os.environ["LLM_PROVIDER"] = "gemini"
+                    os.environ["GEMINI_API_KEY"] = key
+                    get_settings.cache_clear()
+        return
+
+    key_field = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY"}
+    key_env = key_field.get(provider)
+    if not key_env:
+        return
+
+    current = os.environ.get(key_env, "") or getattr(settings, key_env.lower(), "")
+    placeholder = "sk-..." if "OPENAI" in key_env else "..."
+    if current and current != placeholder:
+        return
+
+    print(file=sys.stderr)
+    print(f"╔══════════════════════════════════════════════════════════╗", file=sys.stderr)
+    print(f"║  No valid {key_env} found in .env                     ║", file=sys.stderr)
+    print(f"║                                                          ║", file=sys.stderr)
+    print(f"║  The full agentic pipeline needs an LLM.                 ║", file=sys.stderr)
+    print(f"║  Enter your key below, or press Enter for turbo mode.    ║", file=sys.stderr)
+    print(f"╚══════════════════════════════════════════════════════════╝", file=sys.stderr)
+    key = input(f"{key_env}: ").strip()
+    if key:
+        os.environ[key_env] = key
+        get_settings.cache_clear()
+
+
 async def main():
     parser = argparse.ArgumentParser(
         description="India Runs — AI-Powered Candidate Ranking"
@@ -696,6 +756,8 @@ async def main():
     if args.batch:
         await _run_batch(profiles, executor, args.out)
         return
+
+    _check_llm_config()
 
     planner = PlannerAgent()
     reflector = ReflectorAgent()

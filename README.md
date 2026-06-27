@@ -96,10 +96,10 @@ Recruiters receive **hundreds or thousands** of applications per job. Traditiona
 ### Scoring Dimensions
 
 | # | Dimension | Weight | What It Measures |
-|---|---|---|---|
-| 1 | **Cross-encoder score** | 25% | Deep semantic match via bidirectional transformer attention |
-| 2 | **Skill match** | 18% | Fuzzy skill matching with 32+ alias groups and synonym resolution |
-| 3 | **Semantic similarity** | 15% | FAISS cosine similarity on multilingual embeddings (384-dim) |
+|---|---|---|---|---|
+| 1 | **Cross-encoder score** | 15% | Deep semantic match via bidirectional transformer attention |
+| 2 | **Skill match** | 20% | Fuzzy skill matching with 32+ alias groups and synonym resolution |
+| 3 | **Semantic similarity** | 20% | FAISS cosine similarity on multilingual embeddings (384-dim) |
 | 4 | **Behavioral signals** | 12% | Recruiter response rate, saves, completeness, verification, GitHub activity, interview conversion |
 | 5 | **Keyword match** | 10% | BM25 term overlap on raw profile text |
 | 6 | **Experience match** | 8% | Total experience vs target band with deficit/excess penalties |
@@ -197,8 +197,15 @@ python scripts/build_indexes.py --profiles ./data/profiles/candidates.jsonl --sa
 ### Run the Pipeline
 
 ```bash
-# Generate ranked submission (100 candidates, 17 queries)
+# Interactive mode (default) — prompts for a query, runs full agentic pipeline
+# Planner → Executor → Reflector (uses LLM for deep understanding)
 python rank.py
+
+# Single query via CLI arg — same full agentic pipeline
+python rank.py --query "senior software engineer with python and aws in bangalore"
+
+# Batch mode — runs 20 pre-defined strategic queries (no LLM needed, turbo mode)
+python rank.py --batch
 
 # Validate output format
 python validate_submission.py submission.csv
@@ -276,8 +283,8 @@ python validate_submission.py submission.csv
 ### Submission Quality (100K Profile Index)
 | Metric | Value |
 |--------|-------|
-| **Pipeline time** | ~56.5s (17 queries × 50 results, CPU-only) |
-| **Unique candidates matched** | 802 (from 17 queries) |
+| **Pipeline time** | ~56.5s (20 queries × 50 results, CPU-only) |
+| **Unique candidates matched** | 800+ (from 20 queries) |
 | **Score range** | 0.7033 – 0.8657 |
 | **Score monotonicity** | 100% non-increasing ✓ |
 | **Unique reasoning** | 100/100 unique narratives ✓ |
@@ -306,7 +313,7 @@ python validate_submission.py submission.csv
 
 ```
 📦 india-runs
-├── 📄 rank.py                          # 🏁 Main pipeline entry point (17 queries)
+├── 📄 rank.py                          # 🏁 Main pipeline: interactive, --query, --batch
 ├── 📄 validate_submission.py           # ✅ CSV format verifier
 ├── 📄 submission.csv                   # 📊 Generated output (100 rows)
 ├── 📄 submission_metadata.yaml         # 🏆 Hackathon portal metadata
@@ -455,7 +462,7 @@ Adjust the 10 internal scoring dimensions or the 6 UI slider dimensions. Customi
 ## 📈 What Judges Will See
 
 ### During Demo
-1. **Run the Pipeline** — `python rank.py` generates 100-row submission in ~56s
+1. **Run the Pipeline** — `python rank.py` (interactive) or `python rank.py --batch` generates 100-row submission in ~56s
 2. **Launch the UI** — `python src/ui/app.py` opens interactive Gradio dashboard
 3. **Search** — Paste natural language queries, watch results with scored breakdowns
 4. **Adjust Sliders** — Fine-tune scoring weights, see instant re-ranking
