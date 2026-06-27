@@ -335,11 +335,6 @@ def create_app() -> gr.Blocks:
                     inputs=search_inputs,
                     outputs=[results_area, rationale_area, results_state],
                     show_progress="full",
-                ).then(
-                    fn=create_analytics_dashboard,
-                    inputs=[results_state],
-                    outputs=[analytics_html],
-                    show_progress="hidden",
                 )
 
                 re_rank_inputs = [results_state, *slider_inputs]
@@ -360,6 +355,12 @@ def create_app() -> gr.Blocks:
             with gr.Tab("📊 Analytics"):
                 analytics_html = gr.HTML(label="Analytics Dashboard")
                 refresh_btn = gr.Button("Refresh Analytics", variant="secondary")
+                search_btn.click(
+                    fn=create_analytics_dashboard,
+                    inputs=[results_state],
+                    outputs=[analytics_html],
+                    show_progress="hidden",
+                )
                 refresh_btn.click(
                     fn=create_analytics_dashboard,
                     inputs=[results_state],
