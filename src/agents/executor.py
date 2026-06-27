@@ -60,7 +60,7 @@ class ExecutorAgent:
         self.reranker = reranker
         self.scorer = scorer
         self.profile_store = profiles
-        self._rerank_top_k = 50
+        self._rerank_top_k = 20
 
     async def execute(
         self,
@@ -115,6 +115,11 @@ class ExecutorAgent:
 
         if skip_reranker:
             candidate_scores = filtered[:top_k * 2]
+            # Normalize RRF scores to [0, 1] so they work as cross_encoder_score dimension
+            if candidate_scores:
+                max_score = max(s for _, s in candidate_scores)
+                if max_score > 0:
+                    candidate_scores = [(pid, s / max_score) for pid, s in candidate_scores]
         else:
             rerank_candidates: list[tuple[str, str, float]] = []
             for pid, score in filtered[: self._rerank_top_k]:
@@ -244,9 +249,6 @@ class ExecutorAgent:
 
         scorer = CandidateScorer()
         match_scores = scorer.compute_overall(scores_dict, slider_weights)
-
-        if skip_reranker and rerank_score is not None:
-            match_scores.overall = rerank_score
 
         req_only_matched, req_only_missing = _match_skills_detail(
             req_names, profile.skills, profile.raw_text,

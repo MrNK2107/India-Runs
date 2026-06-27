@@ -1,14 +1,14 @@
 # Internal scoring model — 10 dimensions, must sum to 1.0
 # Used for backend candidate ranking (FR-7.2)
 scoring_weights:
-  semantic_similarity: 0.15
+  semantic_similarity: 0.20
   keyword_match: 0.10
-  skill_match: 0.18
+  skill_match: 0.20
   experience_match: 0.08
   location_match: 0.00
   education_match: 0.00
-  cross_encoder_score: 0.25
-  behavioral_score: 0.12
+  cross_encoder_score: 0.15
+  behavioral_score: 0.15
   career_trajectory_score: 0.07
   skill_proficiency_score: 0.05
 

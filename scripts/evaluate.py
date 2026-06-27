@@ -88,11 +88,113 @@ def find_index_dir() -> Path | None:
     return path.parent if path.exists() else None
 
 
+def _run_full_pipeline(
+    queries_list: list,
+    gt_map: dict,
+    hybrid: HybridSearch,
+    skip_reranker: bool,
+) -> dict:
+    """Run full pipeline across all queries in a single event loop."""
+    from rank import _enhanced_parse_query, _expand_with_aliases
+    from src.search.reranker import CrossEncoderReranker
+    from src.matching.scorer import CandidateScorer
+    from src.agents.executor import ExecutorAgent
+    from src.core.profile_store import ProfileStore
+
+    index_dir = find_index_dir()
+    logger.info("Loading full pipeline components...")
+    reranker = CrossEncoderReranker(timeout_ms=0)
+    scorer = CandidateScorer()
+    profiles = ProfileStore()
+    profiles.load_offset_index(index_dir / "offset_index.json")
+    executor = ExecutorAgent(hybrid, reranker, scorer, profiles)
+
+    async def process_queries():
+        metrics: dict[str, list] = {
+            "p@5": [], "p@10": [], "p@20": [],
+            "r@5": [], "r@10": [], "r@20": [],
+            "mrr": [], "ndcg@10": [], "latencies": [],
+        }
+        evaluated = 0
+        skipped = 0
+
+        for q in queries_list:
+            query_text = q.get("query", q.get("raw_query", ""))
+            qid = q.get("query_id", q.get("id", ""))
+            relevant = set(gt_map.get(qid, []))
+            if not query_text or not relevant:
+                skipped += 1
+                continue
+
+            t0 = time.perf_counter()
+            variants = _expand_with_aliases(query_text)[:3]
+            all_pid_scores: dict[str, float] = {}
+            for variant in variants:
+                parsed = _enhanced_parse_query(variant)
+                results = await executor.execute(parsed, top_k=30, skip_reranker=skip_reranker)
+                for r in results:
+                    pid = r.profile_id
+                    score = r.scores.overall
+                    if pid not in all_pid_scores or score > all_pid_scores[pid]:
+                        all_pid_scores[pid] = score
+
+            retrieved = [pid for pid, _ in sorted(all_pid_scores.items(), key=lambda x: -x[1])]
+            elapsed = (time.perf_counter() - t0) * 1000
+            metrics["latencies"].append(elapsed)
+
+            for k in (5, 10, 20):
+                metrics[f"p@{k}"].append(precision_at_k(retrieved, relevant, k))
+                metrics[f"r@{k}"].append(recall_at_k(retrieved, relevant, k))
+            metrics["mrr"].append(mean_reciprocal_rank(retrieved, relevant))
+            metrics["ndcg@10"].append(ndcg_at_k(retrieved, relevant, 10))
+            evaluated += 1
+
+            if evaluated % 50 == 0:
+                logger.info(f"  processed {evaluated}/{len(queries_list)} queries...")
+
+        metrics["total_queries"] = evaluated
+        metrics["skipped"] = skipped
+
+        summary: dict = {}
+        for metric, values in metrics.items():
+            if isinstance(values, list) and values:
+                summary[metric] = {
+                    "mean": round(mean(values), 4),
+                    "median": round(median(values), 4),
+                    "min": round(min(values), 4),
+                    "max": round(max(values), 4),
+                }
+            elif isinstance(values, (int, float)):
+                summary[metric] = values
+
+        summary["latency"] = latency_stats(metrics["latencies"])
+        for k in ("p50", "p95", "p99", "mean", "min", "max"):
+            if k in summary["latency"]:
+                summary["latency"][k] = round(summary["latency"][k], 1)
+        summary["cross_lingual_mrr"] = round(cross_lingual_mrr({
+            "queries": {i: q for i, q in enumerate(queries_list)},
+            "mrr": {i: v for i, v in enumerate(metrics["mrr"])},
+        }), 4)
+
+        logger.info("Full pipeline evaluation results:")
+        for m in ("p@5", "p@10", "r@5", "r@10", "mrr", "ndcg@10"):
+            if m in summary:
+                s = summary[m]
+                logger.info(f"  {m}: mean={s['mean']:.4f}, median={s['median']:.4f}")
+        lat = summary["latency"]
+        logger.info(f"  latency: p50={lat['p50']:.0f}ms, p95={lat['p95']:.0f}ms")
+        logger.info(f"  cross-lingual MRR: {summary['cross_lingual_mrr']:.4f}")
+        return summary
+
+    return asyncio.run(process_queries())
+
+
 def evaluate(
     queries_path: Path = QUERIES_PATH,
     ground_truth_path: Path = GROUND_TRUTH_PATH,
     use_full_pipeline: bool = False,
     skip_reranker: bool = False,
+    sample_n: int = 0,
 ) -> dict:
     index_dir = find_index_dir()
     if index_dir is None:
@@ -116,6 +218,9 @@ def evaluate(
 
     queries_list = queries_raw if isinstance(queries_raw, list) else list(queries_raw.values())
     gt_map = ground_truth if isinstance(ground_truth, dict) else {}
+    if sample_n > 0:
+        queries_list = queries_list[:sample_n]
+        logger.info(f"Sampling {sample_n} queries for quick evaluation")
 
     logger.info(f"Loaded {len(queries_list)} queries and {len(gt_map)} ground truth entries")
 
@@ -128,24 +233,8 @@ def evaluate(
     embedder = MultilingualEmbedder()
     hybrid = HybridSearch(vector_search, bm25_search, embedder)
 
-    # Optionally build full pipeline components
-    executor = None
-    scorer = None
-    reranker = None
-    profiles = None
     if use_full_pipeline:
-        from rank import _enhanced_parse_query, _expand_with_aliases
-        from src.search.reranker import CrossEncoderReranker
-        from src.matching.scorer import CandidateScorer
-        from src.agents.executor import ExecutorAgent
-        from src.core.profile_store import ProfileStore
-
-        logger.info("Loading full pipeline components...")
-        reranker = CrossEncoderReranker(timeout_ms=0)
-        scorer = CandidateScorer()
-        profiles = ProfileStore()
-        profiles.load_offset_index(index_dir / "offset_index.json")
-        executor = ExecutorAgent(hybrid, reranker, scorer, profiles)
+        return _run_full_pipeline(queries_list, gt_map, hybrid, skip_reranker)
 
     all_metrics: dict[str, list] = {
         "p@5": [], "p@10": [], "p@20": [],
@@ -168,23 +257,8 @@ def evaluate(
 
         t0 = time.perf_counter()
 
-        if use_full_pipeline and executor is not None:
-            # Use full pipeline: parse → executor → (optional cross-encoder) → scorer
-            variants = _expand_with_aliases(query_text)[:3]
-            all_pid_scores: dict[str, float] = {}
-            for variant in variants:
-                parsed = _enhanced_parse_query(variant)
-                results = asyncio.run(executor.execute(parsed, top_k=30, skip_reranker=skip_reranker))
-                for r in results:
-                    pid = r.profile_id
-                    score = r.scores.overall
-                    if pid not in all_pid_scores or score > all_pid_scores[pid]:
-                        all_pid_scores[pid] = score
-            retrieved = [pid for pid, _ in sorted(all_pid_scores.items(), key=lambda x: -x[1])]
-        else:
-            # Use hybrid search directly
-            results = hybrid.search(query_text, top_k=50)
-            retrieved = [pid for pid, _ in results]
+        results = hybrid.search(query_text, top_k=50)
+        retrieved = [pid for pid, _ in results]
 
         elapsed = (time.perf_counter() - t0) * 1000
         all_metrics["latencies"].append(elapsed)
@@ -248,7 +322,11 @@ if __name__ == "__main__":
                         help="Evaluate only N queries for quick testing")
     args = parser.parse_args()
 
-    result = evaluate(use_full_pipeline=args.full_pipeline, skip_reranker=args.skip_reranker)
+    result = evaluate(
+        use_full_pipeline=args.full_pipeline,
+        skip_reranker=args.skip_reranker,
+        sample_n=args.sample,
+    )
     if result:
         report_path = DATA_DIR / "evaluation_report.json"
         if args.full_pipeline and args.skip_reranker:
