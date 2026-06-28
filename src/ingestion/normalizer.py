@@ -43,15 +43,18 @@ def normalize_redrob(raw: dict[str, Any], source: str = "redrob") -> Profile:
     prof = raw.get("profile", {})
 
     city_state = prof.get("location", "") or ""
-    city_parts = city_state.split(",")
+    city_parts = city_state.split(",") if city_state else []
     city = city_parts[0].strip() if city_parts else None
     state = city_parts[1].strip() if len(city_parts) > 1 else None
+
+    preferred_work_mode = raw.get("redrob_signals", {}).get("preferred_work_mode", "")
+    is_remote_ok = preferred_work_mode in ("remote", "flexible", "hybrid")
 
     location = Location(
         city=city or None,
         state=state or None,
         country=prof.get("country", "India"),
-        is_remote_ok=False,
+        is_remote_ok=is_remote_ok,
     )
 
     personal = PersonalInfo(

@@ -206,6 +206,18 @@ def test_normalizer_redrob():
     assert profile.signals.certifications[0] == "AWS Certified Solutions Architect"
     assert "English" in profile.personal.languages_spoken
     assert profile.personal.native_language == "English"
+    assert profile.personal.location.is_remote_ok is False
+
+
+def test_normalizer_redrob_remote():
+    for mode, expected in [("remote", True), ("flexible", True), ("hybrid", True), ("onsite", False), (None, False)]:
+        raw = {
+            "candidate_id": "r-remote",
+            "profile": {"anonymized_name": "Test User"},
+            "redrob_signals": {"preferred_work_mode": mode} if mode else {}
+        }
+        profile = normalize_redrob(raw)
+        assert profile.personal.location.is_remote_ok is expected
 
 
 def test_normalizer_redrob_minimal():
@@ -215,6 +227,7 @@ def test_normalizer_redrob_minimal():
     assert profile.personal.name == "Raj"
     assert profile.professional.total_experience_years is None
     assert profile.personal.location.city is None
+    assert profile.personal.location.is_remote_ok is False
 
 
 def test_raw_text_matches_prd_spec():

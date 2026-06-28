@@ -217,6 +217,7 @@ class QueryFilters(BaseModel):
 class ParsedQuery(BaseModel):
     required_skills: list[RequiredSkill] = Field(default_factory=list)
     preferred_skills: list[PreferredSkill] = Field(default_factory=list)
+    subskills: dict[str, list[str]] = Field(default_factory=dict)
     experience: ExperienceRequirements = Field(default_factory=ExperienceRequirements)
     location: LocationRequirements = Field(default_factory=LocationRequirements)
     education: EducationRequirements = Field(default_factory=EducationRequirements)

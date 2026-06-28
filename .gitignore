@@ -69,3 +69,6 @@ graphify-out/
 
 # Hermes AI coding assistant
 .hermes/
+
+# Comprehensive documentation (auto-generated)
+CODEX.md

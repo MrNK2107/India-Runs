@@ -210,7 +210,7 @@ def parse_query(text: str) -> ParsedQuery:
         max_years=float(exp_max) if exp_max else None,
     )
 
-    loc = LocationRequirements(city=city or "")
+    loc = LocationRequirements(city=city or "", remote_ok="remote" in lower)
 
     return ParsedQuery(
         required_skills=required_skills,

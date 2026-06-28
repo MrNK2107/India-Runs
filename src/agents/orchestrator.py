@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -41,6 +42,7 @@ class AgentState(TypedDict):
     listwise_ranked: bool
     top_k: int
     filters: dict[str, Any] | None
+    rationales: list[dict[str, Any]] | None
 
 
 _SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\s+", re.IGNORECASE)
@@ -183,13 +185,14 @@ class Orchestrator:
         use_turbo: bool = False,
         top_k: int = 50,
         filters: SearchFilters | None = None,
+        parsed_query: ParsedQuery | None = None,
     ) -> SearchResponse:
         if use_turbo:
-            return await self._turbo_run(raw_query, slider_weights, top_k, filters)
+            return await self._turbo_run(raw_query, slider_weights, top_k, filters, parsed_query)
 
         initial_state: AgentState = {
             "raw_query": raw_query,
-            "parsed_query": None,
+            "parsed_query": parsed_query.model_dump() if parsed_query else None,
             "results": [],
             "evaluations": None,
             "replan_count": 0,
@@ -202,6 +205,7 @@ class Orchestrator:
             "listwise_ranked": False,
             "top_k": top_k,
             "filters": filters.model_dump() if filters else None,
+            "rationales": None,
         }
         final_state: AgentState = await self.compiled_graph.ainvoke(initial_state)  # type: ignore[assignment]
         return self._build_response(final_state)
@@ -211,8 +215,9 @@ class Orchestrator:
         slider_weights: dict[str, float] | None = None,
         top_k: int = 50,
         filters: SearchFilters | None = None,
+        parsed_query: ParsedQuery | None = None,
     ) -> SearchResponse:
-        parsed = _parse_query_text(raw_query)
+        parsed = parsed_query or _parse_query_text(raw_query)
         if filters:
             if filters.location:
                 parsed.location.city = filters.location
@@ -269,14 +274,17 @@ class Orchestrator:
             ),
         )
 
-    async def _plan_node(self, state: AgentState    ) -> dict[str, Any]:
+    async def _plan_node(self, state: AgentState) -> dict[str, Any]:
         query = state["raw_query"]
+        parsed_dict = state.get("parsed_query")
         if state["replan_count"] > 0 and state["evaluations"]:
             feedback = ""
             if isinstance(state["evaluations"], dict):
                 feedback = state["evaluations"].get("feedback", "")
-            previous_params = state.get("parsed_query") or {}
+            previous_params = parsed_dict or {}
             parsed = await self.planner.replan(query, previous_params, feedback)
+        elif parsed_dict:
+            parsed = ParsedQuery.model_validate(parsed_dict, strict=False)
         else:
             parsed = await self.planner.plan(query)
 
@@ -353,8 +361,13 @@ class Orchestrator:
         take_top = min(20, len(match_results))
         top_candidates = match_results[:take_top]
 
+        query = state.get("raw_query", "")
+        parsed_dict = state.get("parsed_query")
+        if parsed_dict and parsed_dict.get("original_query"):
+            query = parsed_dict["original_query"]
+
         ranked = await self.listwise_ranker.arank(
-            top_candidates, anonymized_profiles=anonymized_profiles
+            top_candidates, query=query, anonymized_profiles=anonymized_profiles
         )
         rank_map = {pid: merit for pid, merit in ranked}
 
@@ -407,13 +420,48 @@ class Orchestrator:
         if not results_raw:
             return {"should_continue": False}
 
-        rationales = []
+        parsed_dict = state.get("parsed_query") or {}
+
+        # Fetch profiles for the candidates
+        profiles: dict[str, Any] = {}
         for r in results_raw[:20]:
-            if isinstance(r, dict):
-                match_result = _dict_to_match_result(r)
+            pid = r.get("profile_id", "") if isinstance(r, dict) else r.profile_id
+            if pid and hasattr(self.executor, "profile_store"):
+                profile = self.executor.profile_store.get(pid)
+                if profile is not None:
+                    profiles[pid] = profile
+
+        # Generate rationales concurrently (up to 20)
+        tasks = []
+        candidates_to_generate = []
+        for r in results_raw[:20]:
+            match_result = _dict_to_match_result(r) if isinstance(r, dict) else r
+            pid = match_result.profile_id
+            profile = profiles.get(pid)
+            if profile is not None:
+                candidates_to_generate.append((pid, match_result))
+                tasks.append(
+                    self.rationale_gen.generate(match_result, profile, parsed_dict)
+                )
+
+        rationales_resolved = await asyncio.gather(*tasks)
+
+        rationales = []
+        for (pid, match_result), rationale in zip(candidates_to_generate, rationales_resolved):
+            rationales.append({
+                "profile_id": pid,
+                "rationale": rationale.model_dump() if hasattr(rationale, "model_dump") else {},
+            })
+
+        # Add template-based fallback for other candidates in results_raw[:20] that had no profile
+        processed_pids = {pid for pid, _ in candidates_to_generate}
+        for r in results_raw[:20]:
+            pid = r.get("profile_id", "") if isinstance(r, dict) else r.profile_id
+            if pid not in processed_pids:
+                match_result = _dict_to_match_result(r) if isinstance(r, dict) else r
                 rationale = self.rationale_gen._template_rationale(match_result, None)
                 rationales.append({
-                    "profile_id": r.get("profile_id", ""),
+                    "profile_id": pid,
                     "rationale": rationale.model_dump() if hasattr(rationale, "model_dump") else {},
                 })
 
@@ -423,10 +471,42 @@ class Orchestrator:
         results_raw = state.get("results", [])
         items: list[SearchResultItem] = []
 
+        # Build a mapping from profile_id to the pre-generated rationale
+        rationales_map = {}
+        for item in state.get("rationales") or []:
+            pid = item.get("profile_id")
+            rat = item.get("rationale")
+            if pid and rat:
+                rationales_map[pid] = rat
+
         for i, r in enumerate(results_raw[:100], start=1):
             if isinstance(r, dict):
                 match_result = _dict_to_match_result(r, rank_override=i)
-                rationale = self.rationale_gen._template_rationale(match_result, None)
+                pid = match_result.profile_id
+
+                # Check if we have pre-generated rationale
+                if pid in rationales_map:
+                    rat_data = rationales_map[pid]
+                    from src.core.models import MatchRecommendation, SkillDetail
+                    # Reconstruct Rationale object
+                    rationale = Rationale(
+                        summary=rat_data.get("summary", ""),
+                        strengths=rat_data.get("strengths", []),
+                        gaps=rat_data.get("gaps", []),
+                        skill_details=[
+                            SkillDetail(**sd) if isinstance(sd, dict) else sd
+                            for sd in rat_data.get("skill_details", [])
+                        ],
+                        experience_analysis=rat_data.get("experience_analysis", ""),
+                        recommendation=MatchRecommendation(rat_data.get("recommendation", "good_match")),
+                    )
+                else:
+                    # Fallback to template rationale with profile if profile is available
+                    profile = None
+                    if hasattr(self.executor, "profile_store"):
+                        profile = self.executor.profile_store.get(pid)
+                    rationale = self.rationale_gen._template_rationale(match_result, profile)
+
                 items.append(
                     SearchResultItem(
                         rank=i,
@@ -439,14 +519,7 @@ class Orchestrator:
                         scores=match_result.scores,
                         matched_skills=match_result.matched_skills,
                         missing_skills=match_result.missing_skills,
-                        rationale=Rationale(
-                            summary=rationale.summary,
-                            strengths=rationale.strengths,
-                            gaps=rationale.gaps,
-                            skill_details=rationale.skill_details,
-                            experience_analysis=rationale.experience_analysis,
-                            recommendation=rationale.recommendation,
-                        ),
+                        rationale=rationale,
                     )
                 )
 

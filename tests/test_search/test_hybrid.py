@@ -102,3 +102,12 @@ def test_filters_experience(sample_profile):
     assert sf.passes(sample_profile)
     sf2 = SearchFilter(SearchFilters(min_experience_years=10))
     assert not sf2.passes(sample_profile)
+
+
+def test_filters_remote(sample_profile):
+    from src.core.models import SearchFilters
+    sf = SearchFilter(SearchFilters(remote_ok=True))
+    assert not sf.passes(sample_profile)
+
+    sample_profile.personal.location.is_remote_ok = True
+    assert sf.passes(sample_profile)

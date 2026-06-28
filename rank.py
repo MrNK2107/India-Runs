@@ -34,20 +34,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.agents.executor import ExecutorAgent
 from src.agents.orchestrator import Orchestrator
-from src.agents.planner import PlannerAgent
-from src.agents.reflector import ReflectorAgent
-from src.core.config import DATA_DIR
+from src.core.config import DATA_DIR, build_orchestrator
 from src.core.models import Profile
 from src.core.profile_store import ProfileStore
-from src.language.multilingual import MultilingualEmbedder
 from src.matching.behavioral_scorer import (
     detect_honeypot,
 )
-from src.matching.scorer import CandidateScorer
-from src.search.bm25_search import BM25Search
-from src.search.hybrid import HybridSearch
-from src.search.reranker import CrossEncoderReranker
-from src.search.vector_search import VectorSearch
 
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
 logger = logging.getLogger(__name__)
@@ -108,41 +100,20 @@ TIER2_COMPANIES = {"infosys", "tcs", "wipro", "hcl", "tech mahindra", "cognizant
 
 
 def load_search_system() -> tuple:
-    """Load all search components with cross-encoder reranking."""
+    """Load all search components via shared build_orchestrator."""
     indexes_dir = DATA_DIR / "indexes"
+    faiss_path = indexes_dir / "faiss_index.bin"
+    id_map_path = indexes_dir / "faiss_id_map.json"
+    bm25_path = indexes_dir / "bm25_index.pkl"
 
-    logger.info("Loading embedder...")
-    embedder = MultilingualEmbedder()
-    _ = embedder.model  # Force eager init
-
-    logger.info("Loading vector search...")
-    vector_search = VectorSearch()
-    vector_search.load(
-        indexes_dir / "faiss_index.bin",
-        indexes_dir / "faiss_id_map.json",
+    orchestrator, vector_search, profiles = build_orchestrator(
+        faiss_path=faiss_path,
+        id_map_path=id_map_path,
+        bm25_path=bm25_path,
     )
 
-    logger.info("Loading BM25 search...")
-    bm25_search = BM25Search()
-    bm25_search.load(indexes_dir / "bm25_index.pkl")
-
-    logger.info("Building hybrid search...")
-    hybrid_search = HybridSearch(vector_search, bm25_search, embedder)
-
-    logger.info("Loading cross-encoder reranker...")
-    reranker = CrossEncoderReranker(timeout_ms=0)
-
-    logger.info("Loading scorer...")
-    scorer = CandidateScorer()
-
-    logger.info("Loading profiles...")
-    profiles = ProfileStore()
-    offset_path = indexes_dir / "offset_index.json"
-    if offset_path.exists():
-        profiles.load_offset_index(offset_path)
-        logger.info(f"Loaded offset index ({len(profiles._offset_index)} entries)")
-
-    return hybrid_search, reranker, scorer, profiles
+    logger.info(f"Loaded offset index ({len(profiles._offset_index)} entries)")
+    return orchestrator, profiles
 
 
 def _compute_profile_summary(profile: Profile) -> str:
@@ -332,82 +303,71 @@ async def run_pipeline(profiles: ProfileStore, executor: ExecutorAgent,
     return list(all_candidates.values())
 
 
+def _score_profile(profile: Profile, pid: str) -> dict:
+    """Score a single unmatched profile using multi-signal evaluation."""
+    exp = profile.professional.total_experience_years if profile.professional else 0
+    title = profile.professional.current_title if profile.professional else "N/A"
+    company = profile.professional.current_company if profile.professional else "N/A"
+
+    honeypot_reason = detect_honeypot(profile)
+    honeypot_penalty = 0.15 if honeypot_reason else 1.0
+
+    base_score = 0.15
+    if exp:
+        base_score += min(0.20, exp / 30.0 * 0.20)
+    if title and title != "N/A":
+        base_score += 0.04
+    if company and company != "N/A":
+        base_score += 0.03
+    if company and company.lower() in TIER1_COMPANIES:
+        base_score += 0.05
+    elif company and company.lower() in TIER2_COMPANIES:
+        base_score += 0.02
+    if profile.skills:
+        base_score += min(0.10, len(profile.skills) / 50.0 * 0.10)
+    if profile.education:
+        base_score += 0.03
+
+    signals = profile.signals
+    if signals.profile_completeness_score:
+        base_score += min(0.05, signals.profile_completeness_score / 100.0 * 0.05)
+    if signals.open_to_work:
+        base_score += 0.03
+    if signals.verified_email or signals.verified_phone:
+        base_score += 0.02
+    if signals.github_activity_score and signals.github_activity_score > 10:
+        base_score += 0.02
+    if signals.saved_by_recruiters_30d and signals.saved_by_recruiters_30d > 5:
+        base_score += 0.02
+    if signals.recruiter_response_rate and signals.recruiter_response_rate > 0.5:
+        base_score += 0.02
+    if signals.interview_completion_rate and signals.interview_completion_rate > 0.5:
+        base_score += 0.02
+
+    base_score *= honeypot_penalty
+
+    return {
+        "candidate_id": pid,
+        "score": round(min(0.55, base_score), 4),
+        "matched_skills": [],
+        "missing_skills": [],
+        "title": title,
+        "company": company,
+        "query": "",
+        "experience_years": exp,
+        "profile": profile,
+    }
+
+
 def _fill_remaining(all_profiles: dict[str, Profile],
                      existing_pids: set[str],
                      location_map: dict[str, str]) -> list[dict]:
-    """Fill remaining slots with unmatched profiles, using multi-signal scoring."""
-    remaining = []
-    for pid in all_profiles:
-        if pid in existing_pids:
-            continue
-        profile = all_profiles[pid]
-        exp = profile.professional.total_experience_years if profile.professional else 0
-        title = profile.professional.current_title if profile.professional else "N/A"
-        company = profile.professional.current_company if profile.professional else "N/A"
-
-        # Honeypot penalty
-        honeypot_reason = detect_honeypot(profile)
-        honeypot_penalty = 0.15 if honeypot_reason else 1.0
-
-        # Multi-signal base score
-        base_score = 0.15
-
-        # Experience (up to 0.20 for 30+ years)
-        if exp:
-            base_score += min(0.20, exp / 30.0 * 0.20)
-
-        # Current role signal
-        if title and title != "N/A":
-            base_score += 0.04
-        if company and company != "N/A":
-            base_score += 0.03
-        # Company prestige
-        if company and company.lower() in TIER1_COMPANIES:
-            base_score += 0.05
-        elif company and company.lower() in TIER2_COMPANIES:
-            base_score += 0.02
-
-        # Skill count (a proxy for breadth)
-        if profile.skills:
-            skill_count = len(profile.skills)
-            base_score += min(0.10, skill_count / 50.0 * 0.10)
-
-        # Education
-        if profile.education:
-            base_score += 0.03
-
-        # Behavioral signals
-        signals = profile.signals
-        if signals.profile_completeness_score:
-            base_score += min(0.05, signals.profile_completeness_score / 100.0 * 0.05)
-        if signals.open_to_work:
-            base_score += 0.03
-        if signals.verified_email or signals.verified_phone:
-            base_score += 0.02
-        if signals.github_activity_score and signals.github_activity_score > 10:
-            base_score += 0.02
-        if signals.saved_by_recruiters_30d and signals.saved_by_recruiters_30d > 5:
-            base_score += 0.02
-        if signals.recruiter_response_rate and signals.recruiter_response_rate > 0.5:
-            base_score += 0.02
-        if signals.interview_completion_rate and signals.interview_completion_rate > 0.5:
-            base_score += 0.02
-
-        base_score *= honeypot_penalty
-
-        remaining.append({
-            "candidate_id": pid,
-            "score": round(min(0.55, base_score), 4),
-            "matched_skills": [],
-            "missing_skills": [],
-            "title": title,
-            "company": company,
-            "query": "",
-            "experience_years": exp,
-            "profile": profile,
-        })
-
-    return remaining
+    """Fill remaining slots with unmatched profiles from pre-loaded dict."""
+    return [
+        _score_profile(all_profiles[pid], pid)
+        for pid in all_profiles
+        if pid not in existing_pids
+    ]
 
 
 def _fill_from_full_index(
@@ -421,7 +381,6 @@ def _fill_from_full_index(
     import random
     random.seed(42)
 
-    # Start from a random offset to get variety each run
     available = [pid for pid in all_pids if pid not in existing_pids and pid not in honeypot_pids]
     random.shuffle(available)
 
@@ -432,58 +391,7 @@ def _fill_from_full_index(
         profile = profiles.get(pid)
         if profile is None:
             continue
-
-        exp = profile.professional.total_experience_years if profile.professional else 0
-        title = profile.professional.current_title if profile.professional else "N/A"
-        company = profile.professional.current_company if profile.professional else "N/A"
-
-        honeypot_reason = detect_honeypot(profile)
-        honeypot_penalty = 0.15 if honeypot_reason else 1.0
-
-        base_score = 0.15
-        if exp:
-            base_score += min(0.20, exp / 30.0 * 0.20)
-        if title and title != "N/A":
-            base_score += 0.04
-        if company and company != "N/A":
-            base_score += 0.03
-        if company and company.lower() in TIER1_COMPANIES:
-            base_score += 0.05
-        elif company and company.lower() in TIER2_COMPANIES:
-            base_score += 0.02
-        if profile.skills:
-            base_score += min(0.10, len(profile.skills) / 50.0 * 0.10)
-        if profile.education:
-            base_score += 0.03
-        signals = profile.signals
-        if signals.profile_completeness_score:
-            base_score += min(0.05, signals.profile_completeness_score / 100.0 * 0.05)
-        if signals.open_to_work:
-            base_score += 0.03
-        if signals.verified_email or signals.verified_phone:
-            base_score += 0.02
-        if signals.github_activity_score and signals.github_activity_score > 10:
-            base_score += 0.02
-        if signals.saved_by_recruiters_30d and signals.saved_by_recruiters_30d > 5:
-            base_score += 0.02
-        if signals.recruiter_response_rate and signals.recruiter_response_rate > 0.5:
-            base_score += 0.02
-        if signals.interview_completion_rate and signals.interview_completion_rate > 0.5:
-            base_score += 0.02
-
-        base_score *= honeypot_penalty
-
-        remaining.append({
-            "candidate_id": pid,
-            "score": round(min(0.55, base_score), 4),
-            "matched_skills": [],
-            "missing_skills": [],
-            "title": title,
-            "company": company,
-            "query": "",
-            "experience_years": exp,
-            "profile": profile,
-        })
+        remaining.append(_score_profile(profile, pid))
 
     return remaining
 
@@ -702,12 +610,12 @@ def _check_llm_config() -> None:
         return
 
     print(file=sys.stderr)
-    print(f"╔══════════════════════════════════════════════════════════╗", file=sys.stderr)
+    print("╔══════════════════════════════════════════════════════════╗", file=sys.stderr)
     print(f"║  No valid {key_env} found in .env                     ║", file=sys.stderr)
-    print(f"║                                                          ║", file=sys.stderr)
-    print(f"║  The full agentic pipeline needs an LLM.                 ║", file=sys.stderr)
-    print(f"║  Enter your key below, or press Enter for turbo mode.    ║", file=sys.stderr)
-    print(f"╚══════════════════════════════════════════════════════════╝", file=sys.stderr)
+    print("║                                                          ║", file=sys.stderr)
+    print("║  The full agentic pipeline needs an LLM.                 ║", file=sys.stderr)
+    print("║  Enter your key below, or press Enter for turbo mode.    ║", file=sys.stderr)
+    print("╚══════════════════════════════════════════════════════════╝", file=sys.stderr)
     key = input(f"{key_env}: ").strip()
     if key:
         os.environ[key_env] = key
@@ -746,8 +654,8 @@ async def main():
     t0 = time.time()
     print("Loading search system...", file=sys.stderr)
 
-    hybrid_search, reranker, scorer, profiles = load_search_system()
-    executor = ExecutorAgent(hybrid_search, reranker, scorer, profiles)
+    orchestrator, profiles = load_search_system()
+    executor = orchestrator.executor
     all_pids = profiles.get_all_pids()
 
     print(f"Total profiles available: {len(all_pids)}", file=sys.stderr)
@@ -758,10 +666,6 @@ async def main():
         return
 
     _check_llm_config()
-
-    planner = PlannerAgent()
-    reflector = ReflectorAgent()
-    orchestrator = Orchestrator(planner, executor, reflector)
 
     await _run_interactive(orchestrator, profiles, all_pids, args.out, query=args.query)
 

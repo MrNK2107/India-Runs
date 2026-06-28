@@ -28,7 +28,8 @@ from src.search.reranker import CrossEncoderReranker
 
 
 def _match_skills_detail(
-    required_names: list[str], profile_skills: list[Skill], raw_text: str | None = None,
+    required_names: list[str], profile_skills: list[Skill],
+    raw_text: str | None = None, subskills: dict[str, list[str]] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Match skills using ONLY structured skills array.
 
@@ -38,7 +39,8 @@ def _match_skills_detail(
     missing: list[str] = []
     _matcher = SkillMatcher(similarity_threshold=0.85)
     for rn in required_names:
-        result = _matcher.find_best_match(rn, profile_skills)
+        rn_subskills = subskills.get(rn) if subskills else None
+        result = _matcher.find_best_match(rn, profile_skills, rn_subskills)
         if result is not None:
             matched.append(rn)
         else:
@@ -58,7 +60,7 @@ class ExecutorAgent:
     ) -> None:
         self.hybrid_search = hybrid_search
         self.reranker = reranker
-        self.scorer = scorer
+        self.scorer = scorer if scorer is not None else CandidateScorer()
         self.profile_store = profiles
         self._rerank_top_k = 20
 
@@ -71,14 +73,29 @@ class ExecutorAgent:
     ) -> list[MatchResult]:
         search_text = self._query_to_search_text(parsed)
 
+        # Check if there are active filters to decide retrieval size
+        has_filters = False
+        if parsed.location:
+            if parsed.location.city and parsed.location.city.strip():
+                has_filters = True
+            if parsed.location.remote_ok:
+                has_filters = True
+        if parsed.experience:
+            if parsed.experience.min_years is not None or parsed.experience.max_years is not None:
+                has_filters = True
+        if parsed.filters:
+            if parsed.filters.exclude_companies or parsed.filters.include_companies:
+                has_filters = True
+
+        retrieval_k = max(1000, top_k * 10) if has_filters else top_k * 2
+
         query_vec = self.hybrid_search.embedder.embed_query(search_text)
-        vector_raw = self.hybrid_search.vector_search.search(query_vec, top_k=top_k * 2)
-        bm25_raw = self.hybrid_search.bm25_search.search(search_text, top_k=top_k * 2)
+        vector_raw = self.hybrid_search.vector_search.search(query_vec, top_k=retrieval_k)
+        bm25_raw = self.hybrid_search.bm25_search.search(search_text, top_k=retrieval_k)
 
         hybrid_results = self.hybrid_search.reciprocal_rank_fusion(
             [vector_raw, bm25_raw], k=self.hybrid_search.rrf_k
         )
-        rrf_scores: dict[str, float] = dict(hybrid_results)
 
         vec_scores: dict[str, float] = {
             pid: self._norm_vec_score(s) for pid, s in vector_raw
@@ -87,7 +104,8 @@ class ExecutorAgent:
             pid: self._norm_bm25_score(s, bm25_raw) for pid, s in bm25_raw
         }
 
-        filtered = self._apply_filters(hybrid_results, parsed)
+        fetch_top_k = max(self._rerank_top_k, top_k) if not skip_reranker else top_k * 2
+        filtered = self._apply_filters(hybrid_results, parsed, limit=fetch_top_k)
 
         local_profile_cache: dict[str, Profile] = {}
         def _get_profile(pid: str) -> Profile | None:
@@ -98,7 +116,6 @@ class ExecutorAgent:
                 local_profile_cache[pid] = p
             return p
 
-        fetch_top_k = self._rerank_top_k if not skip_reranker else top_k * 2
         pids_to_fetch = [pid for pid, _ in filtered[:fetch_top_k]]
         loop = asyncio.get_running_loop()
         num_fetch_workers = min(16, len(pids_to_fetch) or 1)
@@ -122,7 +139,7 @@ class ExecutorAgent:
                     candidate_scores = [(pid, s / max_score) for pid, s in candidate_scores]
         else:
             rerank_candidates: list[tuple[str, str, float]] = []
-            for pid, score in filtered[: self._rerank_top_k]:
+            for pid, score in filtered[:fetch_top_k]:
                 profile = local_profile_cache.get(pid)
                 if profile is not None:
                     rerank_candidates.append((pid, profile.raw_text[:2000], score))
@@ -217,8 +234,8 @@ class ExecutorAgent:
             profile.professional.total_experience_years if profile.professional else None,
         )
 
-    @staticmethod
     def _score_single_candidate(
+        self,
         pid: str,
         rerank_score: float | None,
         profile: Profile,
@@ -230,8 +247,9 @@ class ExecutorAgent:
         all_req: list[str],
         skip_reranker: bool = False,
     ) -> MatchResult | None:
+        subskills = parsed.subskills if hasattr(parsed, "subskills") else None
         matched_skills_list, missing_skills_list = _match_skills_detail(
-            all_req, profile.skills, profile.raw_text,
+            all_req, profile.skills, profile.raw_text, subskills,
         )
         skill_overlap = len(matched_skills_list) / len(all_req) if all_req else 1.0
 
@@ -247,11 +265,10 @@ class ExecutorAgent:
             skill_overlap, exp_match, all_req,
         )
 
-        scorer = CandidateScorer()
-        match_scores = scorer.compute_overall(scores_dict, slider_weights)
+        match_scores = self.scorer.compute_overall(scores_dict, slider_weights)
 
         req_only_matched, req_only_missing = _match_skills_detail(
-            req_names, profile.skills, profile.raw_text,
+            req_names, profile.skills, profile.raw_text, subskills,
         )
 
         name, title, company, city, exp_years = ExecutorAgent._extract_candidate_info(profile, pid)
@@ -286,7 +303,10 @@ class ExecutorAgent:
         return " ".join(parts) if parts else "software engineer"
 
     def _apply_filters(
-        self, results: list[tuple[str, float]], parsed: ParsedQuery,
+        self,
+        results: list[tuple[str, float]],
+        parsed: ParsedQuery,
+        limit: int | None = None,
     ) -> list[tuple[str, float]]:
         filters = SearchFilters(
             location=parsed.location.city,
@@ -305,5 +325,8 @@ class ExecutorAgent:
                 filtered.append((pid, score))
             elif filter_obj.passes(profile):
                 filtered.append((pid, score))
+
+            if limit is not None and len(filtered) >= limit:
+                break
 
         return filtered

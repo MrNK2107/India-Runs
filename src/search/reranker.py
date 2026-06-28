@@ -65,7 +65,11 @@ class CrossEncoderReranker:
                 os.environ["HF_HUB_OFFLINE"] = old_offline
                 os.environ["TRANSFORMERS_OFFLINE"] = old_offline
         except Exception as err:
-            logger.warning("Failed to load cross-encoder model: %s", err)
+            logger.warning(
+                "Failed to load cross-encoder model '%s': %s. "
+                "Reranker will fall back to hybrid RRF scores.",
+                self.model_name, err,
+            )
             self._model_loaded = True  # don't retry
             self._model = None
 
@@ -83,14 +87,12 @@ class CrossEncoderReranker:
         if not candidates:
             return []
 
-        # Wait briefly for background model loading to complete
         if self._model is None and not self._model_loaded:
             import threading
-            # Poll for up to 10 seconds for model to load
-            for _ in range(50):
+            for _ in range(75):
                 if self._model is not None or self._model_loaded:
                     break
-                threading.Event().wait(0.2)
+                threading.Event().wait(0.4)
 
         model = self._model
         if model is None:
@@ -133,10 +135,10 @@ class CrossEncoderReranker:
     def score_pair(self, query: str, document: str) -> float:  # type: ignore[return-value]
         if self._model is None and not self._model_loaded:
             import threading
-            for _ in range(50):
+            for _ in range(75):
                 if self._model is not None or self._model_loaded:
                     break
-                threading.Event().wait(0.2)
+                threading.Event().wait(0.4)
         model = self._model
         if model is None:
             return 0.5

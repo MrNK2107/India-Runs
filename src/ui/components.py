@@ -151,24 +151,19 @@ def create_score_radar_chart(scores: dict) -> str:
 
     labels = "".join(
         f'<text x="{cx + (r + 18) * math.cos(a):.1f}" y="{cy - (r + 18) * math.sin(a):.1f}" '
-        f'font-size="11" text-anchor="middle" fill="#374151">{dim}</text>'
+        f'font-size="11" text-anchor="middle" fill="var(--text-secondary)">{dim}</text>'
         for dim, a in zip(dims, angles)
-    )
-    grid_lines = "".join(
-        f'<polygon points="{cx + r * frac * math.cos(a):.1f},{cy - r * frac * math.sin(a):.1f} '
-        for frac in [0.25, 0.5, 0.75]
-        for a in angles
     )
     grid_lines = ""
     for frac in [0.25, 0.5, 0.75]:
         pts = " ".join(
             f"{cx + r * frac * math.cos(a):.1f},{cy - r * frac * math.sin(a):.1f}" for a in angles
         )
-        grid_lines += f'<polygon points="{pts}" fill="none" stroke="#e5e7eb" stroke-width="1"/>'
+        grid_lines += f'<polygon points="{pts}" fill="none" stroke="var(--border)" stroke-width="1"/>'
 
     return f"""
     <svg width="220" height="220" viewBox="0 0 220 220">
-        <polygon points="{outer_points}" fill="#f5f0e8" stroke="#e8e0d4" stroke-width="1"/>
+        <polygon points="{outer_points}" fill="var(--bg-input)" stroke="var(--border)" stroke-width="1"/>
         {grid_lines}
         <polygon points="{data_points}" fill="#d4c9e380" stroke="#b8a9c9" stroke-width="2"/>
         <circle cx="{cx}" cy="{cy}" r="2" fill="#b8a9c9"/>

@@ -54,6 +54,7 @@ class PlackettLuceRanker:
     async def arank(
         self,
         candidates: list[MatchResult],
+        query: str | None = None,
         anonymized_profiles: dict[str, dict] | None = None,
     ) -> list[tuple[str, float]]:
         """Async rank candidates by Plackett-Luce merit score.
@@ -77,7 +78,7 @@ class PlackettLuceRanker:
 
             for group in groups:
                 partial_ranking = await self._judge_group_async(
-                    group, anonymized_profiles
+                    group, query, anonymized_profiles
                 )
                 if partial_ranking:
                     all_rankings.append(partial_ranking)
@@ -111,6 +112,7 @@ class PlackettLuceRanker:
     async def _judge_group_async(
         self,
         group: list[MatchResult],
+        query: str | None = None,
         anonymized_profiles: dict[str, dict] | None = None,
     ) -> list[int] | None:
         """Ask LLM to rank a group of candidates listwise (async).
@@ -141,8 +143,9 @@ class PlackettLuceRanker:
                 )
             candidate_descriptions.append(desc)
 
+        job_context = f"for the job query: '{query}'" if query else "for a job"
         prompt = (
-            "You are evaluating candidates for a job. Rank the following "
+            f"You are evaluating candidates {job_context}. Rank the following "
             f"{len(group)} candidates from best fit to worst fit.\n\n"
             + "\n".join(candidate_descriptions)
             + "\n\nOutput ONLY a comma-separated list of candidate indices "
@@ -197,22 +200,22 @@ class PlackettLuceRanker:
         for _iteration in range(self.max_em_iterations):
             old_gamma = gamma.copy()
 
+            numerators = np.zeros(n)
+            denominators = np.zeros(n) + 1e-10
+
+            for ranking in rankings:
+                m = len(ranking)
+                for j in range(m - 1):
+                    chosen = ranking[j]
+                    numerators[chosen] += 1.0
+
+                    sum_gamma_remaining = sum(gamma[r] for r in ranking[j:])
+                    for r in ranking[j:]:
+                        denominators[r] += 1.0 / (sum_gamma_remaining + 1e-10)
+
             for i in range(n):
-                numerator = 0.0
-                denominator = 1e-10
-
-                for ranking in rankings:
-                    if i not in ranking:
-                        continue
-                    rank_of_i = ranking.index(i)
-                    predecessors = ranking[:rank_of_i]
-                    denominator += 1.0 / (
-                        sum(gamma[j] for j in predecessors) + gamma[i] + 1e-10
-                    )
-                    numerator += 1.0
-
-                if numerator > 0:
-                    gamma[i] = numerator / denominator
+                if numerators[i] > 0:
+                    gamma[i] = numerators[i] / denominators[i]
                 else:
                     gamma[i] = 1e-6
 
