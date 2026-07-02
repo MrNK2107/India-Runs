@@ -18,7 +18,7 @@ team_members:
 # ── Code and reproducibility ─────────────────────────────────────────────
 github_repo: "https://github.com/MrNK2107/India-Runs"
 
-sandbox_link: "https://huggingface.co/spaces/MrNK2107/redrob-ranker"
+sandbox_link: "https://huggingface.co/spaces/MrPhantom07/redrob-ranker"
 # Deploy steps:
 #   1. Create Space at https://huggingface.co/spaces → SDK: Docker
 #   2. Name: redrob-ranker, CPU basic (free)
