@@ -7,10 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc build-essential && \
     rm -rf /var/lib/apt/lists/*
 
+# Install dependencies first (cached layer)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[dev]"
+RUN mkdir -p src && pip install --no-cache-dir ".[dev]" && rm -rf src
 
+# Copy source code and complete the package installation
 COPY . .
+RUN pip install --no-cache-dir -e ".[dev]" --no-deps
 
 # Download spacy model
 RUN python -m spacy download en_core_web_sm
