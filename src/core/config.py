@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     llm_provider: str = "openai"
     openai_api_key: str = ""
+    openai_base_url: str = ""
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
@@ -122,11 +123,14 @@ def get_llm_client() -> Any:
 
     if provider == "openai":
         from pydantic import SecretStr
-        return ChatOpenAI(
+        kwargs = dict(
             model=settings.openai_model,
             api_key=SecretStr(settings.openai_api_key),
             temperature=0.1,
         )
+        if settings.openai_base_url:
+            kwargs["base_url"] = settings.openai_base_url
+        return ChatOpenAI(**kwargs)
     elif provider == "gemini":
         return ChatGoogleGenerativeAI(
             model=settings.gemini_model,

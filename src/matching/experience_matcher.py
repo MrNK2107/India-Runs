@@ -72,8 +72,17 @@ class ExperienceMatcher:
 
         max_past_score = max(past_scores) if past_scores else 0.0
 
-        # Current title is primary (70%), past experiences provide a fallback (30%).
-        return 0.7 * current_score + 0.3 * max_past_score
+        # Current title is primary (85%), past experiences provide a minor fallback (15%).
+        # Capped so that generic past 'Engineer' titles cannot override a clearly mismatched
+        # current title (e.g. a Frontend Engineer shouldn't be ranked high for a backend query).
+        combined = 0.85 * current_score + 0.15 * max_past_score
+
+        # Hard floor: if current title is clearly mismatched (score <= 0.1), cap the
+        # combined score so no amount of past experience can fully compensate.
+        if current_score <= 0.1:
+            combined = min(combined, 0.15)
+
+        return combined
 
     def _extract_role(self, query: str) -> str | None:
         query_lower = query.lower()
@@ -158,12 +167,12 @@ class ExperienceMatcher:
             "backend": {
                 "backend": 1.0, "fullstack": 0.9, "general_se": 0.8,
                 "architect": 0.7, "devops": 0.5, "data_eng": 0.6,
-                "frontend": 0.3, "qa": 0.2, "analyst": 0.2, "other": 0.2
+                "frontend": 0.05, "qa": 0.1, "analyst": 0.1, "other": 0.1
             },
             "frontend": {
                 "frontend": 1.0, "fullstack": 0.9, "general_se": 0.8,
-                "backend": 0.3, "architect": 0.6, "devops": 0.3,
-                "qa": 0.2, "analyst": 0.2, "other": 0.2
+                "backend": 0.05, "architect": 0.5, "devops": 0.2,
+                "qa": 0.1, "analyst": 0.1, "other": 0.1
             },
             "devops": {
                 "devops": 1.0, "general_se": 0.5, "fullstack": 0.4, "backend": 0.4,

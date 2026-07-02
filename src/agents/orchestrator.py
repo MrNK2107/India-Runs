@@ -294,6 +294,13 @@ class Orchestrator:
         else:
             parsed = await self.planner.plan(query)
 
+        # Preserve the original raw query on the ParsedQuery object.
+        # The LLM's JSON schema doesn't include original_query, so planner.plan()
+        # always returns with original_query="" — breaking title_match and role-type
+        # detection in _score_single_candidate for non-turbo mode.
+        if not parsed.original_query:
+            parsed.original_query = query
+
         # Merge filters from state if present
         f = state.get("filters")
         if f:
@@ -316,6 +323,7 @@ class Orchestrator:
 
         parsed_dict = parsed.model_dump() if hasattr(parsed, "model_dump") else {}
         return {"parsed_query": parsed_dict}
+
 
     async def _execute_node(self, state: AgentState) -> dict[str, Any]:
         parsed_dict = state.get("parsed_query") or {}

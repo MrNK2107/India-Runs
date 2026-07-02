@@ -26,6 +26,63 @@ from src.search.filters import SearchFilter
 from src.search.hybrid import HybridSearch
 from src.search.reranker import CrossEncoderReranker
 
+# Role-type → representative skills used when the query parser produces no explicit skills.
+_ROLE_SUBSKILLS: dict[str, list[str]] = {
+    "backend": [
+        "node.js", "nodejs", "express", "nestjs", "django", "flask", "fastapi",
+        "spring boot", "spring", "golang", "go", "java", "python",
+        "postgresql", "mysql", "mongodb", "redis", "graphql", "rest api",
+    ],
+    "frontend": [
+        "react", "reactjs", "vue", "angular", "javascript", "typescript",
+        "html", "css", "next.js", "nuxt", "svelte", "tailwind", "webpack", "vite",
+    ],
+    "fullstack": [
+        "react", "vue", "angular", "node.js", "nodejs", "javascript", "typescript",
+        "html", "css", "next.js", "sql", "nosql", "postgresql", "mongodb", "graphql",
+    ],
+    "devops": [
+        "ci/cd", "docker", "kubernetes", "k8s", "terraform", "jenkins", "ansible",
+        "aws", "prometheus", "grafana", "github actions", "argocd", "helm",
+    ],
+    "data science": [
+        "python", "pandas", "numpy", "scikit-learn", "statistics", "machine learning",
+        "sql", "tableau", "tensorflow", "pytorch",
+    ],
+    "data engineering": [
+        "python", "scala", "sql", "spark", "hadoop", "airflow", "kafka", "dbt",
+        "snowflake", "redshift", "bigquery", "etl",
+    ],
+    "ml": [
+        "python", "pytorch", "tensorflow", "scikit-learn", "deep learning", "keras",
+        "mlops", "nlp", "transformers", "llm",
+    ],
+    "mobile": [
+        "android", "ios", "flutter", "react native", "swift", "kotlin", "dart",
+    ],
+}
+
+# Ordered longest-first to avoid partial matches (e.g. "backend" before "back")
+_ROLE_KEYWORDS: list[tuple[str, str]] = [
+    ("full stack", "fullstack"), ("fullstack", "fullstack"),
+    ("back end", "backend"), ("backend", "backend"),
+    ("front end", "frontend"), ("frontend", "frontend"),
+    ("data engineer", "data engineering"), ("data science", "data science"),
+    ("machine learning", "ml"), ("ml engineer", "ml"),
+    ("devops", "devops"),
+    ("mobile", "mobile"),
+]
+
+
+def _detect_role_subskills(query: str) -> list[str]:
+    """If the query mentions a role type (e.g. 'backend engineer'), return representative
+    skills for that role to use in skill_match scoring. Returns empty list if no role found."""
+    lower = query.lower()
+    for keyword, role_key in _ROLE_KEYWORDS:
+        if keyword in lower:
+            return _ROLE_SUBSKILLS.get(role_key, [])
+    return []
+
 
 def _match_skills_detail(
     required_names: list[str], profile_skills: list[Skill],
@@ -248,10 +305,31 @@ class ExecutorAgent:
         skip_reranker: bool = False,
     ) -> MatchResult | None:
         subskills = parsed.subskills if hasattr(parsed, "subskills") else None
-        matched_skills_list, missing_skills_list = _match_skills_detail(
-            all_req, profile.skills, profile.raw_text, subskills,
+        original_query = parsed.original_query or ""
+
+        # When the query parser falls back to using the full original query as the
+        # single required skill (e.g. "backend engineer with 5 years experience"),
+        # no candidate's skill list will ever contain that phrase — skill_match
+        # becomes 0 for everyone and loses all discriminating power.
+        # Fix: detect the role type in the query and expand to representative skills
+        # so backend engineers actually get credit for node.js, django, etc.
+        role_subskills = _detect_role_subskills(original_query)
+        is_fallback = (
+            len(all_req) == 1
+            and all_req[0].lower().strip() == original_query.lower().strip()
         )
-        skill_overlap = len(matched_skills_list) / len(all_req) if all_req else 1.0
+        if role_subskills and is_fallback:
+            # Replace the fallback phrase with actual role skills for matching
+            effective_req = role_subskills
+            effective_subskills: dict[str, list[str]] = {}
+        else:
+            effective_req = list(all_req)
+            effective_subskills = dict(subskills) if subskills else {}
+
+        matched_skills_list, missing_skills_list = _match_skills_detail(
+            effective_req, profile.skills, profile.raw_text, effective_subskills,
+        )
+        skill_overlap = len(matched_skills_list) / len(effective_req) if effective_req else 1.0
 
         total_years = (
             profile.professional.total_experience_years
@@ -272,15 +350,22 @@ class ExecutorAgent:
 
         scores_dict = ExecutorAgent._prepare_scores_dict(
             pid, profile, vec_scores, bm25_scores, rerank_score,
-            skill_overlap, exp_match, all_req,
+            skill_overlap, exp_match, list(effective_req),
         )
 
         match_scores = self.scorer.compute_overall(scores_dict, slider_weights)
         match_scores.overall = max(0.0, min(1.0, match_scores.overall * title_match))
 
-        req_only_matched, req_only_missing = _match_skills_detail(
-            req_names, profile.skills, profile.raw_text, subskills,
-        )
+        # For display: show the actual backend/frontend skills that were matched/missed
+        if role_subskills and is_fallback:
+            req_only_matched = list(matched_skills_list)
+            req_only_missing = []  # Don't show the full-query phrase as a "missing skill"
+        else:
+            req_only_matched_l, req_only_missing_l = _match_skills_detail(
+                req_names, profile.skills, profile.raw_text, dict(subskills) if subskills else {},
+            )
+            req_only_matched = req_only_matched_l
+            req_only_missing = req_only_missing_l
 
         name, title, company, city, exp_years = ExecutorAgent._extract_candidate_info(profile, pid)
 
@@ -300,6 +385,17 @@ class ExecutorAgent:
         )
 
     def _query_to_search_text(self, parsed: ParsedQuery) -> str:
+        # Prefer original_query for retrieval: it's more natural for BM25/vector
+        # and avoids "skill fallback" strings like "backend engineer with 5 years experience"
+        # being broken into tokens that match the wrong candidates.
+        if parsed.original_query and parsed.original_query.strip():
+            base = parsed.original_query.strip()
+            # Append location if present so location-scoped queries still work
+            if parsed.location and parsed.location.city:
+                base = f"{base} {parsed.location.city}"
+            return base
+
+        # Fallback: reconstruct from parsed skill names
         parts: list[str] = []
         for rs in parsed.required_skills:
             parts.append(rs.name)

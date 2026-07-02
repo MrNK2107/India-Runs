@@ -1,0 +1,25 @@
+# Exclude large data (indexes rebuilt during Docker build)
+data/profiles/
+data/indexes/
+data/ground_truth/
+data/queries/
+data/models/
+
+# Exclude dev/CI artifacts
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.benchmarks/
+.understand-anything/
+.understand-output/
+graphify-out/
+
+# Exclude IDE and env files
+.git/
+.vscode/
+.idea/
+.env
+.env.local
+.DS_Store
+Thumbs.db

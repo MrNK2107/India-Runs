@@ -1,42 +1,84 @@
-repo_url: "https://github.com/MrNK2107/India-Runs"
-reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
-computation_time: "~8s CPU-only (16GB RAM, 8 cores, no GPU)"
-model_architecture: |
-  Multi-query hybrid search (FAISS + BM25) with cross-encoder reranking
-  and 10-dimension weighted scoring:
-    1. Cross-encoder semantic (25%) — ms-marco-MiniLM-L-6-v2
-    2. Skill match (18%) — fuzzy skill matching with aliases
-    3. Semantic similarity (15%) — paraphrase-multilingual-MiniLM-L12-v2
-    4. Behavioral signals (12%) — Redrob platform engagement signals
-    5. Keyword match (10%) — BM25 term overlap
-    6. Career trajectory (7%) — job hopping, consulting, progression
-    7. Experience match (8%) — total YOE against target band
-    8. Skill proficiency (5%) — depth beyond binary match
-    + Honeypot penalty (×0.15) for impossible profiles
+# ============================================================================
+# Redrob Hackathon — Submission Metadata
+# ============================================================================
 
-  Pipeline: 17 strategic queries across SWE, data/ML, cloud/DevOps,
-  mobile, QA, security, and leadership → cross-encoder reranks in context
-  → 10-dim scoring → best-score merge across queries → score-sort → export CSV.
+# ── Team identity ──────────────────────────────────────────────────────
+team_name: "Atlas"  # Used in leaderboard and announcements
 
-  Key differentiators:
-  - Cross-encoder (TF-IDF competitors can't match deep semantic understanding)
-  - Behavioral signals from Redrob platform (response rate, saved count,
-    profile completeness, verification, GitHub activity, interview rate)
-  - Career trajectory analysis (job hopping penalties, consulting detection,
-    title progression tracking)
-  - Skill proficiency scoring (not just "has skill" — but proficiency depth,
-    years used, peer endorsements)
-  - Honeypot detection (time-travel detection, skill density anomalies)
-reasoning_quality: |
-  Each candidate gets a unique reasoning string incorporating:
-  - Availability signals (open to work, notice period)
-  - Current role + company with tier ranking (top-tier product vs enterprise)
-  - Experience depth and career stage
-  - Matched skills with count
-  - Skill proficiency depth (expert/advanced counts)
-  - Behavioral signals (saved by recruiters, GitHub activity, responsiveness)
-  - Profile verification status
-  - Gaps and missing skills
-  - Education background
-  - Multiple narrative structures to avoid template feel
-ai_used: "Claude Code (Anthropic) for iterative development assistance. All search, scoring, and ranking logic is deterministic Python."
+primary_contact:
+  name: "Nikhil Choudhary"
+  email: "me@nikhilchoudhary.dev"
+  phone: "+91-XXXXXXXXXX"  # TODO: fill in
+
+team_members:
+  - name: "Nikhil Choudhary"
+    email: "me@nikhilchoudhary.dev"
+    role: "ML Engineer"
+
+# ── Code and reproducibility ─────────────────────────────────────────────
+github_repo: "https://github.com/MrNK2107/India-Runs"
+
+sandbox_link: "https://huggingface.co/spaces/MrNK2107/redrob-ranker"
+# Deploy steps:
+#   1. Create Space at https://huggingface.co/spaces → SDK: Docker
+#   2. Name: redrob-ranker, CPU basic (free)
+#   3. Add secrets in Space Settings → Repository secrets:
+#      - HF_HUB_OFFLINE=0
+#      - LLM_PROVIDER=openai
+#      - OPENAI_API_KEY=sk-or-v1-...  (your key)
+#      - OPENAI_BASE_URL=https://openrouter.ai/api/v1
+#      - OPENAI_MODEL=deepseek/deepseek-v4-flash-free
+#   4. git remote add space https://huggingface.co/spaces/MrNK2107/redrob-ranker
+#   5. git push space main
+#   The Dockerfile builds indexes from sample_500.jsonl automatically.
+
+reproduce_command: "python rank.py --batch --out submission.csv"
+# End-to-end on CPU with 16GB RAM, no network. Produces submission.csv with 100 rows.
+
+# ── Compute environment ─────────────────────────────────────────────────
+compute:
+  platform: "Local Windows 11 PC"
+  cpu_cores: 8                              # AMD Ryzen 7 8745HX, 8 physical cores
+  ram_gb: 16
+  python_version: "3.12.7"
+  os: "Windows 11"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false          # HF_HUB_OFFLINE=1, models cached locally
+  pre_computation_required: true
+  pre_computation_time_minutes: 15           # scripts/build_indexes.py (FAISS + BM25 + offset index)
+
+# ── AI tools declaration ──────────────────────────────────────────────────
+ai_tools_used:
+  - "Claude"
+
+ai_usage_summary: |
+  Used Claude (Anthropic) for iterative development, architecture discussion,
+  code review, and code generation throughout the project lifecycle. No
+  candidate data was fed to any LLM — all search, scoring, and ranking
+  logic is deterministic Python. Claude was used only for writing and
+  reviewing the codebase itself.
+
+# ── Approach summary ─────────────────────────────────────────────────────
+methodology_summary: |
+  Multi-query hybrid search engine with 10-dimension weighted scoring and
+  Plackett-Luce listwise ranking. Pipeline: 17 strategic job queries (SWE,
+  data/ML, cloud/DevOps, mobile, QA, security, product) are each expanded
+  with skill alias variants → FAISS vector search + BM25 keyword search fused
+  via Reciprocal Rank Fusion → cross-encoder reranking (ms-marco-MiniLM-L-6-v2)
+  → 10-dimension multi-signal scoring (semantic, skill match, behavioral,
+  career trajectory, experience, proficiency) → best-score merge across queries
+  → fill remaining slots from full index with base scoring (capped at 0.55) →
+  sort by score → export 100-row CSV with heterogenous reasoning strings.
+  Key differentiators: cross-encoder deep semantic understanding (not just
+  TF-IDF), Redrob behavioral signals (response rate, saved count, verification),
+  career trajectory analysis (job hopping penalties, title progression),
+  skill proficiency depth scoring, and honeypot detection (time-travel,
+  skill density anomalies). Runs in ~8 seconds on CPU, fully offline.
+
+# ── Declarations ─────────────────────────────────────────────────────────
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

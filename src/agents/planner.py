@@ -82,7 +82,12 @@ class PlannerAgent:
             content = _strip_json_fences(content)
             try:
                 parsed = json.loads(content)
-                return ParsedQuery(**parsed)
+                result = ParsedQuery(**parsed)
+                # Stamp the original raw query so downstream scoring (title_match,
+                # role-type detection) always has access to the user's intent.
+                if not result.original_query:
+                    result.original_query = raw_query
+                return result
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Planner LLM parse failed: {e}. Raw: {content[:200]}")
                 return self._fallback_parse(raw_query)
@@ -92,6 +97,7 @@ class PlannerAgent:
         except Exception as e:
             logger.warning(f"Planner LLM failed: {type(e).__name__}: {e}, using fallback")
             return self._fallback_parse(raw_query)
+
 
     async def replan(
         self, original_query: str, previous_params: dict[str, Any], feedback: str,
@@ -170,6 +176,7 @@ class PlannerAgent:
                 min_years=min_years, max_years=max_years, industry=industry,
             ),
             location=LocationRequirements(city=city, remote_ok="remote" in query.lower()),
+            original_query=query,
         )
 
     def _relax_params(self, params: dict) -> dict:

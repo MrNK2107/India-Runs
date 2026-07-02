@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections import OrderedDict
 from pathlib import Path
 from typing import TextIO
@@ -16,15 +17,29 @@ logger = logging.getLogger(__name__)
 
 class ProfileStore:
     def __init__(self, jsonl_path: Path | None = None, max_cache: int = 500) -> None:
-        self.path = jsonl_path or DATA_DIR / "profiles" / "candidates.jsonl"
         self._max_cache = max_cache
         self._offset_index: dict[str, int] = {}
         self._cache: OrderedDict[str, Profile] = OrderedDict()
         self._index_built = False
         self._sample_profiles: dict[str, Profile] = {}
+        self._file_handle: TextIO | None = None
+        # Auto-detect best available data source
+        # Respect PROFILES_PATH env var (set by Dockerfile for HF Spaces)
+        env_path = os.environ.get("PROFILES_PATH")
+        if env_path:
+            detected = Path(env_path)
+        else:
+            candidates = DATA_DIR / "profiles" / "candidates.jsonl"
+            sample_500 = DATA_DIR / "samples" / "sample_500.jsonl"
+            sample_100 = DATA_DIR / "samples" / "sample_candidates.json"
+            detected = (
+                candidates if candidates.exists()
+                else sample_500 if sample_500.exists()
+                else sample_100
+            )
+        self.path = jsonl_path or detected
         self._auto_init_samples()
         self._auto_load_offset_index()
-        self._file_handle: TextIO | None = None
 
     def _auto_load_offset_index(self) -> None:
         offset_path = DATA_DIR / "indexes" / "offset_index.json"
