@@ -23,7 +23,7 @@ class MultilingualEmbedder:
     def model(self) -> SentenceTransformer:
         if self._model is None:
             logger.info(f"Loading embedding model: {self.model_name} on {self.device}")
-            self._model = SentenceTransformer(self.model_name, device=self.device)
+            self._model = SentenceTransformer(self.model_name, device=self.device, local_files_only=True)
         return self._model
 
     def embed(self, text: str) -> np.ndarray:

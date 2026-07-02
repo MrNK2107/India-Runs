@@ -187,6 +187,12 @@ class Orchestrator:
         filters: SearchFilters | None = None,
         parsed_query: ParsedQuery | None = None,
     ) -> SearchResponse:
+        if not use_turbo:
+            from src.core.config import check_llm_provider_connected
+            if not check_llm_provider_connected():
+                logger.warning("No LLM provider connected. Falling back to Turbo Mode.")
+                use_turbo = True
+
         if use_turbo:
             return await self._turbo_run(raw_query, slider_weights, top_k, filters, parsed_query)
 

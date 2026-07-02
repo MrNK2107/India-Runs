@@ -151,15 +151,12 @@ code, pre, .mono {
 }
 
 .app-title {
-  font-size: 40px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: 42px;
+  font-weight: 800;
+  color: var(--sage-600) !important;
   line-height: 1.1;
   margin: 0;
-  background: linear-gradient(135deg, var(--sage-500), var(--sage-400), var(--terra-400));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .app-subtitle {
@@ -169,14 +166,14 @@ code, pre, .mono {
   margin-top: 8px;
 }
 
-/* ── Gradio Overrides ────────────────────────────────────────────────── */
-.gr-box, .gr-form, .panel, .tab-nav, .tabs, .tabitem {
+/* ── Gradio Overrides (Modern & Backward Compatible) ────────────────── */
+.gr-box, .gr-form, .panel, .tab-nav, .tabs, .tabitem, .block, .fieldset, .form {
   border-color: var(--border) !important;
   border-radius: var(--radius-md) !important;
   background: transparent !important;
 }
 
-input:not([type="checkbox"]):not([type="radio"]), textarea, select, .gr-input, .gr-text-input, .gr-box input:not([type="checkbox"]):not([type="radio"]), .gr-box textarea {
+input:not([type="checkbox"]):not([type="radio"]), textarea, select, .gr-input, .gr-text-input, .block input, .block textarea {
   background: var(--bg-input) !important;
   border: 1.5px solid var(--border) !important;
   border-radius: var(--radius-sm) !important;
@@ -186,13 +183,13 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select, .gr-input, .
   transition: all 0.2s ease;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, .gr-input:focus-within, .gr-text-input:focus-within {
+input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, .gr-input:focus-within, .gr-text-input:focus-within, .block input:focus, .block textarea:focus {
   border-color: var(--border-focus) !important;
   box-shadow: 0 0 0 3px var(--sage-100) !important;
   outline: none !important;
 }
 
-.gr-box, label, .gr-label, .block-label {
+.gr-box, label, .gr-label, .block-label, span.block-label, label span {
   font-family: 'DM Sans', sans-serif !important;
   font-size: 13px !important;
   font-weight: 600 !important;
@@ -200,7 +197,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, .gr-inpu
   letter-spacing: 0.02em;
 }
 
-.gr-button, button, .gr-btn {
+.gr-button, button, .gr-btn, .btn {
   font-family: 'DM Sans', sans-serif !important;
   font-weight: 600 !important;
   border-radius: var(--radius-sm) !important;
@@ -208,42 +205,73 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, .gr-inpu
   border: 1.5px solid transparent !important;
 }
 
-.gr-button-primary, button.gr-button-lg {
+.gr-button-primary, button.gr-button-lg, button.primary, .primary {
   background: linear-gradient(135deg, var(--sage-400), var(--sage-500)) !important;
   color: white !important;
   border: none !important;
   box-shadow: var(--shadow-md) !important;
 }
 
-.gr-button-primary:hover {
+.gr-button-primary:hover, button.primary:hover, .primary:hover {
   transform: translateY(-1px) !important;
   box-shadow: var(--shadow-hover) !important;
   background: linear-gradient(135deg, var(--sage-500), var(--sage-600)) !important;
 }
 
-.gr-button-secondary {
+.gr-button-secondary, button.secondary, .secondary {
   background: var(--bg-card) !important;
   color: var(--sage-600) !important;
   border: 1.5px solid var(--sage-200) !important;
 }
 
-.gr-button-secondary:hover {
+.gr-button-secondary:hover, button.secondary:hover, .secondary:hover {
   background: var(--sage-50) !important;
   border-color: var(--sage-300) !important;
 }
 
-.gr-accordion {
+.gr-accordion, .accordion, details {
   border: 1.5px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
   background: var(--bg-card) !important;
 }
 
-.gr-checkbox {
+.gr-checkbox, input[type="checkbox"] {
   accent-color: var(--sage-400) !important;
 }
 
-.gr-slider input[type="range"] {
+.gr-slider input[type="range"], input[type="range"] {
   accent-color: var(--sage-400) !important;
+}
+
+/* Examples styling (formatted as beautiful cards) */
+.examples, .examples-table, table.examples, .examples-list {
+  background: transparent !important;
+  border: none !important;
+  margin-top: 8px !important;
+}
+
+.examples button, .examples-table tr, table.examples tr, .examples-list button, .gr-examples-button {
+  background: var(--bg-card) !important;
+  border: 1.5px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 10px 14px !important;
+  margin: 6px 0 !important;
+  font-size: 13px !important;
+  text-align: left !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  display: block !important;
+  width: 100% !important;
+}
+
+.examples button:hover, .examples-table tr:hover, table.examples tr:hover, .examples-list button:hover, .gr-examples-button:hover {
+  border-color: var(--sage-300) !important;
+  background: var(--sage-50) !important;
+  color: var(--sage-700) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 .tabs, .tab-nav {

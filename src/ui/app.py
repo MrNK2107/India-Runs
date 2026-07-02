@@ -227,6 +227,12 @@ async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool
         except Exception as e:
             logger.warning(f"Failed to parse user JSON query, falling back to natural language: {e}")
 
+    from src.core.config import check_llm_provider_connected
+    llm_connected = check_llm_provider_connected()
+    if not llm_connected and not use_turbo:
+        gr.Warning("No LLM provider detected (OpenAI/Gemini keys missing or Ollama offline). Automatically switching to Turbo Mode.")
+        use_turbo = True
+
     parsed = None
     if use_turbo:
         from src.core.query_parser import parse_query
@@ -287,7 +293,16 @@ async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool
 
     # Serialize to JSON string
     json_str = serialize_query_to_json(parsed, query)
-    return json_str, min_exp, remote_ok, parsed
+    return json_str, min_exp, remote_ok, parsed, use_turbo
+
+
+def on_turbo_toggle(use_turbo: bool) -> bool:
+    from src.core.config import check_llm_provider_connected
+    if not use_turbo:
+        if not check_llm_provider_connected():
+            gr.Warning("No LLM provider detected (OpenAI/Gemini keys missing or Ollama offline). Keeping Turbo Mode on.")
+            return True
+    return use_turbo
 
 
 async def search_handler(
@@ -296,12 +311,13 @@ async def search_handler(
     parsed_query: Any,
     *slider_values: float,
     progress: gr.Progress = gr.Progress(),
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, Any]:
     if not query.strip():
         return (
             create_empty_state(),
             "",
             "[]",
+            gr.update(visible=False),
         )
 
     from src.ui.components import create_error_panel
@@ -315,6 +331,7 @@ async def search_handler(
             ),
             "",
             "[]",
+            gr.update(visible=False),
         )
 
     slider_weights = _parse_slider_weights(*slider_values)
@@ -360,6 +377,7 @@ async def search_handler(
             create_error_panel(f"Search failed: {e}"),
             "",
             "[]",
+            gr.update(visible=False),
         )
 
     # Serialize results to JSON for caching in Gradio State
@@ -411,7 +429,7 @@ async def search_handler(
     for item in response.results[:5]:
         rationales_html += create_rationale_panel(item.rationale, item.name)
 
-    return metadata_header + results_html, rationales_html, results_json
+    return metadata_header + results_html, rationales_html, results_json, gr.update(visible=True)
 
 
 def re_rank_handler(results_json: str, *slider_values: float) -> str:
@@ -494,7 +512,7 @@ def create_app() -> gr.Blocks:
                         )
                         use_turbo_toggle = gr.Checkbox(
                             label="⚡ Turbo Mode (Skip LLM planner/agent loops)",
-                            value=False,
+                            value=True,
                         )
                         transform_btn = gr.Button("🪄 Transform Query", variant="secondary")
                         gr.Examples(
@@ -514,6 +532,9 @@ def create_app() -> gr.Blocks:
                         max_results = gr.Slider(
                             label="📋 Max Results", minimum=5, maximum=50, step=5, value=10,
                         )
+
+                        with gr.Accordion("🔍 Parsed Requirements JSON", open=False):
+                            parsed_query_display = gr.JSON(label="Parsed Requirements", value={})
 
                         with gr.Accordion("🎛️ Scoring Weights", open=False):
                             gr.Markdown(
@@ -536,7 +557,7 @@ def create_app() -> gr.Blocks:
                             value=create_empty_state(),
                         )
                         rationale_area = gr.HTML(label="Rationale Report", value="")
-                        re_rank_btn = gr.Button("🔄 Re-Rank with Current Weights", variant="secondary")
+                        re_rank_btn = gr.Button("🔄 Re-Rank with Current Weights", variant="secondary", visible=False)
 
                 search_inputs = [
                     query_input, location_filter,
@@ -548,13 +569,13 @@ def create_app() -> gr.Blocks:
                 transform_btn.click(
                     fn=parse_query_to_ui,
                     inputs=[query_input, use_turbo_toggle],
-                    outputs=[query_input, experience_filter, remote_ok, parsed_query_state],
+                    outputs=[parsed_query_display, experience_filter, remote_ok, parsed_query_state, use_turbo_toggle],
                     show_progress="hidden",
                 )
                 search_btn.click(
                     fn=parse_query_to_ui,
                     inputs=[query_input, use_turbo_toggle],
-                    outputs=[query_input, experience_filter, remote_ok, parsed_query_state],
+                    outputs=[parsed_query_display, experience_filter, remote_ok, parsed_query_state, use_turbo_toggle],
                     show_progress="hidden",
                 ).then(
                     fn=lambda: create_loading_overlay("Initializing search..."),
@@ -563,8 +584,15 @@ def create_app() -> gr.Blocks:
                 ).then(
                     fn=search_handler,
                     inputs=search_inputs,
-                    outputs=[results_area, rationale_area, results_state],
-                    show_progress="full",
+                    outputs=[results_area, rationale_area, results_state, re_rank_btn],
+                    show_progress="hidden",
+                )
+
+                use_turbo_toggle.change(
+                    fn=on_turbo_toggle,
+                    inputs=[use_turbo_toggle],
+                    outputs=[use_turbo_toggle],
+                    show_progress="hidden",
                 )
 
                 re_rank_inputs = [results_state, *slider_inputs]

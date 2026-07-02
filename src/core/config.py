@@ -141,3 +141,31 @@ def get_llm_client() -> Any:
         )
     else:
         raise ValueError(f"Unknown LLM provider: {provider}")
+
+
+def check_llm_provider_connected() -> bool:
+    """Check if the configured LLM provider is connected and accessible."""
+    settings = get_settings()
+    provider = settings.llm_provider
+
+    if provider == "openai":
+        key = settings.openai_api_key
+        if not key or key == "sk-..." or not key.strip():
+            return False
+        return True
+    elif provider == "gemini":
+        key = settings.gemini_api_key
+        if not key or key == "..." or not key.strip():
+            return False
+        return True
+    elif provider == "ollama":
+        import urllib.request
+        try:
+            # Query base url, e.g. http://localhost:11434/
+            # Set timeout to 1.0 seconds so it doesn't hang
+            response = urllib.request.urlopen(settings.ollama_base_url, timeout=1.0)
+            return response.status == 200
+        except Exception:
+            return False
+    return False
+

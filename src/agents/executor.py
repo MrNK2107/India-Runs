@@ -258,7 +258,17 @@ class ExecutorAgent:
             if profile.professional and profile.professional.total_experience_years
             else 0
         )
-        exp_match = min(1.0, total_years / 10.0)
+
+        from src.matching.experience_matcher import ExperienceMatcher
+        exp_matcher = ExperienceMatcher()
+        years_match = exp_matcher.match(
+            required_min_years=parsed.experience.min_years,
+            required_max_years=parsed.experience.max_years,
+            candidate_years=total_years,
+        )
+        title_match = exp_matcher.match_title(parsed.original_query or "", profile)
+
+        exp_match = min(1.0, total_years / 10.0) * years_match
 
         scores_dict = ExecutorAgent._prepare_scores_dict(
             pid, profile, vec_scores, bm25_scores, rerank_score,
@@ -266,6 +276,7 @@ class ExecutorAgent:
         )
 
         match_scores = self.scorer.compute_overall(scores_dict, slider_weights)
+        match_scores.overall = max(0.0, min(1.0, match_scores.overall * title_match))
 
         req_only_matched, req_only_missing = _match_skills_detail(
             req_names, profile.skills, profile.raw_text, subskills,
@@ -294,12 +305,8 @@ class ExecutorAgent:
             parts.append(rs.name)
         for ps in parsed.preferred_skills:
             parts.append(ps.name)
-        if parsed.experience.min_years:
-            parts.append(f"{int(parsed.experience.min_years)}+ years experience")
-        if parsed.location.city:
+        if parsed.location and parsed.location.city:
             parts.append(parsed.location.city)
-        if parsed.location.remote_ok:
-            parts.append("remote")
         return " ".join(parts) if parts else "software engineer"
 
     def _apply_filters(
