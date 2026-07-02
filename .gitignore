@@ -72,3 +72,11 @@ graphify-out/
 
 # Comprehensive documentation (auto-generated)
 CODEX.md
+
+# Ignore all markdown files
+*.md
+**/*.md
+
+# Except README.md
+!README.md
+!**/README.md
