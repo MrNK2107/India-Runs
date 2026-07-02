@@ -18,17 +18,22 @@ RUN pip install --no-cache-dir -e ".[dev]" --no-deps
 # Download spacy model
 RUN python -m spacy download en_core_web_sm
 
-# Build FAISS + BM25 indexes from the 500-profiles sample
-# (the full 100k candidates.jsonl is too large for the container)
-RUN python scripts/build_indexes.py \
-    --profiles data/samples/sample_500.jsonl \
-    --force
+# Build indexes cannot happen during Docker build (no network to download models).
+# Instead, the app builds them on first startup when HF_HUB_OFFLINE=0 secret is available.
+# Create a startup script that builds indexes if missing, then launches the app.
+RUN printf '#!/bin/sh\n\
+if [ ! -f data/indexes/faiss_index.bin ]; then\n\
+  echo "Building indexes from sample_500.jsonl..."\n\
+  python scripts/build_indexes.py --profiles data/samples/sample_500.jsonl --force\n\
+fi\n\
+exec uvicorn src.main:app --host 0.0.0.0 --port 7860\n' > /start.sh && chmod +x /start.sh
 
 # Point ProfileStore to the sample data (full 100k JSONL is too large for the container)
 ENV PROFILES_PATH=data/samples/sample_500.jsonl
 
 EXPOSE 7860
 
-# By default serve the API. Override CMD to run the ranker:
+# By default serve the API (startup script builds indexes on first run).
+# Override CMD to run the ranker:
 #   docker run ... --entrypoint python rank.py --batch --out submission.csv
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["/start.sh"]
