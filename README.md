@@ -1,6 +1,16 @@
+---
+title: India Runs
+emoji: 🏃
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🏆 India Runs — Intelligent Candidate Discovery System
 
-**Track 1: Data & AI Challenge** | **Team: Atlas** | **Member: Nikhil Choudhary**
+**Track 1: Data & AI Challenge** | **Team: PANGDynamics**
 
 > *Beyond keywords. Beyond filters. AI that understands hiring.*
 
