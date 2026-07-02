@@ -3,34 +3,39 @@
 # ============================================================================
 
 # ── Team identity ──────────────────────────────────────────────────────
-team_name: "Atlas"  # Used in leaderboard and announcements
+team_name: "PANGDynamics"  # Used in leaderboard and announcements
 
 primary_contact:
-  name: "Nikhil Choudhary"
-  email: "me@nikhilchoudhary.dev"
-  phone: "+91-XXXXXXXXXX"  # TODO: fill in
+  name: "Nanda Kishor Suresh Priya"
+  email: "nandakishorsureshpriya@gmail.com"
+  phone: "+91-7868914236"
 
 team_members:
-  - name: "Nikhil Choudhary"
-    email: "me@nikhilchoudhary.dev"
-    role: "ML Engineer"
+  - name: "Nanda Kishor Suresh Priya"
+    email: "nandakishorsureshpriya@gmail.com"
+    role: "AI Engineer — LangGraph agentic pipeline, Plackett-Luce ranking, LLM integration"
+
+  - name: "Aman Singh"
+    email: "amansingh102006@gmail.com"
+    role: "ML Engineer — search, scoring, ranking, cross-encoder reranking"
+
+  - name: "Paul Shervin P"
+    email: "paulshervin77@gmail.com"
+    role: "Data Engineer — ingestion, normalization, FAISS/BM25 indexing"
+
+  - name: "Ganesh Kumar T"
+    email: "ganesh957kumar@gmail.com"
+    role: "Backend Engineer — FastAPI, Gradio UI, Docker, deployment"
 
 # ── Code and reproducibility ─────────────────────────────────────────────
 github_repo: "https://github.com/MrNK2107/India-Runs"
 
 sandbox_link: "https://huggingface.co/spaces/MrPhantom07/redrob-ranker"
-# Deploy steps:
-#   1. Create Space at https://huggingface.co/spaces → SDK: Docker
-#   2. Name: redrob-ranker, CPU basic (free)
-#   3. Add secrets in Space Settings → Repository secrets:
-#      - HF_HUB_OFFLINE=0
-#      - LLM_PROVIDER=openai
-#      - OPENAI_API_KEY=sk-or-v1-...  (your key)
-#      - OPENAI_BASE_URL=https://openrouter.ai/api/v1
-#      - OPENAI_MODEL=deepseek/deepseek-v4-flash-free
-#   4. git remote add space https://huggingface.co/spaces/MrNK2107/redrob-ranker
-#   5. git push space main
-#   The Dockerfile builds indexes from sample_500.jsonl automatically.
+# Deployed via hf CLI. Secrets set:
+#   HF_HUB_OFFLINE=0, LLM_PROVIDER=openai,
+#   OPENAI_API_KEY=<opencode-zen-key>, OPENAI_BASE_URL=https://opencode.ai/zen/v1,
+#   OPENAI_MODEL=deepseek-v4-flash-free
+# Dockerfile builds indexes from sample_500.jsonl during build.
 
 reproduce_command: "python rank.py --batch --out submission.csv"
 # End-to-end on CPU with 16GB RAM, no network. Produces submission.csv with 100 rows.
