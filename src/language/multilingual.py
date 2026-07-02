@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -23,7 +24,12 @@ class MultilingualEmbedder:
     def model(self) -> SentenceTransformer:
         if self._model is None:
             logger.info(f"Loading embedding model: {self.model_name} on {self.device}")
-            self._model = SentenceTransformer(self.model_name, device=self.device, local_files_only=True)
+            # Respect HF_HUB_OFFLINE: if offline mode is set, only use cached files.
+            # Otherwise allow downloading (e.g. first startup in HF Spaces).
+            offline = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
+            self._model = SentenceTransformer(
+                self.model_name, device=self.device, local_files_only=offline,
+            )
         return self._model
 
     def embed(self, text: str) -> np.ndarray:
