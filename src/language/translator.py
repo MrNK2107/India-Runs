@@ -17,6 +17,20 @@ SUPPORTED_LANGUAGES = {
     "ur": "urdu", "sd": "sindhi", "ks": "kashmiri", "ne": "nepali",
 }
 
+DEFAULT_MBART_MODEL = "facebook/mbart-large-50-many-to-many-mmt"
+
+
+def mbart_model_name() -> str:
+    """Fallback translation model from settings.yaml (models.translation.fallback)."""
+    try:
+        from src.core import config
+
+        cfg = config.get_app_config()
+        name = cfg.get("models", {}).get("translation", {}).get("fallback")
+    except Exception:
+        return DEFAULT_MBART_MODEL
+    return name if isinstance(name, str) and name else DEFAULT_MBART_MODEL
+
 
 class TranslationPipeline:
     def __init__(self) -> None:
@@ -29,7 +43,7 @@ class TranslationPipeline:
 
     def translate_to_english(
         self, text: str, source_lang: str, is_batch_call: bool = False,
-    ) -> dict[str, str | float | bool]:  # type: ignore[return-value]
+    ) -> dict[str, str | float | bool]:
         if source_lang == "en":
             return {
                 "original": text,
@@ -58,25 +72,20 @@ class TranslationPipeline:
                 "Google Translation failed for %s, trying MBART: %s",
                 source_lang, e
             )
-            try:
-                from src.core.config import get_app_config
-                cfg = get_app_config()
-                mbart_model_name = (
-                    cfg.get("translation", {})
-                    .get("fallback", "facebook/mbart-large-50-many-to-many-mmt")
-                )
-            except Exception:
-                mbart_model_name = "facebook/mbart-large-50-many-to-many-mmt"
+            mbart_name = mbart_model_name()
 
             try:
-                from transformers import MBart50TokenizerFast, MBartForConditionalGeneration
+                import transformers
+
+                tok_cls: Any = getattr(transformers, "MBart50TokenizerFast")
+                model_cls: Any = transformers.MBartForConditionalGeneration
 
                 if not hasattr(self, "_mbart_tokenizer") or self._mbart_tokenizer is None:
-                    logger.info(f"Loading MBART model: {mbart_model_name}")
-                    self._mbart_tokenizer = MBart50TokenizerFast.from_pretrained(mbart_model_name)
-                    self._mbart_model = (
-                        MBartForConditionalGeneration.from_pretrained(
-                            mbart_model_name
+                    logger.info(f"Loading MBART model: {mbart_name}")
+                    self._mbart_tokenizer: Any = tok_cls.from_pretrained(mbart_name)
+                    self._mbart_model: Any = (
+                        model_cls.from_pretrained(
+                            mbart_name
                         )
                     )
 
@@ -117,7 +126,7 @@ class TranslationPipeline:
     def translate_batch(
         self, texts: list[tuple[str, str]]
     ) -> list[dict[str, Any]]:
-        results: list[dict] = []
+        results: list[dict[str, Any]] = []
         for i, (text, lang) in enumerate(texts):
             if i > 0 and i % 10 == 0:
                 time.sleep(0.3)

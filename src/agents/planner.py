@@ -179,7 +179,7 @@ class PlannerAgent:
             original_query=query,
         )
 
-    def _relax_params(self, params: dict) -> dict:
+    def _relax_params(self, params: dict[str, Any]) -> dict[str, Any]:
         params = dict(params)
         exp = dict(params.get("experience", {}))
         if exp.get("min_years") is not None:

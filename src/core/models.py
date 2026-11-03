@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ProfileSource(StrEnum):
@@ -300,7 +302,17 @@ class SearchFilters(BaseModel):
     include_companies: list[str] = Field(default_factory=list)
 
 
+# UI/API slider dimensions (percent weights 0-100); must match matching.scorer.DIM_TO_ACTUAL.
+SLIDER_DIMENSIONS: tuple[str, ...] = (
+    "skill_match", "experience_match", "education_match",
+    "assessment_score", "behavioral_signals", "cultural_fit",
+)
+
+
 class SearchRequest(BaseModel):
+    """API request. Stricter than SearchFilters itself, which the executor also builds
+    from LLM-parsed queries and must stay permissive."""
+
     query: str = Field(min_length=1, max_length=2000)
     filters: SearchFilters = Field(default_factory=SearchFilters)
     max_results: int = Field(default=10, ge=1, le=100)
@@ -308,6 +320,109 @@ class SearchRequest(BaseModel):
     language: str | None = None
     use_turbo: bool = False
     slider_weights: dict[str, float] = Field(default_factory=dict)
+    # "completed_roles" (default, the submitted ranking): job-hopping/stability uses
+    # finished roles only. "include_current": the open role's tenure counts too.
+    trajectory_mode: Literal["completed_roles", "include_current"] = "completed_roles"
+    # "listed" (default, the submitted ranking): the skills score counts the skills
+    # section only. "work_history": skills proven in a role or assessment count too.
+    skill_evidence: Literal["listed", "work_history"] = "listed"
+    # Attach a per-candidate Explanation (score contributions + evidence spans).
+    explain: bool = True
+
+    @field_validator("query")
+    @classmethod
+    def _query_not_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("query must not be blank")
+        return stripped
+
+    @field_validator("slider_weights")
+    @classmethod
+    def _check_slider_weights(cls, v: dict[str, float]) -> dict[str, float]:
+        unknown = sorted(set(v) - set(SLIDER_DIMENSIONS))
+        if unknown:
+            raise ValueError(
+                f"unknown slider_weights key(s) {unknown}; valid keys: {list(SLIDER_DIMENSIONS)}"
+            )
+        for key, weight in v.items():
+            if not math.isfinite(weight) or not 0 <= weight <= 100:
+                raise ValueError(
+                    f"slider_weights[{key!r}] must be a number between 0 and 100, got {weight}"
+                )
+        return v
+
+    @model_validator(mode="after")
+    def _check_experience_filters(self) -> SearchRequest:
+        lo = self.filters.min_experience_years
+        hi = self.filters.max_experience_years
+        for name, val in (("min_experience_years", lo), ("max_experience_years", hi)):
+            if val is not None and (not math.isfinite(val) or val < 0):
+                raise ValueError(f"filters.{name} must be a non-negative number, got {val}")
+        if lo is not None and hi is not None and lo > hi:
+            raise ValueError(
+                f"filters.min_experience_years ({lo}) must not exceed "
+                f"filters.max_experience_years ({hi})"
+            )
+        return self
+
+
+class EvidenceSpan(BaseModel):
+    """A quoted piece of the profile that supports (or is the only support for) a requirement."""
+
+    term: str
+    source: Literal["assessment", "skills", "experience", "summary", "headline", "education"]
+    label: str
+    text: str
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    strength: Literal["verified", "structured", "demonstrated", "mentioned"]
+
+
+class RequirementCheck(BaseModel):
+    requirement: str
+    kind: Literal["skill", "location", "experience", "role"]
+    status: Literal["met", "partial", "missing"]
+    strength: Literal["verified", "structured", "demonstrated", "mentioned"] | None = None
+    detail: str = ""
+    evidence: list[EvidenceSpan] = Field(default_factory=list)
+
+
+class ScoreContribution(BaseModel):
+    dimension: str
+    label: str
+    score: float
+    weight: float
+    points: float  # share of the overall score this dimension contributed (0-1 scale)
+
+
+class Explanation(BaseModel):
+    profile_id: str
+    verdict: Literal["strong", "good", "potential", "weak"]
+    headline: str
+    overall: float
+    title_factor: float = 1.0
+    contributions: list[ScoreContribution] = Field(default_factory=list)
+    requirements: list[RequirementCheck] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    trajectory: dict[str, float | int | str | None] = Field(default_factory=dict)
+
+
+class ExplainRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    profile_id: str = Field(min_length=1, max_length=200)
+    slider_weights: dict[str, float] = Field(default_factory=dict)
+    trajectory_mode: Literal["completed_roles", "include_current"] = "completed_roles"
+    skill_evidence: Literal["listed", "work_history"] = "listed"
+
+    @field_validator("query")
+    @classmethod
+    def _query_not_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("query must not be blank")
+        return stripped
 
 
 class SearchResultItem(BaseModel):
@@ -324,6 +439,7 @@ class SearchResultItem(BaseModel):
     rationale: Rationale
     passive_candidate: bool = False
     language_matched: bool = False
+    explanation: Explanation | None = None
 
 
 class SearchMetadata(BaseModel):
@@ -349,6 +465,10 @@ class IngestResponse(BaseModel):
     total_profiles: int
     successful: int
     failed: int
+    created: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    profile_ids: list[str] = Field(default_factory=list)
     language_distribution: dict[str, int] = Field(default_factory=dict)
     errors: list[str] = Field(default_factory=list)
 
@@ -358,4 +478,5 @@ class HealthResponse(BaseModel):
     version: str
     index_size: int
     models_loaded: dict[str, bool] = Field(default_factory=dict)
+    engine: dict[str, str] = Field(default_factory=dict)
     last_updated: str | None = None

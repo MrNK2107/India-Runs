@@ -142,7 +142,7 @@ class ExperienceMatcher:
             return "general_se"
         return "other"
 
-    def _score_title_compatibility(self, query_role: str, candidate_title: str) -> float:
+    def _score_title_compatibility(self, query_role: str, candidate_title: str | None) -> float:
         if not candidate_title:
             return 0.5
 

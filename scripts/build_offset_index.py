@@ -16,7 +16,7 @@ if not id_map_path.exists():
     print("FAISS id map not found. Run build_indexes.py first.")
     sys.exit(1)
 
-with open(id_map_path) as f:
+with open(id_map_path, encoding="utf-8") as f:
     profile_ids = json.load(f)
 
 pid_set = set(profile_ids)
@@ -59,6 +59,6 @@ if missing:
     print(f"Missing {len(missing)} profiles")
 
 output_path.parent.mkdir(parents=True, exist_ok=True)
-with open(output_path, "w") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(offsets, f)
 print(f"Offset index saved to {output_path}")

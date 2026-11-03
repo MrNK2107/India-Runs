@@ -42,7 +42,7 @@ def _load_sample_profiles() -> list[dict]:
     if not SAMPLE_PATH.exists():
         logger.warning(f"Sample file not found: {SAMPLE_PATH}")
         return []
-    with open(SAMPLE_PATH) as f:
+    with open(SAMPLE_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -154,12 +154,12 @@ def generate() -> dict:
     GROUND_TRUTH_DIR.mkdir(parents=True, exist_ok=True)
 
     queries_path = QUERIES_DIR / "queries.json"
-    with open(queries_path, "w") as f:
+    with open(queries_path, "w", encoding="utf-8") as f:
         json.dump(queries, f, indent=2)
     logger.info(f"Saved {len(queries)} queries to {queries_path}")
 
     gt_path = GROUND_TRUTH_DIR / "ground_truth.json"
-    with open(gt_path, "w") as f:
+    with open(gt_path, "w", encoding="utf-8") as f:
         json.dump(ground_truth, f, indent=2)
     logger.info(f"Saved ground truth ({len(ground_truth)} entries) to {gt_path}")
 

@@ -3,8 +3,9 @@
 """Test cross-encoder directly on various profile/text pairs."""
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, '/home/nanda/India-Runs')
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+from typing import Any
 
 # Default to offline — must be set before any sentence-transformers imports.
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -31,13 +32,17 @@ class CrossEncoderReranker:
         timeout_ms: int | None = None,
     ) -> None:
         self.model_name = model_name
-        self._model = None  # type: ignore[assignment]
+        self._model: Any = None
         self._model_loaded = False
         settings = get_settings()
         self.timeout_ms = (
             timeout_ms if timeout_ms is not None else settings.cross_encoder_timeout_ms
         )
-        self.enabled = True
+        self.enabled = settings.cross_encoder_enabled
+        if not self.enabled:
+            logger.info("Cross-encoder disabled (CROSS_ENCODER_ENABLED=false); using hybrid scores")
+            self._model_loaded = True  # nothing to wait for
+            return
         # Pre-load in background thread to avoid blocking startup
         import threading
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -74,10 +79,10 @@ class CrossEncoderReranker:
             self._model = None
 
     @property
-    def model(self):
+    def model(self) -> Any:
         return self._model
 
-    def rerank(  # type: ignore[return-value]
+    def rerank(
         self,
         query: str,
         candidates: list[tuple[str, str, float]],
@@ -132,7 +137,7 @@ class CrossEncoderReranker:
                 result.append((str(c[0]), 0.5))
         return result
 
-    def score_pair(self, query: str, document: str) -> float:  # type: ignore[return-value]
+    def score_pair(self, query: str, document: str) -> float:
         if self._model is None and not self._model_loaded:
             import threading
             for _ in range(75):

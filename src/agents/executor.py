@@ -104,6 +104,25 @@ def _match_skills_detail(
             missing.append(rn)
     return matched, missing
 
+def _credit_work_history(
+    matched: list[str], missing: list[str], profile: Profile,
+) -> tuple[list[str], list[str]]:
+    """Opt-in (skill_evidence="work_history"): a required skill that is not in the
+    skills list still counts when the profile proves it - a platform assessment or use
+    in an actual role's title/description. Summary-only claims never count."""
+    from src.explain.evidence import find_evidence
+
+    still_missing: list[str] = []
+    credited = list(matched)
+    for name in missing:
+        spans = find_evidence(name, profile)
+        if any(s.strength in ("verified", "structured", "demonstrated") for s in spans):
+            credited.append(name)
+        else:
+            still_missing.append(name)
+    return credited, still_missing
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,6 +146,8 @@ class ExecutorAgent:
         top_k: int = 50,
         slider_weights: dict[str, float] | None = None,
         skip_reranker: bool = False,
+        include_current_tenure: bool = False,
+        credit_work_history: bool = False,
     ) -> list[MatchResult]:
         search_text = self._query_to_search_text(parsed)
 
@@ -217,7 +238,8 @@ class ExecutorAgent:
                 continue
             scoring_args.append(
                 (pid, rerank_score, profile, parsed, vec_scores, bm25_scores,
-                 slider_weights, req_names, all_req, skip_reranker)
+                 slider_weights, req_names, all_req, skip_reranker, include_current_tenure,
+                 credit_work_history)
             )
 
         loop = asyncio.get_running_loop()
@@ -259,6 +281,7 @@ class ExecutorAgent:
         skill_overlap: float,
         exp_match: float,
         all_req: list[str],
+        include_current_tenure: bool = False,
     ) -> dict[str, float | None]:
         """Build the raw scores dict for a single candidate, before weighting."""
         honeypot_reason = detect_honeypot(profile)
@@ -273,7 +296,9 @@ class ExecutorAgent:
             "education_match": None,
             "cross_encoder_score": rerank_score * honeypot_penalty if rerank_score else None,
             "behavioral_score": compute_behavioral_score(profile.signals) * honeypot_penalty,
-            "career_trajectory_score": compute_career_trajectory(profile) * honeypot_penalty,
+            "career_trajectory_score": (
+                compute_career_trajectory(profile, include_current_tenure) * honeypot_penalty
+            ),
             "skill_proficiency_score": (
                 compute_skill_proficiency(profile, all_req) * honeypot_penalty
             ),
@@ -303,6 +328,8 @@ class ExecutorAgent:
         req_names: list[str],
         all_req: list[str],
         skip_reranker: bool = False,
+        include_current_tenure: bool = False,
+        credit_work_history: bool = False,
     ) -> MatchResult | None:
         subskills = parsed.subskills if hasattr(parsed, "subskills") else None
         original_query = parsed.original_query or ""
@@ -329,6 +356,10 @@ class ExecutorAgent:
         matched_skills_list, missing_skills_list = _match_skills_detail(
             effective_req, profile.skills, profile.raw_text, effective_subskills,
         )
+        if credit_work_history:
+            matched_skills_list, missing_skills_list = _credit_work_history(
+                matched_skills_list, missing_skills_list, profile,
+            )
         skill_overlap = len(matched_skills_list) / len(effective_req) if effective_req else 1.0
 
         total_years = (
@@ -350,7 +381,7 @@ class ExecutorAgent:
 
         scores_dict = ExecutorAgent._prepare_scores_dict(
             pid, profile, vec_scores, bm25_scores, rerank_score,
-            skill_overlap, exp_match, list(effective_req),
+            skill_overlap, exp_match, list(effective_req), include_current_tenure,
         )
 
         match_scores = self.scorer.compute_overall(scores_dict, slider_weights)
@@ -364,6 +395,10 @@ class ExecutorAgent:
             req_only_matched_l, req_only_missing_l = _match_skills_detail(
                 req_names, profile.skills, profile.raw_text, dict(subskills) if subskills else {},
             )
+            if credit_work_history:
+                req_only_matched_l, req_only_missing_l = _credit_work_history(
+                    req_only_matched_l, req_only_missing_l, profile,
+                )
             req_only_matched = req_only_matched_l
             req_only_missing = req_only_missing_l
 

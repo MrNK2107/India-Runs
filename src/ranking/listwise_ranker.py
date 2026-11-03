@@ -55,7 +55,7 @@ class PlackettLuceRanker:
         self,
         candidates: list[MatchResult],
         query: str | None = None,
-        anonymized_profiles: dict[str, dict] | None = None,
+        anonymized_profiles: dict[str, dict[str, Any]] | None = None,
     ) -> list[tuple[str, float]]:
         """Async rank candidates by Plackett-Luce merit score.
 
@@ -72,16 +72,24 @@ class PlackettLuceRanker:
         n_candidates = len(candidates)
         gamma = np.ones(n_candidates)  # merit parameters, initialized to 1.0
 
+        index_of = {id(c): i for i, c in enumerate(candidates)}
         for round_idx in range(self.num_tournament_rounds):
             groups = self._create_groups(candidates, self.group_size)
             all_rankings = []
 
             for group in groups:
+                if len(group) < 2:
+                    continue  # nothing to compare; skip the LLM call
                 partial_ranking = await self._judge_group_async(
                     group, query, anonymized_profiles
                 )
                 if partial_ranking:
-                    all_rankings.append(partial_ranking)
+                    # The judge ranks positions *within the group*; gamma is indexed by
+                    # position in `candidates`. (Using the local indices directly gave all
+                    # merit to candidates 0..group_size-1.)
+                    all_rankings.append(
+                        [index_of[id(group[local])] for local in partial_ranking]
+                    )
 
             if all_rankings:
                 gamma = self._mm_algorithm(gamma, all_rankings)
@@ -90,7 +98,8 @@ class PlackettLuceRanker:
                     f"[{gamma.min():.4f}, {gamma.max():.4f}]"
                 )
 
-        sorted_indices = np.argsort(-gamma)
+        # Stable: ties (e.g. every LLM call failed) keep the incoming score order.
+        sorted_indices = np.argsort(-gamma, kind="stable")
         return [
             (candidates[i].profile_id, float(gamma[i]))
             for i in sorted_indices
@@ -113,7 +122,7 @@ class PlackettLuceRanker:
         self,
         group: list[MatchResult],
         query: str | None = None,
-        anonymized_profiles: dict[str, dict] | None = None,
+        anonymized_profiles: dict[str, dict[str, Any]] | None = None,
     ) -> list[int] | None:
         """Ask LLM to rank a group of candidates listwise (async).
 
@@ -174,17 +183,16 @@ class PlackettLuceRanker:
             indices = [
                 int(x.strip()) for x in cleaned.split(",") if x.strip().isdigit()
             ]
-            if len(indices) == group_size and all(
-                0 <= i < group_size for i in indices
-            ):
+            # Must be a permutation of 0..group_size-1 ("0,0,1,2" used to be accepted).
+            if sorted(indices) == list(range(group_size)):
                 return indices
         except (ValueError, TypeError):
             pass
         return None
 
     def _mm_algorithm(
-        self, gamma: np.ndarray, rankings: list[list[int]]
-    ) -> np.ndarray:
+        self, gamma: np.ndarray[Any, Any], rankings: list[list[int]]
+    ) -> np.ndarray[Any, Any]:
         """Minorization-maximization (MM) algorithm for Plackett-Luce.
 
         Args:

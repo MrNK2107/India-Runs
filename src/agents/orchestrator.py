@@ -43,6 +43,8 @@ class AgentState(TypedDict):
     top_k: int
     filters: dict[str, Any] | None
     rationales: list[dict[str, Any]] | None
+    include_current_tenure: bool
+    credit_work_history: bool
 
 
 _SIMPLE_QUERY_RE = re.compile(r"^(find|search|get|show|i need|looking for|need)\s+", re.IGNORECASE)
@@ -95,7 +97,7 @@ STOP_WORDS = frozenset({
 })
 
 
-def _dict_to_match_result(r: dict, rank_override: int | None = None) -> MatchResult:
+def _dict_to_match_result(r: dict[str, Any], rank_override: int | None = None) -> MatchResult:
     """Convert a raw results dict (from state or JSON) into a MatchResult.
 
     Extracted to eliminate 4x-repeated reconstruction blocks across
@@ -186,6 +188,8 @@ class Orchestrator:
         top_k: int = 50,
         filters: SearchFilters | None = None,
         parsed_query: ParsedQuery | None = None,
+        include_current_tenure: bool = False,
+        credit_work_history: bool = False,
     ) -> SearchResponse:
         if not use_turbo:
             from src.core.config import check_llm_provider_connected
@@ -194,7 +198,10 @@ class Orchestrator:
                 use_turbo = True
 
         if use_turbo:
-            return await self._turbo_run(raw_query, slider_weights, top_k, filters, parsed_query)
+            return await self._turbo_run(
+                raw_query, slider_weights, top_k, filters, parsed_query, include_current_tenure,
+                credit_work_history,
+            )
 
         initial_state: AgentState = {
             "raw_query": raw_query,
@@ -212,6 +219,8 @@ class Orchestrator:
             "top_k": top_k,
             "filters": filters.model_dump() if filters else None,
             "rationales": None,
+            "include_current_tenure": include_current_tenure,
+            "credit_work_history": credit_work_history,
         }
         final_state: AgentState = await self.compiled_graph.ainvoke(initial_state)  # type: ignore[assignment]
         return self._build_response(final_state)
@@ -222,6 +231,8 @@ class Orchestrator:
         top_k: int = 50,
         filters: SearchFilters | None = None,
         parsed_query: ParsedQuery | None = None,
+        include_current_tenure: bool = False,
+        credit_work_history: bool = False,
     ) -> SearchResponse:
         parsed = parsed_query or _parse_query_text(raw_query)
         if filters:
@@ -240,7 +251,11 @@ class Orchestrator:
             )
 
         start_time = int(time.time() * 1000)
-        results = await self.executor.execute(parsed, top_k=top_k, slider_weights=slider_weights)
+        results = await self.executor.execute(
+            parsed, top_k=top_k, slider_weights=slider_weights,
+            include_current_tenure=include_current_tenure,
+            credit_work_history=credit_work_history,
+        )
         elapsed = int(time.time() * 1000) - start_time
         items: list[SearchResultItem] = []
         for i, r in enumerate(results[:100], start=1):
@@ -333,7 +348,11 @@ class Orchestrator:
         )
         slider_weights = state.get("slider_weights") or None
         top_k = state.get("top_k", 50)
-        results = await self.executor.execute(parsed, top_k=top_k, slider_weights=slider_weights)
+        results = await self.executor.execute(
+            parsed, top_k=top_k, slider_weights=slider_weights,
+            include_current_tenure=bool(state.get("include_current_tenure", False)),
+            credit_work_history=bool(state.get("credit_work_history", False)),
+        )
         methods_used = []
         if state.get("replan_count", 0) > 0:
             methods_used.append("hybrid+rerank+replan")
@@ -358,7 +377,7 @@ class Orchestrator:
         from src.fairness.anonymizer import anonymize_profile
 
         match_results = []
-        anonymized_profiles: dict[str, dict] = {}
+        anonymized_profiles: dict[str, dict[str, Any]] = {}
         for r in results_raw:
             if isinstance(r, dict):
                 match_results.append(_dict_to_match_result(r))
@@ -512,7 +531,9 @@ class Orchestrator:
                             for sd in rat_data.get("skill_details", [])
                         ],
                         experience_analysis=rat_data.get("experience_analysis", ""),
-                        recommendation=MatchRecommendation(rat_data.get("recommendation", "good_match")),
+                        recommendation=MatchRecommendation(
+                            rat_data.get("recommendation", "good_match")
+                        ),
                     )
                 else:
                     # Fallback to template rationale with profile if profile is available

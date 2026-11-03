@@ -8,6 +8,7 @@ router = APIRouter()
 
 _index_size: int = 0
 _models_loaded: dict[str, bool] = {"embedding": False, "cross_encoder": False}
+_engine: dict[str, str] = {}
 
 
 def init_health(index_size: int = 0) -> None:
@@ -21,6 +22,17 @@ def set_index_size(size: int) -> None:
     _index_size = size
 
 
+def set_engine_info(mode: str, dataset: str) -> None:
+    import os
+
+    _engine.clear()
+    _engine.update({
+        "mode": mode,
+        "dataset": dataset,
+        "embedding_backend": os.environ.get("EMBEDDING_BACKEND", "transformer"),
+    })
+
+
 def set_model_loaded(name: str, loaded: bool = True) -> None:
     _models_loaded[name] = loaded
 
@@ -29,7 +41,8 @@ def set_model_loaded(name: str, loaded: bool = True) -> None:
 async def health_check() -> HealthResponse:
     return HealthResponse(
         status="healthy" if _index_size > 0 else "degraded",
-        version="0.1.0",
+        version="0.2.0",
         index_size=_index_size,
         models_loaded=dict(_models_loaded),
+        engine=dict(_engine),
     )

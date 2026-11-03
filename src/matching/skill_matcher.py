@@ -82,7 +82,12 @@ class SkillMatcher:
         overall = weighted_score / total_weight if total_weight > 0 else 0.0
         return overall, details
 
-    def find_best_match(self, required_name: str, candidate_skills: list[Skill], subskills: list[str] | None = None) -> Skill | None:
+    def find_best_match(
+        self,
+        required_name: str,
+        candidate_skills: list[Skill],
+        subskills: list[str] | None = None,
+    ) -> Skill | None:
         normalized_req = self._normalize(required_name)
         aliases = [self._normalize(a) for a in SKILL_ALIASES.get(normalized_req, [])]
         if subskills:

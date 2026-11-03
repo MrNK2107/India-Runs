@@ -8,7 +8,7 @@ from pathlib import Path
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.agents.executor import ExecutorAgent
 from src.agents.orchestrator import _parse_query_text

@@ -44,7 +44,7 @@ from src.matching.behavioral_scorer import (
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
-from src.core.query_parser import expand_with_aliases, parse_query
+from src.core.query_parser import expand_with_aliases, parse_query  # noqa: E402
 
 BANNER = """
 ╔═══════════════════════════════════════════════════════════╗

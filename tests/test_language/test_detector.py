@@ -41,7 +41,9 @@ def test_translator_french_success(monkeypatch):
         def translate(self, text: str) -> str:
             return "Hello world"
 
-    monkeypatch.setattr("deep_translator.GoogleTranslator", lambda *a, **kw: FakeGoogleTranslator())
+    monkeypatch.setattr(
+        "src.language.translator.GoogleTranslator", lambda *a, **kw: FakeGoogleTranslator()
+    )
     from src.language.translator import TranslationPipeline
     pipeline = TranslationPipeline()
     result = pipeline.translate_to_english("Bonjour le monde", "fr")
@@ -54,7 +56,9 @@ def test_translator_batch(monkeypatch):
         def translate(self, text: str) -> str:
             return "Hello"
 
-    monkeypatch.setattr("deep_translator.GoogleTranslator", lambda *a, **kw: FakeGoogleTranslator())
+    monkeypatch.setattr(
+        "src.language.translator.GoogleTranslator", lambda *a, **kw: FakeGoogleTranslator()
+    )
     from src.language.translator import TranslationPipeline
     pipeline = TranslationPipeline()
     results = pipeline.translate_batch([("Hello", "en"), ("Hola", "es")])

@@ -5,7 +5,7 @@ import logging
 import os
 from collections import OrderedDict
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from src.core.config import DATA_DIR
 from src.core.constants import SAMPLE_PATH
@@ -22,6 +22,9 @@ class ProfileStore:
         self._cache: OrderedDict[str, Profile] = OrderedDict()
         self._index_built = False
         self._sample_profiles: dict[str, Profile] = {}
+        # Profiles added at runtime via POST /ingest; they take precedence
+        # over the JSONL file and samples (a re-ingest replaces a profile).
+        self._ingested: dict[str, Profile] = {}
         self._file_handle: TextIO | None = None
         # Auto-detect best available data source
         # Respect PROFILES_PATH env var (set by Dockerfile for HF Spaces)
@@ -61,7 +64,7 @@ class ProfileStore:
     def load_sample(self, sample_path: Path) -> None:
         if not sample_path.exists():
             return
-        with open(sample_path) as f:
+        with open(sample_path, encoding="utf-8") as f:
             data = json.load(f)
             profiles_list = data if isinstance(data, list) else [data]
             for p in profiles_list:
@@ -77,14 +80,19 @@ class ProfileStore:
 
     def load_offset_index(self, index_path: Path) -> None:
         if index_path.exists():
-            with open(index_path) as f:
-                self._offset_index = json.load(f)
+            with open(index_path, encoding="utf-8") as f:
+                loaded: dict[str, int] = json.load(f)
+            # Keep sample IDs registered by load_sample() (offset -1) that the
+            # saved index doesn't know about, instead of silently dropping them.
+            for pid, offset in self._offset_index.items():
+                loaded.setdefault(pid, offset)
+            self._offset_index = loaded
             self._index_built = True
             logger.info(f"Loaded offset index with {len(self._offset_index)} entries")
 
     def save_offset_index(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self._offset_index, f)
         logger.info(f"Saved offset index ({len(self._offset_index)} entries) to {path}")
 
@@ -107,6 +115,8 @@ class ProfileStore:
                     continue
                 try:
                     raw = json.loads(line)
+                    if not isinstance(raw, dict):
+                        continue
                     pid = self._extract_id(raw)
                     if pid and pid not in self._offset_index:
                         self._offset_index[pid] = offset
@@ -117,7 +127,7 @@ class ProfileStore:
         logger.info(f"Built offset index: {count} profile IDs")
 
     @staticmethod
-    def _extract_id(raw: dict) -> str | None:
+    def _extract_id(raw: dict[str, Any]) -> str | None:
         for key in ("profile_id", "candidate_id", "id"):
             val = raw.get(key)
             if val:
@@ -130,7 +140,25 @@ class ProfileStore:
                     return str(val)
         return None
 
+    def add_samples(self, profiles: list[Profile]) -> None:
+        """Register already-normalised sample profiles (the in-memory demo engine)."""
+        for profile in profiles:
+            self._sample_profiles[profile.profile_id] = profile
+            self._offset_index.setdefault(profile.profile_id, -1)
+
+    def add_ingested(self, profiles: list[Profile]) -> None:
+        """Register (or replace) profiles that arrived through ingestion."""
+        for profile in profiles:
+            pid = profile.profile_id
+            self._ingested[pid] = profile
+            self._cache.pop(pid, None)  # drop any stale cached version
+
+    def get_ingested(self) -> dict[str, Profile]:
+        return dict(self._ingested)
+
     def get(self, pid: str) -> Profile | None:
+        if pid in self._ingested:
+            return self._ingested[pid]
         if pid in self._cache:
             self._cache.move_to_end(pid)
             return self._cache[pid]
@@ -167,17 +195,26 @@ class ProfileStore:
 
     def get_all_pids(self) -> list[str]:
         self._build_offset_index()
-        return list(self._offset_index.keys())
+        pids = list(self._offset_index.keys())
+        known = set(pids)
+        for pid in [*self._sample_profiles, *self._ingested]:
+            if pid not in known:
+                known.add(pid)
+                pids.append(pid)
+        return pids
 
     def __contains__(self, pid: str) -> bool:
-        if pid in self._sample_profiles or pid in self._cache:
+        if pid in self._ingested or pid in self._sample_profiles or pid in self._cache:
             return True
         self._build_offset_index()
         return pid in self._offset_index
 
     def __len__(self) -> int:
         self._build_offset_index()
-        return len(self._offset_index) + len(self._sample_profiles)
+        # Sample IDs are also registered in the offset index (offset -1).
+        return len(
+            self._offset_index.keys() | self._sample_profiles.keys() | self._ingested.keys()
+        )
 
     def __del__(self) -> None:
         if hasattr(self, "_file_handle") and self._file_handle is not None:

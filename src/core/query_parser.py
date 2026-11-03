@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+
 from src.core.constants import INDIAN_CITIES
 from src.core.models import (
     ExperienceRequirements,
@@ -12,7 +13,6 @@ from src.core.models import (
     SkillImportance,
 )
 from src.matching.skill_matcher import SKILL_ALIASES
-
 
 _SINGLE_WORD_SKILLS: set[str] = set()
 _MULTI_WORD_SKILLS: set[str] = set()
@@ -83,15 +83,7 @@ for s in _EXTRA_SKILLS:
 
 _MULTI_WORD_SKILLS_SORTED = sorted(_MULTI_WORD_SKILLS, key=lambda x: -len(x.split()))
 
-_SENIORITY_LEVELS = {"junior": "junior", "jr": "junior", "mid": "mid",
-                     "senior": "senior", "sr": "senior", "lead": "lead",
-                     "principal": "principal", "staff": "staff",
-                     "head": "head", "vp": "vp", "director": "director",
-                     "c-level": "c-level", "cto": "c-level", "ceo": "c-level",
-                     "chief": "c-level", "architect": "architect",
-                     "manager": "manager", "head of": "head"}
-
-_NON_SKILL_WORDS: frozenset = frozenset({
+_NON_SKILL_WORDS: frozenset[str] = frozenset({
     "find", "search", "look", "looking", "need", "wanted", "hiring",
     "and", "the", "a", "an", "in", "at", "on", "to", "of", "is", "are",
     "for", "with", "from", "by", "as", "or", "but", "not", "be",
@@ -115,6 +107,13 @@ _EXPERIENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "3-6 years" / "3 - 6 yrs": checked before _EXPERIENCE_RE, which would
+# otherwise latch onto the upper bound ("6 years") as the minimum.
+_EXPERIENCE_RANGE_RE = re.compile(
+    r'(?P<min>\d+)\s*(?:-|to)\s*(?P<max>\d+)\s*(?:years?|yrs?|yr)',
+    re.IGNORECASE,
+)
+
 
 def detect_multi_word_skills(text: str) -> list[str]:
     lower = text.lower()
@@ -123,7 +122,6 @@ def detect_multi_word_skills(text: str) -> list[str]:
     while start < len(lower):
         matched = 0
         for phrase in _MULTI_WORD_SKILLS_SORTED:
-            n = len(phrase)
             segment = lower[start:start + len(phrase)]
             if segment == phrase:
                 pre_ok = start == 0 or not lower[start - 1].isalnum()
@@ -149,19 +147,14 @@ def parse_query(text: str) -> ParsedQuery:
         remaining = remaining.replace(phrase.lower(), "", 1)
     remaining = re.sub(r'\s+', ' ', remaining).strip()
 
-    seniority: str | None = None
-    for label, level in _SENIORITY_LEVELS.items():
-        if label in remaining.split():
-            seniority = level
-            break
-        if label == "head of" and "head of" in remaining:
-            seniority = "head"
-            break
-
     exp_min: int | None = None
     exp_max: int | None = None
     exp_match = _EXPERIENCE_RE.search(remaining)
-    if exp_match:
+    range_first = _EXPERIENCE_RANGE_RE.search(remaining)
+    if range_first:
+        exp_min = int(range_first.group("min"))
+        exp_max = int(range_first.group("max"))
+    elif exp_match:
         exp_min = int(exp_match.group("min"))
         range_match = re.search(
             rf'{exp_match.group("min")}\s*-\s*(\d+)\s*(?:years?|yrs?)',

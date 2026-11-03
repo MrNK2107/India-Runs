@@ -21,11 +21,14 @@ class SearchFilter:
 
     def _check_location(self, profile: Profile) -> bool:
         if self.filters.remote_ok:
-            is_candidate_remote = False
+            is_candidate_remote: bool | str | None = False
             if profile.personal and profile.personal.location:
                 is_candidate_remote = (
                     bool(profile.personal.location.is_remote_ok) or
-                    (profile.personal.location.city and profile.personal.location.city.lower().strip() == "remote")
+                    (
+                        profile.personal.location.city
+                        and profile.personal.location.city.lower().strip() == "remote"
+                    )
                 )
             if not is_candidate_remote:
                 return False
@@ -34,8 +37,9 @@ class SearchFilter:
             return True
 
         location_filter = self.filters.location.lower()
-        city = profile.personal.location.city if profile.personal and profile.personal.location else None
-        country = profile.personal.location.country if profile.personal and profile.personal.location else None
+        loc = profile.personal.location if profile.personal else None
+        city = loc.city if loc else None
+        country = loc.country if loc else None
         if location_filter in ("remote", "anywhere"):
             return True
         if city and city.lower() == location_filter:
@@ -45,7 +49,7 @@ class SearchFilter:
         for exp in profile.experience:
             if exp.location and exp.location.lower().strip() == location_filter:
                 return True
-        if self.filters.remote_ok and profile.personal and profile.personal.location and profile.personal.location.is_remote_ok:
+        if self.filters.remote_ok and loc and loc.is_remote_ok:
             return True
         return False
 

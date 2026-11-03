@@ -2,8 +2,49 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.core.constants import IIT_NIT_BITS, TIER_1_CITIES
+from src.core.constants import TIER_1_CITIES
 from src.core.models import MatchResult, Profile
+from src.fairness.groups import city_key, is_top_institution
+
+BIAS_THRESHOLD = 0.1
+MIN_BUCKET_SIZE = 3
+
+
+def _avg(xs: list[float]) -> float:
+    return sum(xs) / len(xs) if xs else 0.0
+
+
+def _compare_groups(
+    label_a: str, scores_a: list[float], label_b: str, scores_b: list[float],
+    keys: tuple[str, str],
+) -> dict[str, Any]:
+    """Mean-score gap between two groups; group a is the (potentially) favoured one.
+
+    With an empty group there is nothing to compare: previously its average counted as 0,
+    so e.g. an all-tier-1 shortlist was reported as location bias.
+    """
+    avg_a, avg_b = _avg(scores_a), _avg(scores_b)
+    observations = [
+        f"{label_a} avg score: {avg_a:.3f} (n={len(scores_a)})",
+        f"{label_b} avg score: {avg_b:.3f} (n={len(scores_b)})",
+    ]
+    if not scores_a or not scores_b:
+        observations.append("Difference: n/a (insufficient data: one group is empty)")
+        return {
+            "detected": False,
+            "observations": observations,
+            "details": {keys[0]: avg_a, keys[1]: avg_b, "diff": 0.0},
+        }
+    diff = avg_a - avg_b
+    detected = diff > BIAS_THRESHOLD
+    observations.append(
+        f"Difference: {diff:.3f} {'(potential bias)' if detected else '(acceptable)'}"
+    )
+    return {
+        "detected": detected,
+        "observations": observations,
+        "details": {keys[0]: avg_a, keys[1]: avg_b, "diff": diff},
+    }
 
 
 class BiasDetector:
@@ -55,11 +96,16 @@ class BiasDetector:
                 buckets[prefix] = []
             buckets[prefix].append(m.scores.overall)
 
+        # A first-letter bucket (n >= MIN_BUCKET_SIZE) whose mean differs from the overall
+        # mean by more than BIAS_THRESHOLD is flagged. (Previously nothing was ever flagged.)
+        all_scores = [x for v in buckets.values() for x in v]
+        overall = _avg(all_scores)
         observations = []
         for prefix, scores in sorted(buckets.items()):
-            if len(scores) >= 3:
-                avg = sum(scores) / len(scores)
-                observations.append(f"{prefix}: avg score {avg:.3f} (n={len(scores)})")
+            if len(scores) >= MIN_BUCKET_SIZE:
+                avg = _avg(scores)
+                flag = " (potential bias)" if abs(avg - overall) > BIAS_THRESHOLD else ""
+                observations.append(f"{prefix}: avg score {avg:.3f} (n={len(scores)}){flag}")
 
         return {
             "detected": any(obs.endswith("(potential bias)") for obs in observations),
@@ -91,19 +137,10 @@ class BiasDetector:
                 non_en_scores.append(m.scores.overall)
                 non_en_names.append(name)
 
-        en_avg = sum(en_scores) / len(en_scores) if en_scores else 0
-        non_en_avg = sum(non_en_scores) / len(non_en_scores) if non_en_scores else 0
-        diff = en_avg - non_en_avg
-
-        return {
-            "detected": diff > 0.1,
-            "observations": [
-                f"English profiles avg score: {en_avg:.3f} (n={len(en_scores)})",
-                f"Non-English profiles avg score: {non_en_avg:.3f} (n={len(non_en_scores)})",
-                f"Difference: {diff:.3f} {'(potential bias)' if diff > 0.1 else '(acceptable)'}",
-            ],
-            "details": {"en_avg_score": en_avg, "non_en_avg_score": non_en_avg, "diff": diff},
-        }
+        return _compare_groups(
+            "English profiles", en_scores, "Non-English profiles", non_en_scores,
+            ("en_avg_score", "non_en_avg_score"),
+        )
 
     def check_location_bias(
         self, matches: list[MatchResult], profiles: dict[str, Profile],
@@ -120,30 +157,21 @@ class BiasDetector:
                 continue
             city = ""
             if profile.personal and profile.personal.location:
-                city = (profile.personal.location.city or "").lower()
+                city = city_key(profile.personal.location.city)
             if not city:
                 for exp in profile.experience:
                     if exp.location:
-                        city = exp.location.lower()
+                        city = city_key(exp.location)
                         break
             if city in TIER_1_CITIES:
                 tier1_scores.append(m.scores.overall)
             elif city:
                 tier2_scores.append(m.scores.overall)
 
-        t1_avg = sum(tier1_scores) / len(tier1_scores) if tier1_scores else 0
-        t2_avg = sum(tier2_scores) / len(tier2_scores) if tier2_scores else 0
-        diff = t1_avg - t2_avg
-
-        return {
-            "detected": diff > 0.1,
-            "observations": [
-                f"Tier-1 city profiles avg score: {t1_avg:.3f} (n={len(tier1_scores)})",
-                f"Tier-2/3 city profiles avg score: {t2_avg:.3f} (n={len(tier2_scores)})",
-                f"Difference: {diff:.3f} {'(potential bias)' if diff > 0.1 else '(acceptable)'}",
-            ],
-            "details": {"tier1_avg": t1_avg, "tier2_avg": t2_avg, "diff": diff},
-        }
+        return _compare_groups(
+            "Tier-1 city profiles", tier1_scores, "Tier-2/3 city profiles", tier2_scores,
+            ("tier1_avg", "tier2_avg"),
+        )
 
     def check_university_bias(
         self, matches: list[MatchResult], profiles: dict[str, Profile],
@@ -158,27 +186,14 @@ class BiasDetector:
             profile = profiles.get(m.profile_id)
             if profile is None:
                 continue
-            is_top_univ = False
-            for edu in profile.education:
-                inst = (edu.institution or "").lower()
-                if any(prefix in inst for prefix in IIT_NIT_BITS):
-                    is_top_univ = True
-                    break
+            is_top_univ = any(is_top_institution(e.institution) for e in profile.education)
             if is_top_univ:
                 top_univ_scores.append(m.scores.overall)
             else:
                 other_scores.append(m.scores.overall)
 
-        top_avg = sum(top_univ_scores) / len(top_univ_scores) if top_univ_scores else 0
-        other_avg = sum(other_scores) / len(other_scores) if other_scores else 0
-        diff = top_avg - other_avg
-
-        return {
-            "detected": diff > 0.1,
-            "observations": [
-                f"IIT/NIT/BITS profiles avg score: {top_avg:.3f} (n={len(top_univ_scores)})",
-                f"Other university profiles avg score: {other_avg:.3f} (n={len(other_scores)})",
-                f"Difference: {diff:.3f} {'(potential bias)' if diff > 0.1 else '(acceptable)'}",
-            ],
-            "details": {"top_univ_avg": top_avg, "other_avg": other_avg, "diff": diff},
-        }
+        return _compare_groups(
+            "IIT/NIT/BITS profiles", top_univ_scores,
+            "Other university profiles", other_scores,
+            ("top_univ_avg", "other_avg"),
+        )

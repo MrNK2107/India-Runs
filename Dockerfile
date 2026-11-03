@@ -1,39 +1,52 @@
+# Kasauti (india-runs) - evidence-backed candidate ranking.
+#
+#   docker build -t kasauti .                      # lite engine (default): small, CPU, no model download
+#   docker build -t kasauti --build-arg ENGINE=full .   # transformer embeddings + cross-encoder + LLM agents
+#   docker run -p 7860:7860 kasauti                # open http://localhost:7860
+#
+# With no prebuilt index the app indexes data/samples/sample_500.jsonl in memory at
+# startup (seconds), so the container is useful immediately. Mount a volume on
+# /app/data/profiles to keep profiles added through POST /api/v1/ingest.
 FROM python:3.11-slim
+
+ARG ENGINE=lite
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    OPENBLAS_NUM_THREADS=2 \
+    PORT=7860
 
 WORKDIR /app
 
-# System deps for faiss, psycopg2, spacy
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc build-essential && \
-    rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml requirements-lite.txt ./
+RUN if [ "$ENGINE" = "full" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends gcc build-essential libpq-dev \
+        && rm -rf /var/lib/apt/lists/* \
+        && mkdir -p src && pip install "." && rm -rf src; \
+    else \
+        pip install -r requirements-lite.txt; \
+    fi
 
-# Install dependencies first (cached layer)
-COPY pyproject.toml .
-RUN mkdir -p src && pip install --no-cache-dir ".[dev]" && rm -rf src
-
-# Copy source code and complete the package installation
 COPY . .
-RUN pip install --no-cache-dir -e ".[dev]" --no-deps
+RUN pip install --no-deps -e . \
+    && useradd --create-home --uid 1000 app \
+    && mkdir -p data/profiles data/indexes && chown -R app:app data
 
-# Download spacy model
-RUN python -m spacy download en_core_web_sm
+# Engine defaults live in /app/.engine.env and only fill variables that are unset, so
+# `docker run -e EMBEDDING_BACKEND=...` and compose .env values always win.
+ENV AUTO_INDEX=true \
+    HF_HOME=/app/.hf
+RUN if [ "$ENGINE" = "full" ]; then b=transformer; ce=true; else b=hashing; ce=false; fi \
+    && printf ': "${EMBEDDING_BACKEND:=%s}"\n: "${CROSS_ENCODER_ENABLED:=%s}"\nexport EMBEDDING_BACKEND CROSS_ENCODER_ENABLED\n' "$b" "$ce" > /app/.engine.env
+# The full engine runs with HF_HUB_OFFLINE=1 (src/main.py), so bake the models in at build time.
+RUN if [ "$ENGINE" = "full" ]; then \
+        python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')" \
+        && chown -R app:app /app/.hf; \
+    fi
 
-# Build indexes cannot happen during Docker build (no network to download models).
-# Instead, the app builds them on first startup when HF_HUB_OFFLINE=0 secret is available.
-# Create a startup script that builds indexes if missing, then launches the app.
-RUN printf '#!/bin/sh\nset -e\n\
-if [ ! -f data/indexes/faiss_index.bin ]; then\n\
-  echo "Building indexes from sample_500.jsonl..."\n\
-  python scripts/build_indexes.py --profiles data/samples/sample_500.jsonl --force\n\
-fi\n\
-exec uvicorn src.main:app --host 0.0.0.0 --port 7860\n' > /start.sh && chmod +x /start.sh
-
-# Point ProfileStore to the sample data (full 100k JSONL is too large for the container)
-ENV PROFILES_PATH=data/samples/sample_500.jsonl
-
+USER app
 EXPOSE 7860
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
+    CMD python -c "import urllib.request,os;urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"7860\")}/api/v1/health',timeout=4)"
 
-# By default serve the API (startup script builds indexes on first run).
-# Override CMD to run the ranker:
-#   docker run ... --entrypoint python rank.py --batch --out submission.csv
-CMD ["/start.sh"]
+CMD ["sh", "-c", ". /app/.engine.env; exec uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"]

@@ -23,12 +23,38 @@ class BM25Search:
         self._load_event.set()  # not waiting by default; cleared only by lazy_load
         self._load_error: Exception | None = None
         self._loading = False
+        self._write_lock = threading.Lock()
 
     def build_index(self, documents: list[str], profile_ids: list[str]) -> None:
         self.corpus_tokenized = [self._tokenize(doc) for doc in documents]
         self.index = BM25Okapi(self.corpus_tokenized)
         self.id_map = list(profile_ids)
         self._load_event.set()
+
+    def upsert(self, documents: list[str], profile_ids: list[str]) -> None:
+        """Add or replace documents by profile id and rebuild the BM25 model.
+
+        rank_bm25 has no incremental API, so the model is rebuilt from the
+        tokenized corpus (O(corpus) time; fine for the sample/demo indexes,
+        a few seconds on the 100K index).
+        """
+        if len(documents) != len(profile_ids):
+            raise ValueError("documents and profile_ids must have the same length")
+        if not profile_ids:
+            return
+        # A background lazy_load would overwrite our additions when it finishes.
+        self._load_event.wait()
+        with self._write_lock:
+            positions = {pid: i for i, pid in enumerate(self.id_map)}
+            for doc, pid in zip(documents, profile_ids):
+                tokens = self._tokenize(doc)
+                if pid in positions:
+                    self.corpus_tokenized[positions[pid]] = tokens
+                else:
+                    positions[pid] = len(self.id_map)
+                    self.id_map.append(pid)
+                    self.corpus_tokenized.append(tokens)
+            self.index = BM25Okapi(self.corpus_tokenized)
 
     def lazy_load(self, path: Path) -> None:
         """Start loading BM25 index in a background thread.
@@ -48,6 +74,8 @@ class BM25Search:
     def _load_async(self) -> None:
         """Background thread: load the BM25 index from disk."""
         try:
+            if self._load_path is None:
+                raise RuntimeError("BM25 load path not set")
             self.load(self._load_path)
             logger.info("BM25 index loaded in background (%d docs)", self.size)
         except Exception as e:

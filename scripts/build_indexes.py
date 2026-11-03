@@ -16,7 +16,8 @@ from src.core.models import Profile
 from src.ingestion.normalizer import normalize_redrob
 from src.ingestion.parser import ProfileParser
 from src.ingestion.quality_scorer import compute_data_quality_score
-from src.language.multilingual import MultilingualEmbedder
+from src.ingestion.service import build_document_text
+from src.language.multilingual import create_embedder
 from src.search.bm25_search import BM25Search
 from src.search.vector_search import VectorSearch
 
@@ -28,6 +29,7 @@ def build_indexes(
     profiles_path: Path = CANDIDATES_PATH,
     sample_count: int = 0,
     force: bool = False,
+    embed_batch_size: int = 64,
 ) -> None:
     start = time.perf_counter()
 
@@ -81,6 +83,8 @@ def build_indexes(
                 loaded += 1
             except Exception:
                 skipped += 1
+            if sample_count > 0 and loaded >= sample_count:
+                break
     logger.info(f"Loaded {len(profiles)} profiles ({skipped} skipped)")
 
     if not profiles:
@@ -89,17 +93,17 @@ def build_indexes(
 
     raw_texts = [p.raw_text for p in profiles]
     profile_ids = [p.profile_id for p in profiles]
-    document_texts = [_build_document_text(p) for p in profiles]
+    document_texts = [build_document_text(p) for p in profiles]
 
     logger.info("Generating embeddings (this may take a while)...")
-    embedder = MultilingualEmbedder()
+    embedder = create_embedder()
     batch_size = 500
     all_embeddings = []
     num_batches = (len(raw_texts) + batch_size - 1) // batch_size
     with tqdm(total=num_batches, desc="Embedding", unit="batch") as pbar:
         for i in range(0, len(raw_texts), batch_size):
             batch = raw_texts[i : i + batch_size]
-            batch_emb = embedder.embed_batch(batch)
+            batch_emb = embedder.embed_batch(batch, batch_size=embed_batch_size)
             all_embeddings.append(batch_emb)
             pbar.update(1)
     import numpy as np
@@ -121,26 +125,6 @@ def build_indexes(
 
     elapsed = time.perf_counter() - start
     logger.info(f"All indexes built successfully in {elapsed:.1f}s")
-
-
-def _build_document_text(profile: Profile) -> str:
-    parts: list[str] = []
-    if profile.raw_text:
-        parts.append(profile.raw_text)
-    parts.extend(s.name for s in profile.skills)
-    for exp in profile.experience:
-        parts.append(exp.title)
-        parts.append(exp.company)
-        parts.append(exp.description)
-    for edu in profile.education:
-        parts.append(edu.institution)
-        if edu.field:
-            parts.append(edu.field)
-    if profile.professional and profile.professional.current_title:
-        parts.append(profile.professional.current_title)
-    if profile.professional and profile.professional.current_company:
-        parts.append(profile.professional.current_company)
-    return " ".join(parts)
 
 
 def _save_offset_index(
@@ -180,7 +164,7 @@ def _save_offset_index(
             except json.JSONDecodeError:
                 continue
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(offsets, f)
     logger.info(f"Offset index saved: {len(offsets)} entries")
 
@@ -193,10 +177,13 @@ def main():
                         help="Process only N profiles (for quick testing)")
     parser.add_argument("--force", action="store_true",
                         help="Rebuild indexes even if they exist")
+    parser.add_argument("--embed-batch-size", type=int, default=64,
+                        help="Texts per model forward pass (lower = less memory)")
     args = parser.parse_args()
 
     profiles_p = Path(args.profiles) if args.profiles else CANDIDATES_PATH
-    build_indexes(profiles_path=profiles_p, sample_count=args.sample, force=args.force)
+    build_indexes(profiles_path=profiles_p, sample_count=args.sample, force=args.force,
+                  embed_batch_size=args.embed_batch_size)
 
 
 if __name__ == "__main__":

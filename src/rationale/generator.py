@@ -23,7 +23,7 @@ class RationaleGenerator:
         self.model = settings.openai_model
 
     @property
-    def client(self):
+    def client(self) -> Any:
         if self._client is None:
             try:
                 self._client = get_llm_client()
@@ -33,7 +33,7 @@ class RationaleGenerator:
         return self._client
 
     async def generate(
-        self, match: MatchResult, profile: Profile, job_requirements: dict,
+        self, match: MatchResult, profile: Profile, job_requirements: dict[str, Any],
     ) -> Rationale:
         try:
             if self.client is None:
@@ -69,7 +69,7 @@ class RationaleGenerator:
         return results
 
     def _build_prompt(
-        self, match: MatchResult, profile: Profile, job_requirements: dict,
+        self, match: MatchResult, profile: Profile, job_requirements: dict[str, Any],
     ) -> str:
         skills_text = ", ".join(s.name for s in profile.skills)
         return (
@@ -87,24 +87,29 @@ class RationaleGenerator:
         )
 
     def _parse_response(self, response: str) -> Rationale:
-        try:
-            data = json.loads(response)
-            return Rationale(
-                summary=data.get("summary", ""),
-                strengths=data.get("strengths", []),
-                gaps=data.get("gaps", []),
-                skill_details=[
-                    SkillDetail(**sd) for sd in data.get("skill_details", [])
-                ],
-                experience_analysis=data.get("experience_analysis", ""),
-                recommendation=MatchRecommendation(data.get("recommendation", "good_match")),
-            )
-        except (json.JSONDecodeError, TypeError, ValueError):
-            return Rationale(summary="Could not parse rationale response from LLM.")
+        """Parse the LLM's JSON. Raises ValueError when unusable, so generate() falls back
+        to the template rationale (it used to return an empty "Could not parse" one)."""
+        from src.agents.planner import _strip_json_fences
+
+        data = json.loads(_strip_json_fences(response))
+        if not isinstance(data, dict):
+            raise ValueError(f"rationale JSON must be an object, got {type(data).__name__}")
+        return Rationale(
+            summary=data.get("summary", ""),
+            strengths=data.get("strengths", []),
+            gaps=data.get("gaps", []),
+            skill_details=[
+                SkillDetail(**sd) for sd in data.get("skill_details", [])
+            ],
+            experience_analysis=data.get("experience_analysis", ""),
+            recommendation=MatchRecommendation(data.get("recommendation", "good_match")),
+        )
 
     def _template_rationale(self, match: MatchResult, profile: Profile | None) -> Rationale:
-        matched = set(match.matched_skills)
-        missing = set(match.missing_skills)
+        # Ordered de-duplication: set() order depends on per-process string hashing, so
+        # the rationale text differed between runs.
+        matched = list(dict.fromkeys(match.matched_skills))
+        missing = [s for s in dict.fromkeys(match.missing_skills) if s not in matched]
         skill_details = [
             SkillDetail(
                 skill=s,
@@ -113,12 +118,12 @@ class RationaleGenerator:
                 proficiency_match=s in matched,
                 evidence=s in matched and "Found in profile" or "Not found in profile",
             )
-            for s in list(matched) + list(missing)
+            for s in matched + missing
         ]
 
         strengths = []
         if matched:
-            top5 = ", ".join(list(matched)[:5])
+            top5 = ", ".join(matched[:5])
             strengths.append(f"Matches {len(matched)} required skills: {top5}")
         if match.experience_years and match.scores.experience_match >= 0.6:
             yrs = match.experience_years
@@ -128,7 +133,7 @@ class RationaleGenerator:
 
         gaps = []
         if missing:
-            gaps.append(f"Missing {len(missing)} required skills: {', '.join(list(missing)[:5])}")
+            gaps.append(f"Missing {len(missing)} required skills: {', '.join(missing[:5])}")
         if match.scores.experience_match < 0.5 and match.experience_years:
             gaps.append(f"Experience ({match.experience_years} years) may be insufficient")
 
@@ -143,7 +148,7 @@ class RationaleGenerator:
 
         return Rationale(
             summary=(
-                f"{match.name} is a{'n' if recommendation == MatchRecommendation.STRONG else ''} "
+                f"{match.name} is a "
                 f"{recommendation.value.replace('_', ' ')} "
                 f"with {len(matched)} matching skills "
                 f"and {match.experience_years or 0} years of experience."

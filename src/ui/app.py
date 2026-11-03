@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import logging
 import sys
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import gradio as gr
 
@@ -18,12 +20,10 @@ from src.core.config import DATA_DIR  # noqa: E402
 from src.core.models import MatchScores, Rationale, SearchResultItem  # noqa: E402
 from src.matching.scorer import DEFAULT_SLIDER_WEIGHTS, CandidateScorer  # noqa: E402
 from src.ui.components import (  # noqa: E402
-    LOADING_STEPS,
     create_analytics_dashboard,
     create_candidate_card,
     create_empty_state,
     create_loading_overlay,
-    create_progress_html,
     create_rationale_panel,
 )
 
@@ -157,37 +157,44 @@ def is_json_query(query: str) -> bool:
 
 def parse_json_to_query_object(json_str: str) -> Any:
     import json
-    from src.core.models import ParsedQuery, RequiredSkill, PreferredSkill, ExperienceRequirements, LocationRequirements
+
+    from src.core.models import (
+        ExperienceRequirements,
+        LocationRequirements,
+        ParsedQuery,
+        PreferredSkill,
+        RequiredSkill,
+    )
     data = json.loads(json_str)
-    
+
     req_skills = []
     for s in data.get("required_skills", []):
         if isinstance(s, dict):
             req_skills.append(RequiredSkill(name=s.get("name", "")))
         else:
             req_skills.append(RequiredSkill(name=str(s)))
-            
+
     pref_skills = []
     for s in data.get("preferred_skills", []):
         if isinstance(s, dict):
             pref_skills.append(PreferredSkill(name=s.get("name", "")))
         else:
             pref_skills.append(PreferredSkill(name=str(s)))
-            
+
     min_exp = data.get("min_experience")
     max_exp = data.get("max_experience")
     exp = ExperienceRequirements(
         min_years=float(min_exp) if min_exp is not None else None,
         max_years=float(max_exp) if max_exp is not None else None,
     )
-    
+
     loc = LocationRequirements(
         city=data.get("location", ""),
         remote_ok=bool(data.get("remote_ok", False)),
     )
-    
+
     subskills = data.get("subskills", {})
-    
+
     return ParsedQuery(
         required_skills=req_skills,
         preferred_skills=pref_skills,
@@ -198,16 +205,18 @@ def parse_json_to_query_object(json_str: str) -> Any:
     )
 
 
-async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool, Any]:
+async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool, Any, bool]:
+    # Wired to 5 Gradio outputs (..., parsed_query_state, use_turbo_toggle): every
+    # return must yield 5 values or Gradio raises "too few output values".
     if not query or not query.strip():
-        return "", 0, False, None
+        return "", 0, False, None, use_turbo
 
     from src.core.models import ParsedQuery
 
     if is_json_query(query):
         try:
             parsed = parse_json_to_query_object(query)
-            
+
             # Automatically populate subskills if empty
             if not parsed.subskills:
                 parsed.subskills = {}
@@ -219,11 +228,11 @@ async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool
                 name_lower = psk.name.lower().strip()
                 if name_lower in DOMAIN_SUBSKILLS and psk.name not in parsed.subskills:
                     parsed.subskills[psk.name] = DOMAIN_SUBSKILLS[name_lower]
-            
+
             formatted_json = serialize_query_to_json(parsed, parsed.original_query)
             min_exp = int(parsed.experience.min_years) if (parsed.experience and parsed.experience.min_years is not None) else 0
             remote_ok = bool(parsed.location.remote_ok) if parsed.location else False
-            return formatted_json, min_exp, remote_ok, parsed
+            return formatted_json, min_exp, remote_ok, parsed, use_turbo
         except Exception as e:
             logger.warning(f"Failed to parse user JSON query, falling back to natural language: {e}")
 
@@ -247,7 +256,7 @@ async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool
             parsed = await planner.plan(query)
         except Exception as e:
             logger.warning(f"Planner LLM failed: {e}")
-            
+
     if parsed is None:
         parsed = ParsedQuery()
 
@@ -275,10 +284,10 @@ async def parse_query_to_ui(query: str, use_turbo: bool) -> tuple[str, int, bool
             min_exp = 7
         elif "junior" in q_lower or "jr" in q_lower or "fresher" in q_lower:
             min_exp = 0
-            
+
     # Determine remote status
     remote_ok = "remote" in query.lower() or (parsed.location is not None and bool(parsed.location.remote_ok))
-    
+
     # Sync remote_ok and min_years into the ParsedQuery object itself
     if parsed.location is None:
         from src.core.models import LocationRequirements
@@ -327,7 +336,7 @@ async def search_handler(
         return (
             create_error_panel(
                 "Search system not initialized. Please build indexes first "
-                "by running <tt>python scripts/build_indexes.py</tt>."
+                "by running: python scripts/build_indexes.py"
             ),
             "",
             "[]",
@@ -338,6 +347,14 @@ async def search_handler(
 
     from src.api.routes.search import _orchestrator
     from src.core.models import SearchFilters
+
+    if _orchestrator is None:
+        return (
+            create_error_panel("Search system not initialized (orchestrator missing)."),
+            "",
+            "[]",
+            gr.update(visible=False),
+        )
 
     filters = SearchFilters(
         location=location.strip() if location.strip() else None,
@@ -414,7 +431,7 @@ async def search_handler(
         badges += '<span class="badge badge-listwise">&#127942; Listwise Ranked</span>'
     if md and md.pii_anonymized:
         badges += '<span class="badge badge-pii">&#128737;&#65039; PII Anonymized</span>'
-    badges += f'<span class="badge badge-method">{methods_str}</span>'
+    badges += f'<span class="badge badge-method">{html.escape(methods_str)}</span>'
     metadata_header = f"""
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
         {badges}
@@ -461,7 +478,7 @@ def re_rank_handler(results_json: str, *slider_values: float) -> str:
 
         raw.sort(key=lambda x: x.get("_re_score", 0), reverse=True)
 
-        html = "<div class='results-container'>"
+        cards_html = "<div class='results-container'>"
         for rank, r in enumerate(raw, 1):
             r["rank"] = rank
             rationale_dict = r.get("rationale", {}) or {}
@@ -478,10 +495,10 @@ def re_rank_handler(results_json: str, *slider_values: float) -> str:
                 missing_skills=r.get("missing_skills", []),
                 rationale=Rationale(**rationale_dict) if isinstance(rationale_dict, dict) else Rationale(),
             )
-            html += create_candidate_card(item)
-        html += "</div>"
+            cards_html += create_candidate_card(item)
+        cards_html += "</div>"
 
-        return html
+        return cards_html
     except Exception as e:
         logger.exception("Re-rank processing failed")
         return create_error_panel(f"Re-ranking failed: {e}")
@@ -674,7 +691,7 @@ def create_app() -> gr.Blocks:
                 </div>
                 """)
 
-    return app
+    return cast(gr.Blocks, app)
 
 
 app = create_app()

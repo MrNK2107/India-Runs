@@ -47,6 +47,24 @@ class CandidateScorer:
         self.weights = config["scoring_weights"]
         self.slider_defaults = config.get("slider_weights", DEFAULT_SLIDER_WEIGHTS)
 
+    def effective_weights(self, slider_weights: dict[str, float] | None = None) -> dict[str, float]:
+        """Weight per score dimension for this request (sliders, else config weights)."""
+        effective_weights: dict[str, float] = {}
+        if slider_weights:
+            for slider_dim, actual_dim in DIM_TO_ACTUAL.items():
+                # A slider set to 0 means "ignore this dimension"; only sliders that were
+                # not sent fall back to the defaults below. (0 used to fall back too, so a
+                # 0 slider weighed more than a 5.)
+                if slider_dim in slider_weights:
+                    effective_weights[actual_dim] = max(0.0, slider_weights[slider_dim]) / 100.0
+            for dim, w in self.slider_defaults.items():
+                actual = DIM_TO_ACTUAL.get(dim, dim)
+                if actual not in effective_weights:
+                    effective_weights[actual] = w
+        else:
+            effective_weights = dict(self.weights)
+        return effective_weights
+
     def compute_overall(
         self,
         scores: dict[str, float | None],
@@ -55,18 +73,7 @@ class CandidateScorer:
         total_weight = 0.0
         weighted_sum = 0.0
         components: dict[str, float | None] = {}
-
-        effective_weights: dict[str, float] = {}
-        if slider_weights:
-            for slider_dim, actual_dim in DIM_TO_ACTUAL.items():
-                if slider_dim in slider_weights and slider_weights[slider_dim] > 0:
-                    effective_weights[actual_dim] = slider_weights[slider_dim] / 100.0
-            for dim, w in self.slider_defaults.items():
-                actual = DIM_TO_ACTUAL.get(dim, dim)
-                if actual not in effective_weights:
-                    effective_weights[actual] = w
-        else:
-            effective_weights = dict(self.weights)
+        effective_weights = self.effective_weights(slider_weights)
 
         for dim in _ALL_DIMS:
             score = scores.get(dim)

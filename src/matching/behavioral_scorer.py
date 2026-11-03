@@ -119,11 +119,18 @@ def detect_honeypot(profile: Profile) -> str | None:
 # ── Career Trajectory Scoring ───────────────────────────────────────
 
 
-def compute_career_trajectory(profile: Profile) -> float:
+def compute_career_trajectory(
+    profile: Profile, include_current_tenure: bool = False, as_of: str | None = None,
+) -> float:
     """Score career trajectory quality (0-1).
 
     Rewards: career progression, stability, company quality.
     Penalizes: job hopping, pure consulting, no progression.
+
+    By default (the ranking used for submissions) tenure is measured on completed
+    roles only, so a long-running current job doesn't count towards stability.
+    ``include_current_tenure=True`` also counts the open role up to ``as_of``
+    (YYYY-MM[-DD], default today) - an opt-in alternative exposed in the API/UI.
     """
     experiences = profile.experience
     if not experiences:
@@ -147,8 +154,12 @@ def compute_career_trajectory(profile: Profile) -> float:
 
     # 1. Job hopping penalty: avg tenure < 18 months at 3+ jobs
     tenures = []
+    today = as_of or datetime.now(UTC).date().isoformat()
     for job in experiences:
-        months = _calc_months(job.start_date, job.end_date)
+        end = job.end_date
+        if end is None and include_current_tenure and job.is_current:
+            end = today
+        months = _calc_months(job.start_date, end)
         if months is not None and months > 0:
             tenures.append(months)
 
@@ -172,17 +183,20 @@ def compute_career_trajectory(profile: Profile) -> float:
         scores.append(0.5)
 
     # 2. Consulting detection: Check for consulting/staffing companies
-    consulting_keywords = [
-        "consulting", "staffing", "contract", "temp", "freelance",
+    # Staffing-firm names only make sense against the company; "temp" and
+    # "freelance" are title words (and "temp" would false-match e.g. "Tempus").
+    company_keywords = [
+        "consulting", "staffing", "contract",
         "randstad", "adecco", "teamlease", "manpower", "kelly services",
     ]
+    title_keywords = ["consulting", "staffing", "contract", "temp", "freelance"]
     consulting_jobs = 0
     for job in experiences:
         company_lower = (job.company or "").lower()
         title_lower = (job.title or "").lower()
-        if any(kw in company_lower for kw in consulting_keywords[:3]):
+        if any(kw in company_lower for kw in company_keywords):
             consulting_jobs += 1
-        elif any(kw in title_lower for kw in consulting_keywords):
+        elif any(kw in title_lower for kw in title_keywords):
             consulting_jobs += 1
 
     if consulting_jobs == len(experiences):
@@ -304,7 +318,11 @@ def compute_behavioral_score(signals: Signals) -> float:
     else:
         components.append(0.2)
 
-    return statistics.mean(components) if components else 0.3
+    # Raw platform values are not range-checked upstream (e.g. a completeness
+    # of 250 or an interview rate given as a percentage), so clamp each
+    # component to keep the score in [0, 1].
+    clamped = [min(1.0, max(0.0, c)) for c in components]
+    return statistics.mean(clamped) if clamped else 0.3
 
 
 # ── Skill Proficiency Scoring ───────────────────────────────────────

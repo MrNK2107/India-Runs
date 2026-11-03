@@ -3,8 +3,9 @@
 """Check data quality issues in the candidate dataset."""
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, '/home/nanda/India-Runs')
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
@@ -67,7 +68,7 @@ print("\n--- Checking raw data structure ---")
 import json  # noqa: E402
 
 samples = DATA_DIR / "samples" / "sample_candidates.json"
-with open(samples) as f:
+with open(samples, encoding="utf-8") as f:
     data = json.load(f)
 
 for pid in has_exp_but_no_roles[:3]:

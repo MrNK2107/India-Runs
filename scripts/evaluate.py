@@ -12,75 +12,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.config import DATA_DIR
 from src.core.constants import GROUND_TRUTH_PATH, QUERIES_PATH
+from src.evaluation.metrics import (
+    cross_lingual_mrr,
+    latency_stats,
+    mean_reciprocal_rank,
+    ndcg_at_k,
+    precision_at_k,
+    recall_at_k,
+)
 from src.search.bm25_search import BM25Search
 from src.search.hybrid import HybridSearch
 from src.search.vector_search import VectorSearch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def precision_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    if k <= 0 or not retrieved:
-        return 0.0
-    top_k = retrieved[:k]
-    if not top_k:
-        return 0.0
-    return len([doc for doc in top_k if doc in relevant]) / len(top_k)
-
-
-def recall_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    if not relevant:
-        return 0.0
-    top_k = retrieved[:k]
-    hits = len([doc for doc in top_k if doc in relevant])
-    return hits / len(relevant)
-
-
-def mean_reciprocal_rank(retrieved: list[str], relevant: set[str]) -> float:
-    for i, doc in enumerate(retrieved, start=1):
-        if doc in relevant:
-            return 1.0 / i
-    return 0.0
-
-
-def ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
-    top_k = retrieved[:k]
-    dcg = 0.0
-    for i, doc in enumerate(top_k, start=1):
-        rel = 1.0 if doc in relevant else 0.0
-        dcg += (2 ** rel - 1) / (i.bit_length()) if i > 1 else rel
-    ideal = min(len(relevant), k)
-    idcg = sum(1.0 / (i.bit_length()) if i > 1 else 1.0 for i in range(1, ideal + 1))
-    return dcg / idcg if idcg > 0 else 0.0
-
-
-def cross_lingual_mrr(results: dict) -> float:
-    non_en_queries = {
-        qid for qid, q in results.get("queries", {}).items()
-        if q.get("language", "en") != "en"
-    }
-    if not non_en_queries:
-        return 1.0
-    mrr_sum = 0.0
-    for qid in non_en_queries:
-        mrr_sum += results.get("mrr", {}).get(qid, 0.0)
-    return mrr_sum / len(non_en_queries)
-
-
-def latency_stats(latencies: list[float]) -> dict:
-    if not latencies:
-        return {"p50": 0, "p95": 0, "p99": 0, "mean": 0, "min": 0, "max": 0}
-    sorted_lat = sorted(latencies)
-    n = len(sorted_lat)
-    return {
-        "p50": sorted_lat[int(n * 0.50)],
-        "p95": sorted_lat[int(n * 0.95)],
-        "p99": sorted_lat[int(n * 0.99)],
-        "mean": mean(latencies),
-        "min": min(latencies),
-        "max": max(latencies),
-    }
 
 
 def find_index_dir() -> Path | None:
@@ -95,11 +40,11 @@ def _run_full_pipeline(
     skip_reranker: bool,
 ) -> dict:
     """Run full pipeline across all queries in a single event loop."""
-    from src.core.query_parser import expand_with_aliases, parse_query
-    from src.search.reranker import CrossEncoderReranker
-    from src.matching.scorer import CandidateScorer
     from src.agents.executor import ExecutorAgent
     from src.core.profile_store import ProfileStore
+    from src.core.query_parser import expand_with_aliases, parse_query
+    from src.matching.scorer import CandidateScorer
+    from src.search.reranker import CrossEncoderReranker
 
     index_dir = find_index_dir()
     logger.info("Loading full pipeline components...")
@@ -211,9 +156,9 @@ def evaluate(
             logger.error(e)
         return {}
 
-    with open(queries_path) as f:
+    with open(queries_path, encoding="utf-8") as f:
         queries_raw = json.load(f)
-    with open(ground_truth_path) as f:
+    with open(ground_truth_path, encoding="utf-8") as f:
         ground_truth = json.load(f)
 
     queries_list = queries_raw if isinstance(queries_raw, list) else list(queries_raw.values())
@@ -333,7 +278,7 @@ if __name__ == "__main__":
             report_path = DATA_DIR / "evaluation_report_hybrid_pipeline.json"
         elif args.full_pipeline:
             report_path = DATA_DIR / "evaluation_report_full.json"
-        with open(report_path, "w") as f:
+        with open(report_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
         logger.info(f"Report saved to {report_path}")
         print(json.dumps(result, indent=2))

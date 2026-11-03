@@ -19,7 +19,7 @@ class ReflectorAgent:
         self.model = settings.openai_model
 
     @property
-    def client(self):
+    def client(self) -> Any:
         if self._client is None:
             try:
                 self._client = get_llm_client()
@@ -88,8 +88,8 @@ class ReflectorAgent:
             "feedback": self._generate_feedback(evaluations, results),
         }
 
-    def _fallback_evaluate(self, results: list[MatchResult]) -> list[dict]:
-        evaluations: list[dict] = []
+    def _fallback_evaluate(self, results: list[MatchResult]) -> list[dict[str, Any]]:
+        evaluations: list[dict[str, Any]] = []
         for r in results[:20]:
             if r.scores.overall >= 0.8:
                 assessment = "strong_match"

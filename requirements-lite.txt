@@ -1,0 +1,17 @@
+# Runtime for the lite engine (EMBEDDING_BACKEND=hashing, CROSS_ENCODER_ENABLED=false):
+# the full product - web app, API, ingest, hybrid search, explanations - without
+# torch/transformers/spacy/gradio. ~250 MB image layer instead of several GB.
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
+pydantic>=2.9
+pydantic-settings>=2.5
+pyyaml>=6.0
+python-dotenv>=1.0
+numpy>=1.26
+faiss-cpu>=1.8
+rank-bm25>=0.2.2
+langgraph>=0.2
+langchain-core>=0.3
+langdetect>=1.0.9
+deep-translator>=1.11

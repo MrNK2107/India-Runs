@@ -80,3 +80,8 @@ CODEX.md
 # Except README.md
 !README.md
 !**/README.md
+
+# Product docs (user-facing) are tracked
+!docs/PRODUCT.md
+!docs/DEMO.md
+!docs/ARCHITECTURE.md

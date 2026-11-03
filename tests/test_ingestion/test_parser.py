@@ -210,7 +210,10 @@ def test_normalizer_redrob():
 
 
 def test_normalizer_redrob_remote():
-    for mode, expected in [("remote", True), ("flexible", True), ("hybrid", True), ("onsite", False), (None, False)]:
+    cases = [
+        ("remote", True), ("flexible", True), ("hybrid", True), ("onsite", False), (None, False),
+    ]
+    for mode, expected in cases:
         raw = {
             "candidate_id": "r-remote",
             "profile": {"anonymized_name": "Test User"},

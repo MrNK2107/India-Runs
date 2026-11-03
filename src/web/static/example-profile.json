@@ -1,0 +1,23 @@
+[
+  {
+    "candidate_id": "DEMO_0001",
+    "profile": {
+      "anonymized_name": "Asha Rao",
+      "headline": "Flutter Developer | Dart, Firebase",
+      "summary": "Mobile engineer building Flutter apps with Dart and Firebase for fintech in Pune.",
+      "location": "Pune, Maharashtra",
+      "country": "India",
+      "years_of_experience": 4,
+      "current_title": "Flutter Developer",
+      "current_company": "PayKaro"
+    },
+    "career_history": [
+      {"company": "PayKaro", "title": "Flutter Developer", "start_date": "2022-01-10",
+       "end_date": null, "is_current": true,
+       "description": "Built the Flutter consumer app, offline sync with Firebase, UPI flows."}
+    ],
+    "skills": [{"name": "Flutter", "proficiency": "advanced"},
+               {"name": "Dart", "proficiency": "advanced"},
+               {"name": "Firebase", "proficiency": "intermediate"}]
+  }
+]

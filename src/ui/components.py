@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import math
+from html import escape
+from typing import Any
 
 # ruff: noqa: E501 — long HTML/CSS inline style strings are intentional
 from src.core.models import MatchResult, MatchScores, Profile, Rationale, SearchResultItem
+
+
+def _e(value: object) -> str:
+    """HTML-escape data for gr.HTML, which renders raw HTML without sanitising."""
+    return escape(str(value), quote=True)
 
 
 def _bullet_years(years: float | None) -> str:
@@ -37,7 +44,7 @@ def _bar_color(label: str) -> str:
 
 
 def _score_bar(label: str, value: float, color: str | None = None) -> str:
-    pct = max(0, min(100, int(value * 100)))
+    pct = max(0, min(100, int(value * 100))) if math.isfinite(value) else 0
     c = color or _bar_color(label)
     return f"""
     <div class="score-bar-row">
@@ -86,10 +93,10 @@ def create_candidate_card(item: SearchResultItem) -> str:
         bars += _score_bar("Proficiency", s.skill_proficiency_score)
 
     skills_html = "".join(
-        f'<span class="skill-chip matched">{skill}</span>' for skill in item.matched_skills[:8]
+        f'<span class="skill-chip matched">{_e(skill)}</span>' for skill in item.matched_skills[:8]
     )
     missing_html = "".join(
-        f'<span class="skill-chip missing">{skill}</span>' for skill in item.missing_skills[:5]
+        f'<span class="skill-chip missing">{_e(skill)}</span>' for skill in item.missing_skills[:5]
     )
 
     return f"""
@@ -98,19 +105,19 @@ def create_candidate_card(item: SearchResultItem) -> str:
             <div style="flex:1;">
                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span class="candidate-rank">#{item.rank}</span>
-                    <span class="candidate-name">{item.name}</span>
-                    <code style="font-size:10px;color:var(--text-muted);background:rgba(167,139,250,0.06);padding:1px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;">{item.profile_id}</code>
+                    <span class="candidate-name">{_e(item.name)}</span>
+                    <code style="font-size:10px;color:var(--text-muted);background:rgba(167,139,250,0.06);padding:1px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;">{_e(item.profile_id)}</code>
                 </div>
                 <div class="candidate-role">
-                    {item.current_title or 'N/A'}
+                    {_e(item.current_title or 'N/A')}
                     {(
                         f'<span style="opacity:0.45;font-weight:400;"> at </span>'
-                        f'<strong>{item.current_company}</strong>'
+                        f'<strong>{_e(item.current_company)}</strong>'
                         if item.current_company else ""
                     )}
                 </div>
                 <div class="candidate-meta">
-                    {item.location or 'Location N/A'}
+                    {_e(item.location or 'Location N/A')}
                     {_bullet_years(item.experience_years)}
                 </div>
             </div>
@@ -131,7 +138,7 @@ def create_candidate_card(item: SearchResultItem) -> str:
     """
 
 
-def create_score_radar_chart(scores: dict) -> str:
+def create_score_radar_chart(scores: dict[str, Any]) -> str:
     dims = ["Skill", "Experience", "Semantic", "Keyword", "Confidence"]
     dim_keys = [
         "skill_match", "experience_match",
@@ -176,7 +183,7 @@ def create_skill_match_table(rationale: Rationale) -> str:
     rows = ""
     for sd in rationale.skill_details:
         icon = "\u2705" if sd.found else "\u274c"
-        rows += f"<tr><td>{icon}</td><td>{sd.skill}</td><td>{sd.evidence}</td></tr>"
+        rows += f"<tr><td>{icon}</td><td>{_e(sd.skill)}</td><td>{_e(sd.evidence)}</td></tr>"
 
     return f"""
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -275,7 +282,9 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
         dp = fairness.get("demographic_parity", {})
         lang_bias = fairness.get("language_bias", {})
 
-        def _metric_card(label, value, threshold, format_str="{:.3f}"):
+        def _metric_card(
+            label: str, value: Any, threshold: float, format_str: str = "{:.3f}"
+        ) -> str:
             val = value if isinstance(value, (int, float)) else 0
             if val < threshold:
                 cls = "pastel-green"
@@ -286,7 +295,7 @@ def create_analytics_dashboard(results_json: str = "[]") -> str:
                 color = "#d97706"
                 status = "👀 Monitor closely"
             else:
-                cls = "pastel-rose"
+                cls = "pastel-rose"  # noqa: F841 - css class reserved for future use
                 color = "#e11d48"
                 status = "⚠️ Bias detected"
             return f"""
@@ -387,18 +396,18 @@ def create_rationale_panel(rationale: Rationale | None, profile_summary: str) ->
         return ""
 
     color = MATCH_COLORS.get(rationale.recommendation.value, "#a78bfa")
-    summary = rationale.summary or "No summary available."
+    summary = _e(rationale.summary or "No summary available.")
 
     strengths_html = "".join(
-        f"<li>{s}</li>" for s in rationale.strengths[:5]
+        f"<li>{_e(s)}</li>" for s in rationale.strengths[:5]
     )
     gaps_html = "".join(
-        f"<li>{g}</li>" for g in rationale.gaps[:5]
+        f"<li>{_e(g)}</li>" for g in rationale.gaps[:5]
     )
 
     return f"""
     <div class="candidate-card rationale-panel" style="border-left-color:{color};">
-        <h4 style="margin:0 0 4px;font-size:15px;font-weight:600;color:var(--text-primary);">Rationale: {profile_summary}</h4>
+        <h4 style="margin:0 0 4px;font-size:15px;font-weight:600;color:var(--text-primary);">Rationale: {_e(profile_summary)}</h4>
         <p style="color:var(--text-secondary);font-size:13px;line-height:1.6;margin:6px 0;">{summary}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
             <div>
@@ -533,7 +542,7 @@ def create_error_panel(message: str) -> str:
             <span style="font-size:22px;">⚠️</span>
             <strong style="color:var(--red-700);font-size:15px;">Error</strong>
         </div>
-        <p style="color:var(--red-700);margin:0;font-size:13px;line-height:1.6;">{message}</p>
+        <p style="color:var(--red-700);margin:0;font-size:13px;line-height:1.6;">{_e(message)}</p>
     </div>"""
 
 

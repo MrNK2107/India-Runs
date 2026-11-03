@@ -4,9 +4,9 @@ from typing import Any
 
 import numpy as np
 
-from src.core.constants import IIT_NIT_BITS, TIER_1_CITIES
+from src.core.constants import TIER_1_CITIES
 from src.core.models import MatchResult, PersonalInfo, Profile
-
+from src.fairness.groups import city_key, is_top_institution
 
 _EMPTY_PROFILE = Profile(personal=PersonalInfo(name=""))
 
@@ -14,11 +14,11 @@ _EMPTY_PROFILE = Profile(personal=PersonalInfo(name=""))
 def _get_city_tier(profile: Profile) -> str | None:
     city = ""
     if profile.personal and profile.personal.location:
-        city = (profile.personal.location.city or "").lower()
+        city = city_key(profile.personal.location.city)
     if not city:
         for exp in profile.experience:
             if exp.location:
-                city = exp.location.lower()
+                city = city_key(exp.location)
                 break
     if not city:
         return None
@@ -26,11 +26,7 @@ def _get_city_tier(profile: Profile) -> str | None:
 
 
 def _is_top_university(profile: Profile) -> bool:
-    for edu in profile.education:
-        inst = (edu.institution or "").lower()
-        if any(prefix in inst for prefix in IIT_NIT_BITS):
-            return True
-    return False
+    return any(is_top_institution(edu.institution) for edu in profile.education)
 
 
 def compute_demographic_parity(
@@ -92,9 +88,10 @@ def compute_disparate_impact_ratio(
         group_lower = group.lower()
         for edu in profile.education:
             inst = (edu.institution or "").lower()
-            if group_lower == "top_university" and any(p in inst for p in IIT_NIT_BITS):
+            top = is_top_institution(edu.institution)
+            if group_lower == "top_university" and top:
                 return True
-            if group_lower == "other_university" and not any(p in inst for p in IIT_NIT_BITS):
+            if group_lower == "other_university" and not top:
                 return True
             if group_lower in inst:
                 return True

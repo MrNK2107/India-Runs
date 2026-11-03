@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from src.core.models import Profile
 from src.core.profile_store import ProfileStore
@@ -30,8 +30,14 @@ async def get_profile(profile_id: str) -> Profile:
 
 
 @router.get("/profiles", response_model=list[Profile])
-async def list_profiles(skip: int = 0, limit: int = 20) -> list[Profile]:
+async def list_profiles(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[Profile]:
     if _profile_store is None:
         raise HTTPException(status_code=503, detail="Profile store not initialized")
-    all_profiles = list(_profile_store.get_all_sample().values())
+    # Sample profiles first, then profiles added via POST /ingest (an ingested
+    # profile with a sample's id replaces it).
+    merged = {**_profile_store.get_all_sample(), **_profile_store.get_ingested()}
+    all_profiles = list(merged.values())
     return all_profiles[skip : skip + limit]
